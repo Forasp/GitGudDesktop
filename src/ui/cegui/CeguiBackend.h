@@ -11,6 +11,7 @@
 
 #include "ui/IUiBackend.h"
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -23,6 +24,7 @@ namespace CEGUI
     class Window;
     class NativeClipboardProvider;
     class Logger;
+    class ListWidget;
 } // namespace CEGUI
 
 namespace gitgud::ui
@@ -157,6 +159,17 @@ namespace gitgud::ui
         // Widgets opted into drag events (SetDraggable), and whether each is
         // mid-drag. Keyed by window so a recreated widget subscribes afresh.
         std::unordered_map<CEGUI::Window*, bool> m_Draggable;
+
+        // What each list was last filled with by SetList: a hash of the rows
+        // and their count. Refreshes often push identical rows; matching ones
+        // skip the model rebuild and the re-format of every row.
+        struct ListFingerprint
+        {
+            std::uint64_t m_uiHash = 0;
+            std::size_t m_uCount = 0;
+        };
+
+        std::unordered_map<CEGUI::ListWidget*, ListFingerprint> m_ListFingerprints;
 
         EventHandler m_EventHandler;
         CEGUI::OpenGL3Renderer* m_pRenderer = nullptr;

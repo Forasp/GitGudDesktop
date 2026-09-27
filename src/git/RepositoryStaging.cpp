@@ -682,6 +682,14 @@ namespace gitgud::git
         IndexPtr index = OpenIndex(m_pRepo);
         const FileSide head = ReadHeadSide(m_pRepo, _Path);
         const FileSide staged = ReadIndexSide(m_pRepo, index.m_pP, _Path);
+
+        // Nothing staged (the usual case, and every untracked file): no
+        // diff needed at all.
+        if (staged.m_bExists == head.m_bExists && staged.m_Text == head.m_Text)
+        {
+            return {};
+        }
+
         const FileSide work = ReadWorkSide(m_pRepo, _Path);
         const FlatPatch combined = MakePatch(_Path, head, work, DiffOptions());
         if (combined.m_bBinary)
@@ -689,8 +697,22 @@ namespace gitgud::git
             return {};
         }
 
-        const std::vector<bool> flags = ComputeStaged(_Path, head, staged, work, combined);
         std::vector<std::size_t> out;
+        // Everything staged: every changed line of the one diff, without the
+        // HEAD->index and index->worktree diffs ComputeStaged would make.
+        if (staged.m_bExists && work.m_bExists && staged.m_Text == work.m_Text)
+        {
+            for (std::size_t i = 0; i < combined.m_Lines.size(); ++i)
+            {
+                if (combined.IsChange(i))
+                {
+                    out.push_back(i);
+                }
+            }
+            return out;
+        }
+
+        const std::vector<bool> flags = ComputeStaged(_Path, head, staged, work, combined);
         for (std::size_t i = 0; i < flags.size(); ++i)
         {
             if (flags[i])

@@ -68,11 +68,11 @@ end
 function settings.set(key, value)
     load()
 
-    if value == nil then
-        values[key] = nil
-    else
-        values[key] = tostring(value)
+    local stored = value ~= nil and tostring(value) or nil
+    if values[key] == stored then
+        return -- unchanged: skip the file write
     end
+    values[key] = stored
 
     save()
 end

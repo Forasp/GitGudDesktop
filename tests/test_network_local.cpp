@@ -113,6 +113,22 @@ TEST_CASE("ahead/behind reflects unpushed commits", "[network]")
     CHECK(ab.m_Ahead == 1);
     CHECK(ab.m_Behind == 0);
 
+    // The branch listing maps the upstream through origin's fetch refspec.
+    const std::string branch = work.CurrentBranch();
+    bool sawBranch = false;
+    for (const auto& b : work.Branches())
+    {
+        if (!b.m_bIsRemote && b.m_Name == branch)
+        {
+            sawBranch = true;
+            CHECK(b.m_bIsHead);
+            CHECK(b.m_Upstream == "origin/" + branch);
+            CHECK(b.m_Ahead == 1);
+            CHECK(b.m_Behind == 0);
+        }
+    }
+    CHECK(sawBranch);
+
     work.Push("origin");
     ab = work.GetAheadBehind();
     CHECK(ab.m_Ahead == 0);

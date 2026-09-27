@@ -11,6 +11,7 @@
 
 #include <git2/sys/errors.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -493,40 +494,51 @@ namespace gitgud::git
     {
         RequireOpen(m_pRepo, "tags()");
 
-        StrArray names;
-        if (git_tag_list(&names.m_A, m_pRepo) < 0)
+        // One pass over refs/tags/*: listing the names and then looking each
+        // ref up again reads every loose ref file twice.
+        ReferenceIteratorPtr it;
+        if (git_reference_iterator_glob_new(&it.m_pP, m_pRepo, "refs/tags/*") < 0)
         {
-            RaiseLastError("git_tag_list failed");
+            RaiseLastError("git_reference_iterator_glob_new failed");
         }
 
+        constexpr std::size_t kPrefixLength = sizeof("refs/tags/") - 1;
         std::vector<TagInfo> out;
-        for (std::size_t i = 0; i < names.m_A.count; ++i)
+        git_reference* pref = nullptr;
+        while (git_reference_next(&pref, it.m_pP) == 0)
         {
-            TagInfo info;
-            info.m_Name = names.m_A.strings[i];
-            const std::string refName = "refs/tags/" + info.m_Name;
-
             ReferencePtr ref;
-            if (git_reference_lookup(&ref.m_pP, m_pRepo, refName.c_str()) != 0)
+            ref.m_pP = pref;
+            const git_oid* pdirect = git_reference_target(pref);
+            if (!pdirect)
             {
-                continue;
+                continue; // symbolic
             }
-            ObjectPtr target;
-            if (git_reference_peel(&target.m_pP, ref.m_pP, GIT_OBJECT_COMMIT) == 0)
+
+            TagInfo info;
+            info.m_Name = git_reference_name(pref) + kPrefixLength;
+            ObjectPtr object;
+            if (git_object_lookup(&object.m_pP, m_pRepo, pdirect, GIT_OBJECT_ANY) == 0)
             {
-                info.m_TargetOid = OidToHex(git_object_id(target.m_pP));
-            }
-            if (const git_oid* pdirect = git_reference_target(ref.m_pP))
-            {
-                TagPtr tag;
-                if (git_tag_lookup(&tag.m_pP, m_pRepo, pdirect) == 0)
+                // Annotated tags point at a tag object; lightweight ones at the commit.
+                if (git_object_type(object.m_pP) == GIT_OBJECT_TAG)
                 {
-                    const char* szmsg = git_tag_message(tag.m_pP);
+                    const char* szmsg =
+                        git_tag_message(reinterpret_cast<const git_tag*>(object.m_pP));
                     info.m_Message = szmsg ? szmsg : "";
                 }
+                ObjectPtr target;
+                if (git_object_peel(&target.m_pP, object.m_pP, GIT_OBJECT_COMMIT) == 0)
+                {
+                    info.m_TargetOid = OidToHex(git_object_id(target.m_pP));
+                }
             }
+            git_error_clear();
             out.push_back(std::move(info));
         }
+        // git_tag_list's order.
+        std::sort(out.begin(), out.end(),
+            [](const TagInfo& _A, const TagInfo& _B) { return _A.m_Name < _B.m_Name; });
         return out;
     }
 

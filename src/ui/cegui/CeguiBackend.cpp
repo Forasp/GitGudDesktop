@@ -54,6 +54,21 @@ namespace gitgud::ui
 #endif
         }
 
+        // FNV-1a over every row, with a separator so ["ab"] != ["a", "b"].
+        std::uint64_t HashItems(const std::vector<std::string>& _Items)
+        {
+            std::uint64_t uihash = 14695981039346656037ull;
+            for (const std::string& item : _Items)
+            {
+                for (const char c : item)
+                {
+                    uihash = (uihash ^ static_cast<unsigned char>(c)) * 1099511628211ull;
+                }
+                uihash = (uihash ^ 0xffu) * 1099511628211ull;
+            }
+            return uihash;
+        }
+
         // Row of a list under a screen position (0-based), or -1.
         int RowAt(CEGUI::ListWidget* _pList, const glm::vec2& _Position)
         {
@@ -267,7 +282,14 @@ namespace gitgud::ui
         // UI, JetBrains Mono for diffs - both OFL), fall back to the Windows
         // system fonts, then to the DejaVu shipped with CEGUI.
         FontManager& fonts = FontManager::getSingleton();
+        // CEGUI's stock definition auto-scales with the window, which
+        // re-rasterizes the font and notifies every window of a font change on
+        // each step of a resize. Nothing needs it to scale.
         fonts.createFromFile("DejaVuSans-12.font");
+        if (fonts.isDefined("DejaVuSans-12"))
+        {
+            fonts.get("DejaVuSans-12").setAutoScaled(AutoScaledMode::Disabled);
+        }
 #if defined(_WIN32)
         prp->setResourceGroupDirectory("sysfonts", "C:/Windows/Fonts/");
 #endif
@@ -615,6 +637,7 @@ namespace gitgud::ui
         m_WidgetCache.clear();
         m_DragStartRow.clear();
         m_Draggable.clear();
+        m_ListFingerprints.clear();
         m_bForceRedraw = true;
     }
 
@@ -1172,6 +1195,22 @@ namespace gitgud::ui
         // "selected -1" back at the app — suppress while we mutate.
         m_bSuppressEvents = true;
 
+        // The same rows it already shows: keep the model and its formatted
+        // rows, and only clear the selection as a refill would. The count is
+        // checked against the list too, so a list recreated at a recycled
+        // address never matches a stale fingerprint.
+        ListFingerprint fingerprint{HashItems(_Items), _Items.size()};
+        const auto known = m_ListFingerprints.find(plist);
+        if (known != m_ListFingerprints.end() && known->second.m_uiHash == fingerprint.m_uiHash &&
+            known->second.m_uCount == fingerprint.m_uCount &&
+            plist->getItemCount() == fingerprint.m_uCount)
+        {
+            plist->clearSelections();
+            m_bSuppressEvents = false;
+            return;
+        }
+        m_ListFingerprints[plist] = fingerprint;
+
         // ListWidget::addItem notifies the view per row, and the view re-sorts
         // and re-measures its whole item list on every notification — O(N^2)
         // for an N-line diff. Detach the model, fill it silently, and re-attach
@@ -1404,6 +1443,7 @@ namespace gitgud::ui
         {
             return;
         }
+        m_ListFingerprints.erase(plist); // no longer what SetList filled in
         m_bSuppressEvents = true;
         plist->getModel()->updateItemText(
             plist->getItemAtIndex(static_cast<size_t>(_iIndex)), _Text);

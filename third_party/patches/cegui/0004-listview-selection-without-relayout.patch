@@ -1,0 +1,47 @@
+diff --git a/cegui/include/CEGUI/views/ListView.h b/cegui/include/CEGUI/views/ListView.h
+index 55d092fe3..b2826baef 100644
+--- a/cegui/include/CEGUI/views/ListView.h
++++ b/cegui/include/CEGUI/views/ListView.h
+@@ -111,6 +111,8 @@ protected:
+ 
+     bool onChildrenAdded(const EventArgs& args) override;
+     bool onChildrenRemoved(const EventArgs& args) override;
++    // Gitgud patch: see ListView.cpp.
++    void onSelectionChanged(ItemViewEventArgs& args) override;
+ 
+     void resortListView();
+     void resortView() override;
+diff --git a/cegui/src/views/ListView.cpp b/cegui/src/views/ListView.cpp
+index fc5063d9f..f8ad5ba1d 100644
+--- a/cegui/src/views/ListView.cpp
++++ b/cegui/src/views/ListView.cpp
+@@ -251,6 +251,29 @@ void ListView::updateItem(ListViewItemRenderingState &item, ModelIndex index, fl
+     item.d_isSelected = isIndexSelected(index);
+ }
+ 
++//----------------------------------------------------------------------------//
++void ListView::onSelectionChanged(ItemViewEventArgs& args)
++{
++    // Gitgud patch: a selection change only moves the highlight.
++    // ItemView::onSelectionChanged() calls invalidateView(), which marks the
++    // view dirty, so the next prepareForRender() (a click's own indexAt()
++    // runs one straight away) re-formats the text of EVERY item: O(items)
++    // text layout per click. When the items are otherwise current, refresh
++    // just their selected flags and redraw.
++    if (!d_itemModel || isDirty() ||
++        d_items.size() != d_itemModel->getChildCount(d_itemModel->getRootIndex()))
++    {
++        ItemView::onSelectionChanged(args);
++        return;
++    }
++
++    for (ListViewItemRenderingState& item : d_items)
++        item.d_isSelected = isIndexSelected(item.d_index);
++
++    invalidate(false);
++    fireEvent(EventSelectionChanged, args);
++}
++
+ //----------------------------------------------------------------------------//
+ bool ListView::onChildrenAdded(const EventArgs& args)
+ {

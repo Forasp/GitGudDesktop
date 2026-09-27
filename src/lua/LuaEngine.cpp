@@ -193,8 +193,38 @@ namespace gitgud::lua
         {
             lua_rawgeti(m_pL, LUA_REGISTRYINDEX, iref);
             lua_pushlstring(m_pL, _Value.data(), _Value.size());
-            ProtectedCall(m_pL, 1, context.c_str());
+            CallTimed(iref, 1, context.c_str(), _Name);
         }
+    }
+
+    void LuaEngine::CallTimed(
+        int _iRef, int _iArgs, const char* _szContext, const std::string& _What)
+    {
+        if (m_iSlowCallMs <= 0)
+        {
+            ProtectedCall(m_pL, _iArgs, _szContext);
+            return;
+        }
+
+        const auto started = std::chrono::steady_clock::now();
+        ProtectedCall(m_pL, _iArgs, _szContext);
+        const double fms =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started)
+                .count();
+        if (fms < m_iSlowCallMs)
+        {
+            return;
+        }
+
+        // Where the function was defined, so the report names the handler.
+        lua_rawgeti(m_pL, LUA_REGISTRYINDEX, _iRef);
+        lua_Debug info{};
+        std::string where = "?";
+        if (lua_getinfo(m_pL, ">S", &info) != 0)
+        {
+            where = std::string(info.short_src) + ":" + std::to_string(info.linedefined);
+        }
+        std::printf("[perf] lua %-28s %7.1f ms  %s\n", _What.c_str(), fms, where.c_str());
     }
 
     std::uint64_t LuaEngine::NowMs()
@@ -262,7 +292,7 @@ namespace gitgud::lua
                 it->m_bCancelled = true;
             }
             lua_rawgeti(m_pL, LUA_REGISTRYINDEX, iref);
-            ProtectedCall(m_pL, 0, "error in timer");
+            CallTimed(iref, 0, "error in timer", "(timer)");
         }
 
         // Drop finished timers and release their callbacks.

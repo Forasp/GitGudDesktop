@@ -9,12 +9,112 @@
 
 #include "git/LibGit2Internal.h"
 
+#include <git2/sys/errors.h>
+
+#include <utility>
+
 namespace gitgud::git
 {
 
     using namespace internal;
 
     // ---- Branches --------------------------------------------------------------
+
+    namespace
+    {
+
+        // Upstreams for a whole branch listing. git_branch_upstream re-reads the
+        // configuration (a stat of every config file) and looks the remote up
+        // again for every branch; this reads one config snapshot and each remote
+        // once, with the same rules (branch.<name>.remote/.merge, mapped through
+        // the remote's first matching fetch refspec).
+        class UpstreamResolver
+        {
+          public:
+            explicit UpstreamResolver(git_repository* _pRepo) : m_pRepo(_pRepo)
+            {
+                if (git_repository_config_snapshot(&m_Config.m_pP, _pRepo) < 0)
+                {
+                    git_error_clear(); // no config: no upstreams
+                }
+            }
+
+            // Full ref name of local branch _Branch's upstream, or "".
+            std::string RefName(const std::string& _Branch)
+            {
+                const std::string remote = Get("branch." + _Branch + ".remote");
+                const std::string merge = Get("branch." + _Branch + ".merge");
+                if (remote.empty() || merge.empty())
+                {
+                    return {};
+                }
+                if (remote == ".")
+                {
+                    return merge; // tracks another local branch
+                }
+
+                git_remote* premote = Remote(remote);
+                if (!premote)
+                {
+                    return {};
+                }
+                const std::size_t nspecs = git_remote_refspec_count(premote);
+                for (std::size_t ni = 0; ni < nspecs; ++ni)
+                {
+                    const git_refspec* pspec = git_remote_get_refspec(premote, ni);
+                    if (git_refspec_direction(pspec) != GIT_DIRECTION_FETCH ||
+                        git_refspec_src_matches(pspec, merge.c_str()) == 0)
+                    {
+                        continue;
+                    }
+                    Buf dst;
+                    if (git_refspec_transform(&dst.m_B, pspec, merge.c_str()) == 0)
+                    {
+                        return dst.Str();
+                    }
+                    break;
+                }
+                git_error_clear();
+                return {};
+            }
+
+          private:
+            std::string Get(const std::string& _Key) const
+            {
+                const char* szvalue = nullptr;
+                if (!m_Config.m_pP ||
+                    git_config_get_string(&szvalue, m_Config.m_pP, _Key.c_str()) != 0)
+                {
+                    git_error_clear();
+                    return {};
+                }
+                return szvalue ? szvalue : "";
+            }
+
+            git_remote* Remote(const std::string& _Name)
+            {
+                for (auto& [name, remote] : m_Remotes)
+                {
+                    if (name == _Name)
+                    {
+                        return remote.m_pP;
+                    }
+                }
+                RemotePtr remote;
+                if (git_remote_lookup(&remote.m_pP, m_pRepo, _Name.c_str()) != 0)
+                {
+                    git_error_clear();
+                }
+                m_Remotes.emplace_back(_Name, std::move(remote));
+                return m_Remotes.back().second.m_pP;
+            }
+
+            git_repository* m_pRepo;
+            ConfigPtr m_Config;
+            std::vector<std::pair<std::string, RemotePtr>> m_Remotes;
+        };
+
+    } // namespace
 
     std::vector<BranchInfo> Repository::Branches() const
     {
@@ -28,6 +128,18 @@ namespace gitgud::git
         {
             RaiseLastError("git_branch_iterator_new failed");
         }
+
+        // HEAD is read once, not once per branch (git_branch_is_head).
+        std::string headRef;
+        {
+            ReferencePtr head;
+            if (git_repository_head(&head.m_pP, m_pRepo) == 0)
+            {
+                headRef = git_reference_name(head.m_pP);
+            }
+            git_error_clear();
+        }
+        UpstreamResolver upstreams(m_pRepo);
 
         std::vector<BranchInfo> out;
         git_reference* pref = nullptr;
@@ -43,7 +155,7 @@ namespace gitgud::git
                 b.m_Name = szname;
             }
             b.m_bIsRemote = (type == GIT_BRANCH_REMOTE);
-            b.m_bIsHead = !b.m_bIsRemote && git_branch_is_head(pref) == 1;
+            b.m_bIsHead = !b.m_bIsRemote && headRef == git_reference_name(pref);
 
             // Remote HEAD aliases ("origin/HEAD") duplicate a real branch.
             if (b.m_bIsRemote && b.m_Name.size() >= 5 &&
@@ -62,8 +174,10 @@ namespace gitgud::git
 
             if (!b.m_bIsRemote)
             {
+                const std::string upstreamRef = upstreams.RefName(b.m_Name);
                 ReferencePtr upstream;
-                if (git_branch_upstream(&upstream.m_pP, pref) == 0)
+                if (!upstreamRef.empty() &&
+                    git_reference_lookup(&upstream.m_pP, m_pRepo, upstreamRef.c_str()) == 0)
                 {
                     const char* szupName = nullptr;
                     if (git_branch_name(&szupName, upstream.m_pP) == 0 && szupName)
