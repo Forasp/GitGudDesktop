@@ -42,6 +42,7 @@ $Pages = [ordered]@{
     "LUA_API.md"    = @{ Page = "Lua-API"; Title = "Lua API" }
     "BUILDING.md"   = @{ Page = "Building"; Title = "Building" }
     "USAGE.md"      = @{ Page = "Using-the-Default-UI"; Title = "Using the Default UI" }
+    "P4V.md"        = @{ Page = "Using-the-P4V-UI"; Title = "Using the P4V UI" }
     "PRINCIPLES.md" = @{ Page = "Principles"; Title = "Principles" }
 }
 

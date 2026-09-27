@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  labels.xml - the Labels tab (git tags). scripts/p4/views/labels.lua.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="LabelsPanel">
+        <Property name="Area" value="{{0,1},{0,1},{1,-1},{1,-1}}"/>
+        <Property name="Visible" value="false"/>
+
+        <Window type="Gitgud/StaticText" name="LabelsHeader">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,30}}"/>
+            <Property name="PanelColour" value="FF25484F"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Label" name="LabelsFilterLabel">
+                <Property name="Area" value="{{0,8},{0,0},{0,50},{1,0}}"/>
+                <Property name="Text" value="Filter:"/>
+            </Window>
+            <Window type="Gitgud/Editbox" name="LabelsFilterEdit">
+                <Property name="Area" value="{{0,52},{0,4},{0.4,0},{1,-4}}"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/Button" name="LabelsPushButton">
+                <Property name="Area" value="{{1,-290},{0,4},{1,-148},{1,-4}}"/>
+                <Property name="Text" value="Push Labels"/>
+                <Property name="TooltipText" value="Send every label (tag) to the remote"/>
+            </Window>
+            <Window type="Gitgud/Button" name="LabelsNewButton">
+                <Property name="Area" value="{{1,-140},{0,4},{1,-8},{1,-4}}"/>
+                <Property name="Text" value="New Label…"/>
+            </Window>
+        </Window>
+        <Window type="DefaultWindow" name="LabelsGridHost">
+            <Property name="Area" value="{{0,0},{0,30},{1,0},{1,0}}"/>
+        </Window>
+    </Window>
+</GUILayout>

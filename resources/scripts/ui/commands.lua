@@ -3,9 +3,9 @@
 -- One search box over everything the app can do:
 --   * every menu command (with its shortcut), so nothing is only a menu away
 --   * commands modules register here (commands.register)
---   * "Check out <branch>" for every branch
---   * "Open <repository>" for every repository in the list
---   * "Show <file>" for every changed file
+--   * whatever the UI's candidate sources add when the palette opens
+--     (commands.addSource) — the default UI adds "Check out <branch>",
+--     "Open <repository>", and "Show <file>" (views/menus.lua)
 -- Matching is fuzzy (the letters in order, not necessarily together); word
 -- starts and runs of letters rank higher. With an empty box, recently run
 -- commands come first.
@@ -13,6 +13,11 @@
 -- Mods add their own entries:
 --     local commands = require("ui.commands")
 --     commands.register({ label = "Count lines", action = fn, keywords = "stats" })
+--
+-- A source adds live entries every time the palette opens:
+--     commands.addSource(function(add)
+--         add("Branch", "Check out main", fn, "local")  -- group, label, action, detail
+--     end)
 
 local C = require("core.palette")
 local keys = require("core.keys")
@@ -28,6 +33,7 @@ local MAX_RESULTS = 60
 local MAX_RECENT = 8
 
 local registered = {}   -- commands.register() entries
+local sources = {}      -- commands.addSource() functions
 local candidates = {}   -- everything searchable (built when the palette opens)
 local results = {}      -- what the list shows, in order
 local selected = 1
@@ -36,6 +42,13 @@ local selected = 1
 -- @param entry  { label, action, keywords?, enabled? (function), group? }
 function commands.register(entry)
     registered[#registered + 1] = entry
+end
+
+--- Add a source of palette entries, asked every time the palette opens.
+-- @param source  function(add) calling add(group, label, action, detail?,
+--                shortcut?, enabled?) for each entry
+function commands.addSource(source)
+    sources[#sources + 1] = source
 end
 
 --- Recently run command labels, newest first.
@@ -133,36 +146,8 @@ local function collect()
         add(entry.group or "Command", entry.label, entry.action, entry.keywords, entry.shortcut, enabled)
     end
 
-    if gitgud.isOpen() then
-        local branches = require("views.branches")
-        local current = gitgud.currentBranch()
-        for _, branch in ipairs(gitgud.branches()) do
-            if branch.name ~= current then
-                local name = branch.name
-                add("Branch", "Check out " .. name, function()
-                    branches.checkoutByName(name)
-                end, branch.isRemote and "remote" or "local")
-            end
-        end
-
-        local changes = require("views.changes")
-        for _, file in ipairs(require("core.repo").state().files) do
-            local path = file.path
-            add("File", "Show " .. path, function()
-                require("views.sidebar").select("changes")
-                changes.select(path)
-            end, "changed")
-        end
-    end
-
-    local repositories = require("views.repositories")
-    local here = gitgud.repoPath():lower()
-    for _, path in ipairs(repositories.known()) do
-        if path:lower() ~= here then
-            add("Repository", "Open " .. text.basename(path), function()
-                repositories.open(path)
-            end, path)
-        end
+    for _, source in ipairs(sources) do
+        source(add)
     end
 end
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Previews.xml - screenshots of the built-in interfaces for the picker's cards
+     (the top of each window). Replace Previews.png to update them. -->
+<Imageset version="2" name="GitGud-Previews" imagefile="Previews.png" resourceGroup="ui-imagesets" nativeHorzRes="1280" nativeVertRes="720" autoScaled="false">
+    <Image name="Default" xPos="0" yPos="0" width="600" height="190"/>
+    <Image name="P4V" xPos="600" yPos="0" width="600" height="190"/>
+</Imageset>

@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  P4V package skin: generated from resources/looknfeel/Editbox.xml with
+  the Dagobah palette and the Segoe UI font (Gitgud-System).
+  Loaded over the base skin while the P4V UI runs; same look names, so
+  every Gitgud/* widget (shared dialogs and menus too) picks it up.
+-->
+<Falagard version="7">
+
+    <!-- ============================ Editbox ========================== -->
+    <WidgetLook name="Gitgud/Editbox">
+        <Property name="Font" value="Gitgud-System"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF010102" type="ColourRect" name="BgColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF525445" type="ColourRect" name="BorderColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF28333C" type="ColourRect" name="ReadOnlyBGColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFECF1C1" type="ColourRect" name="NormalTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFECF1C1" type="ColourRect" name="SelectedTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF34796A" type="ColourRect" name="ActiveSelectionColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF25484F" type="ColourRect" name="InactiveSelectionColour"/>
+        <Property name="CursorImage" value="Vanilla-Images/Caret" />
+        <Property name="SelectionBrushImage" value="Vanilla-Images/GenericBrush" />
+        <Property name="Size" value="{{0, 256}, {0, 30}}" />
+        <!-- Symmetric padding so the text sits vertically centred; placeholder
+             labels in the layouts assume the 10px left inset. -->
+        <NamedArea name="TextArea">
+            <Area>
+                <Dim type="LeftEdge"><AbsoluteDim value="10"/></Dim>
+                <Dim type="TopEdge"><AbsoluteDim value="5"/></Dim>
+                <Dim type="RightEdge"><UnifiedDim scale="1.0" type="RightEdge" offset="-10"/></Dim>
+                <Dim type="BottomEdge"><UnifiedDim scale="1.0" type="BottomEdge" offset="-5"/></Dim>
+            </Area>
+        </NamedArea>
+        <ImagerySection name="Caret">
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="Width"><AbsoluteDim value="2"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1.0" type="BottomEdge"/></Dim>
+                </Area>
+                <Image name="Vanilla-Images/GenericBrush"/>
+                <Colours topLeft="FFECF1C1" bottomLeft="FFECF1C1" topRight="FFECF1C1" bottomRight="FFECF1C1"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+        </ImagerySection>
+        <StateImagery name="Enabled">
+            <Layer>
+                <Section section="BackgroundOnlyFull" look="Gitgud/Shared">
+                    <ColourProperty name="BgColour"/>
+                </Section>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="ReadOnly">
+            <Layer>
+                <Section section="BackgroundOnlyFull" look="Gitgud/Shared">
+                    <ColourProperty name="ReadOnlyBGColour"/>
+                </Section>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="Disabled">
+            <Layer>
+                <Section section="BackgroundOnlyFull" look="Gitgud/Shared">
+                    <ColourProperty name="ReadOnlyBGColour"/>
+                </Section>
+            </Layer>
+        </StateImagery>
+    </WidgetLook>
+
+
+    <!-- ======================= MultiLineEditbox ====================== -->
+    <WidgetLook name="Gitgud/MultiLineEditbox">
+        <Property name="Font" value="Gitgud-System"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF1F2731" type="ColourRect" name="BgColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF525445" type="ColourRect" name="BorderColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFECF1C1" type="ColourRect" name="NormalTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFECF1C1" type="ColourRect" name="SelectedTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF34796A" type="ColourRect" name="ActiveSelectionColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF25484F" type="ColourRect" name="InactiveSelectionColour"/>
+        <Property name="SelectionBrushImage" value="Vanilla-Images/GenericBrush"/>
+        <Property name="Size" value="{{0, 256}, {0, 128}}" />
+        <NamedArea name="TextArea">
+            <Area>
+                <Dim type="LeftEdge"><AbsoluteDim value="10"/></Dim>
+                <Dim type="TopEdge"><AbsoluteDim value="7"/></Dim>
+                <Dim type="RightEdge"><UnifiedDim scale="1.0" type="RightEdge" offset="-10"/></Dim>
+                <Dim type="BottomEdge"><UnifiedDim scale="1.0" type="BottomEdge" offset="-7"/></Dim>
+            </Area>
+        </NamedArea>
+        <NamedArea name="TextAreaHScroll">
+            <Area>
+                <Dim type="LeftEdge"><ImageDim name="Vanilla-Images/FrameLeft" dimension="Width"/></Dim>
+                <Dim type="TopEdge"><ImageDim name="Vanilla-Images/FrameTop" dimension="Height"/></Dim>
+                <Dim type="RightEdge">
+                    <OperatorDim op="Subtract">
+                        <UnifiedDim scale="1" type="RightEdge"/>
+                        <ImageDim name="Vanilla-Images/FrameRight" dimension="Width"/>
+                    </OperatorDim>
+                </Dim>
+                <Dim type="BottomEdge">
+                    <OperatorDim op="Subtract">
+                        <UnifiedDim scale="1" type="BottomEdge"/>
+                        <OperatorDim op="Add">
+                            <ImageDim name="Vanilla-Images/FrameBottom" dimension="Height"/>
+                            <WidgetDim widget="__auto_hscrollbar__" dimension="Height"/>
+                        </OperatorDim>
+                    </OperatorDim>
+                </Dim>
+            </Area>
+        </NamedArea>
+        <NamedArea name="TextAreaVScroll">
+            <Area>
+                <Dim type="LeftEdge"><ImageDim name="Vanilla-Images/FrameLeft" dimension="Width"/></Dim>
+                <Dim type="TopEdge"><ImageDim name="Vanilla-Images/FrameTop" dimension="Height"/></Dim>
+                <Dim type="RightEdge">
+                    <OperatorDim op="Subtract">
+                        <UnifiedDim scale="1" type="RightEdge"/>
+                        <OperatorDim op="Add">
+                            <ImageDim name="Vanilla-Images/FrameRight" dimension="Width"/>
+                            <WidgetDim widget="__auto_vscrollbar__" dimension="Width"/>
+                        </OperatorDim>
+                    </OperatorDim>
+                </Dim>
+                <Dim type="BottomEdge">
+                    <OperatorDim op="Subtract">
+                        <UnifiedDim scale="1" type="BottomEdge"/>
+                        <ImageDim name="Vanilla-Images/FrameBottom" dimension="Height"/>
+                    </OperatorDim>
+                </Dim>
+            </Area>
+        </NamedArea>
+        <NamedArea name="TextAreaHVScroll">
+            <Area>
+                <Dim type="LeftEdge"><ImageDim name="Vanilla-Images/FrameLeft" dimension="Width"/></Dim>
+                <Dim type="TopEdge"><ImageDim name="Vanilla-Images/FrameTop" dimension="Height"/></Dim>
+                <Dim type="RightEdge">
+                    <OperatorDim op="Subtract">
+                        <UnifiedDim scale="1" type="RightEdge"/>
+                        <OperatorDim op="Add">
+                            <ImageDim name="Vanilla-Images/FrameRight" dimension="Width"/>
+                            <WidgetDim widget="__auto_vscrollbar__" dimension="Width"/>
+                        </OperatorDim>
+                    </OperatorDim>
+                </Dim>
+                <Dim type="BottomEdge">
+                    <OperatorDim op="Subtract">
+                        <UnifiedDim scale="1" type="BottomEdge"/>
+                        <OperatorDim op="Add">
+                            <ImageDim name="Vanilla-Images/FrameBottom" dimension="Height"/>
+                            <WidgetDim widget="__auto_hscrollbar__" dimension="Height"/>
+                        </OperatorDim>
+                    </OperatorDim>
+                </Dim>
+            </Area>
+        </NamedArea>
+        <Child nameSuffix="__auto_hscrollbar__" type="Gitgud/HorizontalScrollbar">
+            <Area>
+                <Dim type="LeftEdge"><AbsoluteDim value="3"/></Dim>
+                <Dim type="TopEdge"><AbsoluteDim value="-3"/></Dim>
+                <Dim type="Width"><UnifiedDim scale="1" type="Width" offset="-20"/></Dim>
+                <Dim type="Height"><AbsoluteDim value="14"/></Dim>
+            </Area>
+            <VertAlignment type="BottomAligned"/>
+        </Child>
+        <Child nameSuffix="__auto_vscrollbar__" type="Gitgud/VerticalScrollbar">
+            <Area>
+                <Dim type="LeftEdge"><AbsoluteDim value="-3"/></Dim>
+                <Dim type="TopEdge"><AbsoluteDim value="3"/></Dim>
+                <Dim type="Width"><AbsoluteDim value="14"/></Dim>
+                <Dim type="Height"><UnifiedDim scale="1" type="Height" offset="-6"/></Dim>
+            </Area>
+            <HorzAlignment type="RightAligned"/>
+        </Child>
+        <ImagerySection name="Caret">
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="Width"><AbsoluteDim value="2"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1.0" type="BottomEdge"/></Dim>
+                </Area>
+                <Image name="Vanilla-Images/GenericBrush"/>
+                <Colours topLeft="FFECF1C1" bottomLeft="FFECF1C1" topRight="FFECF1C1" bottomRight="FFECF1C1"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+        </ImagerySection>
+        <StateImagery name="Enabled">
+            <Layer>
+                <Section section="BackgroundOnlyFull" look="Gitgud/Shared">
+                    <ColourProperty name="BgColour"/>
+                </Section>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="ReadOnly">
+            <Layer>
+                <Section section="BackgroundOnlyFull" look="Gitgud/Shared">
+                    <ColourProperty name="BgColour"/>
+                </Section>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="Disabled">
+            <Layer>
+                <Section section="BackgroundOnlyFull" look="Gitgud/Shared">
+                    <ColourProperty name="BgColour"/>
+                </Section>
+            </Layer>
+        </StateImagery>
+    </WidgetLook>
+
+</Falagard>

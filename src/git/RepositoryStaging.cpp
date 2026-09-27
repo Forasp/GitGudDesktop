@@ -480,6 +480,9 @@ namespace gitgud::git
             }
         }
 
+        FileDiff DiffSides(const std::string& _OldPath, const FileSide& _Old,
+            const std::string& _NewPath, const FileSide& _New, const DiffOptions& _Options);
+
     } // namespace
 
     namespace internal
@@ -490,13 +493,80 @@ namespace gitgud::git
         {
             const FileSide head = ReadHeadSide(_pRepo, _Path);
             const FileSide work = ReadWorkSide(_pRepo, _Path);
+            return DiffSides(_Path, head, _Path, work, _Options);
+        }
 
+        FileVersion ReadVersion(
+            git_repository* _pRepo, const std::string& _Path, const std::string& _Revision)
+        {
+            FileSide side;
+            if (_Revision == "workdir")
+            {
+                side = ReadWorkSide(_pRepo, _Path);
+            }
+            else if (_Revision == "index")
+            {
+                IndexPtr index = OpenIndex(_pRepo);
+                side = ReadIndexSide(_pRepo, index.m_pP, _Path);
+            }
+            else if (_Revision == "head")
+            {
+                side = ReadHeadSide(_pRepo, _Path);
+            }
+            else
+            {
+                ObjectPtr obj;
+                ObjectPtr commit;
+                TreePtr tree;
+                // "<oid>^" on a root commit has no parent: the file didn't exist.
+                if (git_revparse_single(&obj.m_pP, _pRepo, _Revision.c_str()) == 0 &&
+                    git_object_peel(&commit.m_pP, obj.m_pP, GIT_OBJECT_COMMIT) == 0 &&
+                    git_commit_tree(&tree.m_pP, reinterpret_cast<git_commit*>(commit.m_pP)) == 0)
+                {
+                    side = ReadTreeSide(_pRepo, tree.m_pP, _Path);
+                }
+            }
+            return FileVersion{std::move(side.m_Text), side.m_bExists, side.m_uiMode};
+        }
+
+        void WriteWorkingFile(
+            git_repository* _pRepo, const std::string& _Path, const std::string& _Text)
+        {
+            WriteWorkFile(_pRepo, _Path, _Text);
+        }
+
+        std::filesystem::path WorkingPath(git_repository* _pRepo, const std::string& _Path)
+        {
+            return WorkPath(_pRepo, _Path);
+        }
+
+        FileDiff DiffFileVersions(const std::string& _OldPath, const FileVersion& _Old,
+            const std::string& _NewPath, const FileVersion& _New, const DiffOptions& _Options)
+        {
+            return DiffSides(_OldPath, FileSide{_Old.m_Text, _Old.m_bExists, _Old.m_uiMode},
+                _NewPath, FileSide{_New.m_Text, _New.m_bExists, _New.m_uiMode}, _Options);
+        }
+
+    } // namespace internal
+
+    namespace
+    {
+
+        // The structured diff between two file versions (the shape every diff
+        // producer returns).
+        FileDiff DiffSides(const std::string& _OldPath, const FileSide& _Old,
+            const std::string& _NewPath, const FileSide& _New, const DiffOptions& _Options)
+        {
             FileDiff out;
-            out.m_Path = _Path;
-            out.m_OldPath = _Path;
-            out.m_cStatus = !head.m_bExists ? 'A' : (!work.m_bExists ? 'D' : 'M');
+            out.m_Path = _NewPath;
+            out.m_OldPath = _OldPath;
+            out.m_cStatus = !_Old.m_bExists ? 'A' : (!_New.m_bExists ? 'D' : 'M');
+            if (_Old.m_bExists && _New.m_bExists && _OldPath != _NewPath)
+            {
+                out.m_cStatus = 'R';
+            }
 
-            const FlatPatch fp = MakePatch(_Path, head, work, _Options);
+            const FlatPatch fp = MakePatch(_NewPath, _Old, _New, _Options);
             out.m_bIsBinary = fp.m_bBinary;
 
             for (std::size_t h = 0; h < git_patch_num_hunks(fp.m_Patch.m_pP); ++h)
@@ -538,7 +608,7 @@ namespace gitgud::git
             return out;
         }
 
-    } // namespace internal
+    } // namespace
 
     // ---- Batch stage / unstage ---------------------------------------------------
 

@@ -69,6 +69,7 @@ local function fileMenu()
         { label = "Clone repository…", shortcut = "ctrl+shift+o", action = repositories.clone },
         { separator = true },
         { label = "Options…", shortcut = "ctrl+,", action = settingsView.options },
+        { label = "Switch user interface…", action = settingsView.switchInterface },
         { label = "SSH keys…", action = ssh.keys },
         { label = "Commit signing…", action = settingsView.signing },
         { separator = true },
@@ -432,8 +433,44 @@ function menus.showShortcuts()
             .. "Ctrl+,   Options      Escape   Close popups and dialogs")
 end
 
+--- The palette's live entries: check out a branch, show a changed file,
+-- open a repository from the list.
+-- @param add  commands.addSource's add(group, label, action, detail)
+local function paletteEntries(add)
+    if gitgud.isOpen() then
+        local current = gitgud.currentBranch()
+        for _, branch in ipairs(gitgud.branches()) do
+            if branch.name ~= current then
+                local name = branch.name
+                add("Branch", "Check out " .. name, function()
+                    branches.checkoutByName(name)
+                end, branch.isRemote and "remote" or "local")
+            end
+        end
+
+        for _, file in ipairs(repo.state().files) do
+            local path = file.path
+            add("File", "Show " .. path, function()
+                sidebar.select("changes")
+                changes.select(path)
+            end, "changed")
+        end
+    end
+
+    local here = gitgud.repoPath():lower()
+    for _, path in ipairs(repositories.known()) do
+        if path:lower() ~= here then
+            add("Repository", "Open " .. require("core.text").basename(path), function()
+                repositories.open(path)
+            end, path)
+        end
+    end
+end
+
 --- Build every menu.
 function menus.init()
+    commands.addSource(paletteEntries)
+
     require("core.keys").bind("ctrl+y", function()
         if undo.peekRedo() and not gitgud.textInputFocused() then
             toolbar.redo()

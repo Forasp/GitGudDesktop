@@ -3,7 +3,8 @@
 // features: the commit graph (with its row pictures), reflog and branch moves
 // for Undo/Redo, the 3-pane conflict tool, interactive rebase, file history
 // and blame, submodules, worktrees, Git LFS, SSH keys and host trust, and the
-// console (running commands with streamed output).
+// console (running commands with streamed output) — plus browsing, version
+// diffs, shelves, and file revision graphs for the P4V-style UI.
 //
 // Same conventions as the rest of the table (docs/LUA_API.md): sync calls
 // return a value or (nil, "message"); mutations publish "status.changed";
@@ -25,7 +26,9 @@
 #include "git/CommitGraph.h"
 #include "git/Repository.h"
 #include "imaging/GraphRenderer.h"
+#include "imaging/RevisionGraphRenderer.h"
 #include "platform/Process.h"
+#include "platform/Shell.h"
 #include "ui/IUiBackend.h"
 
 namespace gitgud::lua::bindings
@@ -806,6 +809,277 @@ namespace gitgud::lua::bindings
             return 1;
         }
 
+        // ---- browsing, version diffs, shelves, revision graphs --------------------------
+
+        // gitgud.listTree(revision = "HEAD", dir = "") -> {{name, path, isDir,
+        //   isSubmodule, oid, size}, ...} (directories first)
+        int LListTree(lua_State* _pL)
+        {
+            const std::string revision = luaL_optstring(_pL, 1, "HEAD");
+            const std::string dir = luaL_optstring(_pL, 2, "");
+            return Query(_pL,
+                [&](Repository& _R)
+                {
+                    const auto entries = _R.ListTree(revision, dir);
+                    lua_createtable(_pL, static_cast<int>(entries.size()), 0);
+                    int idx = 1;
+                    for (const auto& entry : entries)
+                    {
+                        lua_createtable(_pL, 0, 6);
+                        SetField(_pL, "name", entry.m_Name);
+                        SetField(_pL, "path", entry.m_Path);
+                        SetField(_pL, "isDir", entry.m_bIsDir);
+                        SetField(_pL, "isSubmodule", entry.m_bIsSubmodule);
+                        SetField(_pL, "oid", entry.m_Oid);
+                        SetField(_pL, "size", static_cast<lua_Integer>(entry.m_Size));
+                        lua_rawseti(_pL, -2, idx++);
+                    }
+                    return 1;
+                });
+        }
+
+        // gitgud.fileAt(path, revision) -> the file's bytes, or nil when it
+        // doesn't exist in that version ("workdir", "index", "head", any
+        // commit-ish, "<oid>^")
+        int LFileAt(lua_State* _pL)
+        {
+            const std::string path = luaL_checkstring(_pL, 1);
+            const std::string revision = luaL_checkstring(_pL, 2);
+            return Query(_pL,
+                [&](Repository& _R)
+                {
+                    std::string content;
+                    if (!_R.ReadFileVersion(path, revision, content))
+                    {
+                        lua_pushnil(_pL);
+                        return 1;
+                    }
+                    lua_pushlstring(_pL, content.data(), content.size());
+                    return 1;
+                });
+        }
+
+        // gitgud.diffVersions(oldPath, oldRevision, newPath, newRevision,
+        //   {ignoreWhitespace, context}) -> diff table (as gitgud.diff)
+        int LDiffVersions(lua_State* _pL)
+        {
+            const std::string oldPath = luaL_checkstring(_pL, 1);
+            const std::string oldRevision = luaL_checkstring(_pL, 2);
+            const std::string newPath = luaL_checkstring(_pL, 3);
+            const std::string newRevision = luaL_checkstring(_pL, 4);
+            gitgud::git::DiffOptions options;
+            options.m_bIgnoreWhitespace = BoolField(_pL, 5, "ignoreWhitespace", false);
+            options.m_iContextLines = static_cast<int>(IntField(_pL, 5, "context", 3));
+            return Query(_pL,
+                [&](Repository& _R)
+                {
+                    PushFileDiff(
+                        _pL, _R.DiffVersions(oldPath, oldRevision, newPath, newRevision, options));
+                    return 1;
+                });
+        }
+
+        // gitgud.changedFiles(oldRevision, newRevision, prefix = "") ->
+        //   {{path, oldPath, status}, ...}; newRevision may be "workdir", and
+        //   oldRevision "" (nothing)
+        int LChangedFiles(lua_State* _pL)
+        {
+            const std::string oldRevision = luaL_checkstring(_pL, 1);
+            const std::string newRevision = luaL_checkstring(_pL, 2);
+            const std::string prefix = luaL_optstring(_pL, 3, "");
+            return Query(_pL,
+                [&](Repository& _R)
+                {
+                    const auto files = _R.ChangedFiles(oldRevision, newRevision, prefix);
+                    lua_createtable(_pL, static_cast<int>(files.size()), 0);
+                    int idx = 1;
+                    for (const auto& file : files)
+                    {
+                        lua_createtable(_pL, 0, 3);
+                        SetField(_pL, "path", file.m_Path);
+                        SetField(_pL, "oldPath", file.m_OldPath);
+                        SetField(_pL, "status", std::string(1, file.m_cStatus));
+                        lua_rawseti(_pL, -2, idx++);
+                    }
+                    return 1;
+                });
+        }
+
+        // gitgud.shelve(branch, {paths}, message) -> commit id. The files are
+        // committed on top of HEAD onto `branch`; nothing else changes.
+        int LShelve(lua_State* _pL)
+        {
+            const std::string branch = luaL_checkstring(_pL, 1);
+            const auto paths = StringList(_pL, 2);
+            const std::string message = luaL_checkstring(_pL, 3);
+            LuaEngine* pengine = Self(_pL);
+            return Query(_pL,
+                [&](Repository& _R)
+                {
+                    const std::string oid = _R.Shelve(branch, paths, message);
+                    PublishStatusChanged(pengine);
+                    lua_pushlstring(_pL, oid.data(), oid.size());
+                    return 1;
+                });
+        }
+
+        // gitgud.unshelve(revision, {paths}?) -> {applied, conflicted, skipped}
+        int LUnshelve(lua_State* _pL)
+        {
+            const std::string revision = luaL_checkstring(_pL, 1);
+            const auto paths =
+                lua_isnoneornil(_pL, 2) ? std::vector<std::string>{} : StringList(_pL, 2);
+            LuaEngine* pengine = Self(_pL);
+            return Query(_pL,
+                [&](Repository& _R)
+                {
+                    const auto result = _R.Unshelve(revision, paths, [](const std::string& _Abs)
+                        { return gitgud::platform::MoveToTrash(_Abs); });
+                    PublishStatusChanged(pengine);
+                    lua_createtable(_pL, 0, 3);
+                    PushStringArray(_pL, result.m_Applied);
+                    lua_setfield(_pL, -2, "applied");
+                    PushStringArray(_pL, result.m_Conflicted);
+                    lua_setfield(_pL, -2, "conflicted");
+                    PushStringArray(_pL, result.m_Skipped);
+                    lua_setfield(_pL, -2, "skipped");
+                    return 1;
+                });
+        }
+
+        void PushBox(lua_State* _pL, const gitgud::imaging::PixelBox& _Box)
+        {
+            SetField(_pL, "x", static_cast<lua_Integer>(_Box.m_fX));
+            SetField(_pL, "y", static_cast<lua_Integer>(_Box.m_fY));
+            SetField(_pL, "w", static_cast<lua_Integer>(_Box.m_fWidth));
+            SetField(_pL, "h", static_cast<lua_Integer>(_Box.m_fHeight));
+        }
+
+        // gitgud.revisionGraph{path, remotes = true, max = 300, exclude = {branches}, columnWidth,
+        //   rowHeight, nodeWidth, nodeHeight, selected (1-based node),
+        //   image = "GitgudRevisionGraph", colours = {background, bandA, bandB,
+        //   bandSelected, rowLine, node, nodeHead, nodeBorder, deleted, bar,
+        //   edge, branchEdge, selectedFill, selectedBorder}}
+        //   -> {image, width, height, columnWidth, rows = {{name, head, remote,
+        //   x, y, w, h}}, nodes = {commit + {row, column, revision, action, x, y,
+        //   w, h}}, edges = {{from, to, merge}}} (rows/columns/nodes 1-based)
+        int LRevisionGraph(lua_State* _pL)
+        {
+            luaL_checktype(_pL, 1, LUA_TTABLE);
+            const std::string path = StringField(_pL, 1, "path", "");
+            if (path.empty())
+            {
+                return FailWith(_pL, "revisionGraph needs a path");
+            }
+            gitgud::git::RevisionGraphQuery query;
+            query.m_bRemotes = BoolField(_pL, 1, "remotes", true);
+            query.m_MaxNodes = static_cast<std::size_t>(IntField(_pL, 1, "max", 300));
+            lua_getfield(_pL, 1, "exclude");
+            if (lua_istable(_pL, -1))
+            {
+                query.m_ExcludeBranches = StringList(_pL, lua_gettop(_pL));
+            }
+            lua_pop(_pL, 1);
+            const std::string image = StringField(_pL, 1, "image", "GitgudRevisionGraph");
+
+            gitgud::imaging::RevisionGraphStyle style;
+            style.m_iColumnWidth =
+                static_cast<int>(IntField(_pL, 1, "columnWidth", style.m_iColumnWidth));
+            style.m_iRowHeight =
+                static_cast<int>(IntField(_pL, 1, "rowHeight", style.m_iRowHeight));
+            style.m_iNodeWidth =
+                static_cast<int>(IntField(_pL, 1, "nodeWidth", style.m_iNodeWidth));
+            style.m_iNodeHeight =
+                static_cast<int>(IntField(_pL, 1, "nodeHeight", style.m_iNodeHeight));
+            style.m_iNodeTop = static_cast<int>(IntField(_pL, 1, "nodeTop", style.m_iNodeTop));
+            style.m_iSelected = static_cast<int>(IntField(_pL, 1, "selected", 0)) - 1;
+
+            lua_getfield(_pL, 1, "colours");
+            if (lua_istable(_pL, -1))
+            {
+                const int icolours = lua_gettop(_pL);
+                const std::pair<const char*, std::uint32_t*> keys[] = {
+                    {"background", &style.m_uiBackground},
+                    {"bandA", &style.m_uiBandA},
+                    {"bandB", &style.m_uiBandB},
+                    {"bandSelected", &style.m_uiBandSelected},
+                    {"rowLine", &style.m_uiRowLine},
+                    {"node", &style.m_uiNode},
+                    {"nodeHead", &style.m_uiNodeHead},
+                    {"nodeBorder", &style.m_uiNodeBorder},
+                    {"deleted", &style.m_uiDeleted},
+                    {"bar", &style.m_uiBar},
+                    {"edge", &style.m_uiEdge},
+                    {"branchEdge", &style.m_uiBranchEdge},
+                    {"selectedFill", &style.m_uiSelectedFill},
+                    {"selectedBorder", &style.m_uiSelectedBorder},
+                };
+                for (const auto& [szkey, puiValue] : keys)
+                {
+                    *puiValue = ParseColour(StringField(_pL, icolours, szkey, ""), *puiValue);
+                }
+            }
+            lua_pop(_pL, 1);
+
+            LuaEngine* pengine = Self(_pL);
+            return Query(_pL,
+                [&](Repository& _R)
+                {
+                    const auto graph = _R.FileRevisionGraph(path, query);
+                    const auto picture = gitgud::imaging::RenderRevisionGraph(graph, style);
+                    if (auto* pui = pengine->UiBackend())
+                    {
+                        pui->DefineImage(image, picture.m_Image.m_iWidth, picture.m_Image.m_iHeight,
+                            picture.m_Image.m_Rgba);
+                    }
+
+                    lua_createtable(_pL, 0, 8);
+                    SetField(_pL, "image", image);
+                    SetField(_pL, "width", static_cast<lua_Integer>(picture.m_Image.m_iWidth));
+                    SetField(_pL, "height", static_cast<lua_Integer>(picture.m_Image.m_iHeight));
+                    SetField(_pL, "columnWidth", static_cast<lua_Integer>(picture.m_iColumnWidth));
+
+                    lua_createtable(_pL, static_cast<int>(graph.m_Rows.size()), 0);
+                    for (std::size_t r = 0; r < graph.m_Rows.size(); ++r)
+                    {
+                        lua_createtable(_pL, 0, 7);
+                        SetField(_pL, "name", graph.m_Rows[r].m_Name);
+                        SetField(_pL, "head", graph.m_Rows[r].m_bHead);
+                        SetField(_pL, "remote", graph.m_Rows[r].m_bRemote);
+                        PushBox(_pL, picture.m_Rows[r]);
+                        lua_rawseti(_pL, -2, static_cast<lua_Integer>(r + 1));
+                    }
+                    lua_setfield(_pL, -2, "rows");
+
+                    lua_createtable(_pL, static_cast<int>(graph.m_Nodes.size()), 0);
+                    for (std::size_t n = 0; n < graph.m_Nodes.size(); ++n)
+                    {
+                        const auto& node = graph.m_Nodes[n];
+                        PushCommit(_pL, node.m_Commit);
+                        SetField(_pL, "row", static_cast<lua_Integer>(node.m_iRow + 1));
+                        SetField(_pL, "column", static_cast<lua_Integer>(node.m_iColumn + 1));
+                        SetField(_pL, "revision", static_cast<lua_Integer>(node.m_iRevision));
+                        SetField(_pL, "action", std::string(1, node.m_cAction));
+                        PushBox(_pL, picture.m_Nodes[n]);
+                        lua_rawseti(_pL, -2, static_cast<lua_Integer>(n + 1));
+                    }
+                    lua_setfield(_pL, -2, "nodes");
+
+                    lua_createtable(_pL, static_cast<int>(graph.m_Edges.size()), 0);
+                    for (std::size_t e = 0; e < graph.m_Edges.size(); ++e)
+                    {
+                        lua_createtable(_pL, 0, 3);
+                        SetField(
+                            _pL, "from", static_cast<lua_Integer>(graph.m_Edges[e].m_iFrom + 1));
+                        SetField(_pL, "to", static_cast<lua_Integer>(graph.m_Edges[e].m_iTo + 1));
+                        SetField(_pL, "merge", graph.m_Edges[e].m_bMerge);
+                        lua_rawseti(_pL, -2, static_cast<lua_Integer>(e + 1));
+                    }
+                    lua_setfield(_pL, -2, "edges");
+                    return 1;
+                });
+        }
+
     } // namespace
 
     void AddFeatureBindings(std::vector<luaL_Reg>& _Out)
@@ -813,6 +1087,14 @@ namespace gitgud::lua::bindings
         const luaL_Reg kFunctions[] = {
             // graph + undo
             {"graph", LGraph},
+            {"revisionGraph", LRevisionGraph},
+            // browsing, version diffs, shelves
+            {"listTree", LListTree},
+            {"fileAt", LFileAt},
+            {"diffVersions", LDiffVersions},
+            {"changedFiles", LChangedFiles},
+            {"shelve", LShelve},
+            {"unshelve", LUnshelve},
             {"headOid", LHeadOid},
             {"reflog", LReflog},
             {"setBranchTarget", LSetBranchTarget},

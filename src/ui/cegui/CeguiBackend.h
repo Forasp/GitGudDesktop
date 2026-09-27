@@ -11,12 +11,14 @@
 
 #include "ui/IUiBackend.h"
 
+#include <map>
 #include <memory>
 #include <unordered_map>
 
 namespace CEGUI
 {
     class OpenGL3Renderer;
+    class OpenGLViewportTarget;
     class GUIContext;
     class Window;
     class NativeClipboardProvider;
@@ -38,6 +40,19 @@ namespace gitgud::ui
 
         bool LoadLayout(const std::string& _LayoutFile) override;
         bool LoadLayoutInto(const std::string& _LayoutFile, const std::string& _ParentId) override;
+
+        void SetLayoutDirectory(const std::string& _Directory) override;
+        void ApplySkin(const std::string& _PackageRoot) override;
+        void UnloadAll() override;
+
+        bool CreateSurface(const std::string& _SurfaceId, int _iWidth, int _iHeight,
+            const std::string& _LayoutFile) override;
+        void DestroySurface(const std::string& _SurfaceId) override;
+        void ResizeSurface(const std::string& _SurfaceId, int _iWidth, int _iHeight) override;
+        bool SurfaceNeedsRedraw(const std::string& _SurfaceId) const override;
+        void RenderSurface(const std::string& _SurfaceId) override;
+        void SetInputSurface(const std::string& _SurfaceId) override;
+        void SetCursorVisible(const std::string& _SurfaceId, bool _bVisible) override;
 
         void Resize(int _iWindowWidth, int _iWindowHeight) override;
         void Update(float _fElapsed) override;
@@ -62,8 +77,11 @@ namespace gitgud::ui
             const std::string& _WidgetId, int _iIndex, const std::string& _Text) override;
         void SelectListItem(
             const std::string& _WidgetId, int _iIndex, bool _bEnsureVisible) override;
-        float GetScroll(const std::string& _WidgetId) const override;
-        void SetScroll(const std::string& _WidgetId, float _fPosition) override;
+        void SelectListItems(const std::string& _WidgetId, const std::vector<int>& _Rows) override;
+        void SetDraggable(const std::string& _WidgetId, bool _bDraggable) override;
+        float GetScroll(const std::string& _WidgetId, bool _bHorizontal = false) const override;
+        void SetScroll(
+            const std::string& _WidgetId, float _fPosition, bool _bHorizontal = false) override;
         void Focus(const std::string& _WidgetId) override;
         void BringToFront(const std::string& _WidgetId) override;
         bool DefineImage(const std::string& _ImageName, int _iWidth, int _iHeight,
@@ -77,6 +95,7 @@ namespace gitgud::ui
         void SuspendLayout(const std::string& _WidgetId, bool _bSuspended) override;
         std::string GetText(const std::string& _WidgetId) const override;
         int GetSelectedIndex(const std::string& _WidgetId) const override;
+        std::vector<int> GetSelectedIndices(const std::string& _WidgetId) const override;
         std::string GetProperty(
             const std::string& _WidgetId, const std::string& _Property) const override;
         bool GetRect(const std::string& _WidgetId, PixelRect& _Out) const override;
@@ -87,6 +106,27 @@ namespace gitgud::ui
         void OnEvent(EventHandler _Handler) override;
 
       private:
+        // One pop-out window: its own GUI context drawing into a viewport of
+        // the shared GL context.
+        struct Surface
+        {
+            CEGUI::OpenGLViewportTarget* m_pTarget = nullptr;
+            CEGUI::GUIContext* m_pContext = nullptr;
+            CEGUI::Window* m_pRoot = nullptr;
+            bool m_bForceRedraw = true;
+        };
+
+        void SetUpContext(CEGUI::GUIContext& _Context);
+        // Load a layout file; nullptr (logged) on failure.
+        CEGUI::Window* LoadLayoutFile(const std::string& _LayoutFile) const;
+        // The name of the first widget in the tree already taken, or "".
+        std::string FindNameClash(CEGUI::Window* _pWindow) const;
+        void DestroySurfaceNow(Surface& _Surface);
+        // The context input goes to (the main one unless a surface was chosen).
+        CEGUI::GUIContext* InputContext() const;
+        void RenderContext(CEGUI::GUIContext& _Context);
+        // Drop cached geometry in every window (an image they show changed).
+        void InvalidateAll();
         void SubscribeWidgetEvents(CEGUI::Window* _pWindow);
         CEGUI::Window* FindWidget(const std::string& _WidgetId) const;
         void CacheWidget(const std::string& _WidgetId, CEGUI::Window* _pWindow) const;
@@ -100,6 +140,8 @@ namespace gitgud::ui
         // side is mirroring the other.
         std::vector<std::string> m_LinkedScrollPairs;
         bool m_bLinkingScroll = false;
+        // Every list's linked neighbours; a scroll reaches the whole group.
+        std::unordered_map<std::string, std::vector<std::string>> m_ScrollLinks;
 
         // Widget-id -> window index. getChildRecursive is an O(tree) UTF-32
         // string scan, which made bulk row building O(N^2); this map makes every
@@ -112,10 +154,18 @@ namespace gitgud::ui
         // per list widget; -1 when none.
         std::unordered_map<std::string, int> m_DragStartRow;
 
+        // Widgets opted into drag events (SetDraggable), and whether each is
+        // mid-drag. Keyed by window so a recreated widget subscribes afresh.
+        std::unordered_map<CEGUI::Window*, bool> m_Draggable;
+
         EventHandler m_EventHandler;
         CEGUI::OpenGL3Renderer* m_pRenderer = nullptr;
         CEGUI::GUIContext* m_pGuiContext = nullptr;
         CEGUI::Window* m_pRootWindow = nullptr;
+        std::map<std::string, Surface> m_Surfaces;
+        std::string m_InputSurface; // "" = the main window
+        std::string m_ResourceRoot;
+        std::string m_SkinOverride; // package whose looknfeel is applied over the base skin
         // OS clipboard bridge (Windows today); CEGUI does not take ownership.
         std::unique_ptr<CEGUI::NativeClipboardProvider> m_ClipboardProvider;
         // Created before CEGUI's System so its log lands next to the exe.

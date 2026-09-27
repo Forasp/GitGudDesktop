@@ -101,21 +101,28 @@ add_library(gitgud_core STATIC
     src/git/RepositoryHistory.cpp
     src/git/RepositoryRewrite.cpp
     src/git/RepositoryModules.cpp
+    src/git/RepositoryTree.cpp
+    src/git/RepositoryShelves.cpp
+    src/git/RepositoryRevisionGraph.cpp
     src/git/CommitGraph.cpp
     src/git/CommitSigning.cpp
     src/git/LfsFilter.cpp
     src/app/EventBus.cpp
     src/app/TaskRunner.cpp
+    src/app/UiPackages.cpp
     src/lua/LuaEngine.cpp
     src/lua/LuaRepoBindings.cpp
     src/lua/LuaUiBindings.cpp
     src/lua/LuaFeatureBindings.cpp
+    src/lua/LuaAppBindings.cpp
     src/platform/CredentialStore.cpp
     src/platform/Shell.cpp
     src/platform/CrashHandler.cpp
     src/platform/Process.cpp
     src/imaging/ImageDiff.cpp
     src/imaging/GraphRenderer.cpp
+    src/imaging/Raster.cpp
+    src/imaging/RevisionGraphRenderer.cpp
 )
 
 if(WIN32)

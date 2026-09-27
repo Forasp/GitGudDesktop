@@ -2,7 +2,8 @@
 
 A tour of the interface GitGud ships with. It works like GitHub Desktop,
 against any Git server — and every part of it can be changed or replaced
-(see `MODDING.md`).
+(see `MODDING.md`). GitGud also ships a P4V-style interface (`P4V.md`);
+see *Switching interfaces* below.
 
 ## The window
 
@@ -275,6 +276,16 @@ branch name (global Git config), the commands for your editor and terminal
 (`%s` is replaced by the path), and whether to confirm discards and force
 pushes and to fetch in the background. *File ▸ SSH keys…* and *File ▸
 Commit signing…* set up SSH and signed commits.
+
+## Switching interfaces
+
+The first time GitGud starts it asks which interface you'd like: this one,
+or the P4V-style one (`P4V.md`). Change your mind any time with *File ▸
+Switch user interface…* (or the **Switch UI…** button in Options): the
+picker shows every interface GitGud knows, and **Use an interface from a
+folder…** loads one you made yourself (`MODDING.md` ▸ "Your own
+interface"). Your repositories, tabs, and settings are shared by all of
+them; the choice is remembered for the next launch.
 
 ## Keyboard shortcuts
 

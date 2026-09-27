@@ -6,7 +6,8 @@
 -- remote, an optional per-repository identity, and its .gitignore (other
 -- remotes are managed from the branch tree — views/remotes.lua).
 --
--- Public API: settingsView.options(), settingsView.repository()
+-- Public API: settingsView.options(), settingsView.repository(),
+-- settingsView.switchInterface()
 
 local app = require("core.app")
 local dialog = require("ui.dialog")
@@ -38,6 +39,7 @@ function settingsView.options()
             { label = "Fetch in the background every 15 minutes", value = settings.get("autoFetch", true) },
         },
         ok = "Save",
+        alt = { label = "Switch UI…", action = settingsView.switchInterface },
         onOk = function(v)
             local identity = {
                 { "user.name", text.trim(v.fields[1]) },
@@ -64,6 +66,17 @@ function settingsView.options()
             return true
         end,
     })
+end
+
+--- Open the user-interface picker (File > Switch user interface…, or the
+-- Options dialog's "Switch UI…" button): choose the default UI, the P4V-style
+-- UI, or a UI package from any folder. The picker runs in place of this UI
+-- and comes back here on Cancel.
+function settingsView.switchInterface()
+    local ok, err = gitgud.showUiPicker()
+    if not ok then
+        status.error(err or "The interface picker isn't available.")
+    end
 end
 
 --- Commit signing (File > Commit signing…): commit.gpgsign, gpg.format, and

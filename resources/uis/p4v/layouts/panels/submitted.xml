@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  submitted.xml - the Submitted tab: committed changelists (commits),
+  filtered by folder, user, and branch; the selected one's Details / Files
+  below. scripts/p4/views/submitted.lua.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="SubmittedPanel">
+        <Property name="Area" value="{{0,1},{0,1},{1,-1},{1,-1}}"/>
+        <Property name="Visible" value="false"/>
+
+        <Window type="Gitgud/StaticText" name="SubmittedHeader">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,30}}"/>
+            <Property name="PanelColour" value="FF25484F"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Label" name="SubmittedPathLabel">
+                <Property name="Area" value="{{0,8},{0,0},{0,50},{1,0}}"/>
+                <Property name="Text" value="Folder:"/>
+            </Window>
+            <Window type="Gitgud/Editbox" name="SubmittedPathEdit">
+                <Property name="Area" value="{{0,52},{0,4},{0.45,0},{1,-4}}"/>
+                <Property name="Text" value=""/>
+                <Property name="TooltipText" value="Only changelists that touched this folder or file (blank: all)"/>
+            </Window>
+            <Window type="Gitgud/Label" name="SubmittedUserLabel">
+                <Property name="Area" value="{{0.45,8},{0,0},{0.45,48},{1,0}}"/>
+                <Property name="Text" value="User:"/>
+            </Window>
+            <Window type="Gitgud/Editbox" name="SubmittedUserEdit">
+                <Property name="Area" value="{{0.45,48},{0,4},{0.65,0},{1,-4}}"/>
+                <Property name="Text" value=""/>
+                <Property name="TooltipText" value="Only changelists by this author (blank: everyone)"/>
+            </Window>
+            <Window type="Gitgud/Button" name="SubmittedBranchButton">
+                <Property name="Area" value="{{0.65,8},{0,4},{1,-96},{1,-4}}"/>
+                <Property name="Text" value=""/>
+                <Property name="HorzFormatting" value="LeftAligned"/>
+                <Property name="TooltipText" value="Whose history: the current branch, or every branch"/>
+            </Window>
+            <Window type="Gitgud/Button" name="SubmittedMoreButton">
+                <Property name="Area" value="{{1,-90},{0,4},{1,-8},{1,-4}}"/>
+                <Property name="Text" value="More…"/>
+                <Property name="TooltipText" value="Load older changelists"/>
+            </Window>
+        </Window>
+        <Window type="DefaultWindow" name="SubmittedGridHost">
+            <Property name="Area" value="{{0,0},{0,30},{1,0},{0.55,0}}"/>
+        </Window>
+        <Window type="Gitgud/Button" name="SubmittedSplit">
+            <Property name="Area" value="{{0,0},{0.55,0},{1,0},{0.55,5}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="FF28333C"/>
+            <Property name="HoverFillColour" value="FF276460"/>
+            <Property name="PushedFillColour" value="FF34796A"/>
+            <Property name="BorderColour" value="00000000"/>
+        </Window>
+        <Window type="DefaultWindow" name="SubmittedDetailHost">
+            <Property name="Area" value="{{0,0},{0.55,5},{1,0},{1,0}}"/>
+            <Window type="DefaultWindow" name="SubmittedDetailTabs">
+                <Property name="Area" value="{{0,4},{0,0},{1,-4},{0,24}}"/>
+            </Window>
+            <Window type="Gitgud/MultiLineEditbox" name="SubmittedDetailText">
+                <Property name="Area" value="{{0,4},{0,24},{1,-4},{1,-4}}"/>
+                <Property name="ReadOnly" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="DefaultWindow" name="SubmittedFilesHost">
+                <Property name="Area" value="{{0,4},{0,24},{1,-4},{1,-4}}"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+        </Window>
+    </Window>
+</GUILayout>

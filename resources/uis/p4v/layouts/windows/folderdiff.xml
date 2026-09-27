@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  windows/folderdiff.xml - the Folder Diff window: every file that differs
+  between two versions of a folder (two changelists, a label and the
+  workspace, two branches). Double-click a file for its Diff window.
+  scripts/p4/windows/folderdiff.lua; names are prefixed with the window id.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="Root">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+
+        <Window type="Gitgud/StaticText" name="Background">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="FF28333C"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="Header">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,54}}"/>
+            <Property name="PanelColour" value="FF25484F"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Label" name="Title">
+                <Property name="Area" value="{{0,12},{0,4},{1,-240},{0,26}}"/>
+                <Property name="Font" value="Gitgud-System-Bold"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/Label" name="Subtitle">
+                <Property name="Area" value="{{0,12},{0,26},{1,-240},{0,50}}"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/Button" name="DiffButton">
+                <Property name="Area" value="{{1,-228},{0,12},{1,-120},{0,42}}"/>
+                <Property name="Text" value="Diff File"/>
+            </Window>
+            <Window type="Gitgud/Button" name="SwapButton">
+                <Property name="Area" value="{{1,-112},{0,12},{1,-12},{0,42}}"/>
+                <Property name="Text" value="Swap Sides"/>
+            </Window>
+        </Window>
+        <Window type="DefaultWindow" name="GridHost">
+            <Property name="Area" value="{{0,4},{0,58},{1,-4},{1,-26}}"/>
+        </Window>
+        <Window type="Gitgud/Label" name="Footer">
+            <Property name="Area" value="{{0,12},{1,-24},{1,-12},{1,0}}"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

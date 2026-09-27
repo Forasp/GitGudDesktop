@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  leftpane.xml - P4V's tree pane: Depot (the repository's files at HEAD)
+  and Workspace (the working tree, untracked files included) tabs over one
+  tree list. The connection row names the open repository (workspace) and
+  its branch; click it to switch. scripts/p4/tree.lua and depot.lua fill it.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="LeftPane">
+        <Property name="Area" value="{{0,0},{0,0},{0.25,0},{0.8,0}}"/>
+
+        <Window type="DefaultWindow" name="LeftTabs">
+            <Property name="Area" value="{{0,4},{0,2},{1,0},{0,26}}"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="LeftBody">
+            <Property name="Area" value="{{0,4},{0,26},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="FF1F2731"/>
+            <Property name="FrameEnabled" value="true"/>
+            <Property name="FrameColour" value="FF525445"/>
+            <Property name="Text" value=""/>
+
+            <Window type="Gitgud/Button" name="ConnectionButton">
+                <Property name="Area" value="{{0,2},{0,2},{1,-58},{0,24}}"/>
+                <Property name="Text" value=""/>
+                <Property name="HorzFormatting" value="LeftAligned"/>
+                <Property name="NormalFillColour" value="FF1F2731"/>
+                <Property name="BorderColour" value="00000000"/>
+                <Property name="TooltipText" value="The open repository (workspace) and branch - click to switch"/>
+            </Window>
+            <Window type="Gitgud/Button" name="TreeFilterButton">
+                <Property name="Area" value="{{1,-56},{0,2},{1,-30},{0,24}}"/>
+                <Property name="Text" value=""/>
+                <Property name="NormalFillColour" value="FF1F2731"/>
+                <Property name="BorderColour" value="00000000"/>
+                <Property name="TooltipText" value="Find a file in the tree"/>
+                <Window type="Gitgud/Image" name="TreeFilterIcon">
+                    <Property name="Area" value="{{0.5,-8},{0.5,-8},{0.5,8},{0.5,8}}"/>
+                    <Property name="Image" value="P4-Icons/Search"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+            </Window>
+            <Window type="Gitgud/Button" name="TreeCollapseButton">
+                <Property name="Area" value="{{1,-28},{0,2},{1,-2},{0,24}}"/>
+                <Property name="Text" value="–"/>
+                <Property name="NormalFillColour" value="FF1F2731"/>
+                <Property name="BorderColour" value="00000000"/>
+                <Property name="TooltipText" value="Collapse all"/>
+            </Window>
+            <Window type="Gitgud/StaticText" name="LeftBodyLine">
+                <Property name="Area" value="{{0,1},{0,26},{1,-1},{0,27}}"/>
+                <Property name="PanelColour" value="FF25484F"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/ListWidget" name="DepotTree">
+                <Property name="Area" value="{{0,1},{0,27},{1,-1},{1,-1}}"/>
+                <Property name="BorderColour" value="FF1F2731"/>
+            </Window>
+        </Window>
+    </Window>
+</GUILayout>

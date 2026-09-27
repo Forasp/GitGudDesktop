@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  addressbar.xml - the depot path of the selection (//repo/src/main.cpp).
+  Type a path and press Enter (or Go) to select it in the tree.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="AddressBar">
+        <Property name="Area" value="{{0,0},{0,72},{1,0},{0,100}}"/>
+        <Property name="PanelColour" value="FF28333C"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/Editbox" name="AddressEdit">
+            <Property name="Area" value="{{0,6},{0,3},{1,-70},{1,-3}}"/>
+            <Property name="Text" value=""/>
+            <Property name="TooltipText" value="Depot path: type a folder or file and press Enter"/>
+        </Window>
+        <Window type="Gitgud/Button" name="AddressGo">
+            <Property name="Area" value="{{1,-64},{0,3},{1,-6},{1,-3}}"/>
+            <Property name="Text" value="Go"/>
+        </Window>
+    </Window>
+</GUILayout>

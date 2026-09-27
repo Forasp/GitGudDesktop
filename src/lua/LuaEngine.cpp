@@ -98,19 +98,32 @@ namespace gitgud::lua
 
     void LuaEngine::SetScriptRoot(const std::string& _Directory)
     {
-        m_ScriptRoot = _Directory;
+        SetScriptRoots({_Directory});
+    }
+
+    void LuaEngine::SetScriptRoots(const std::vector<std::string>& _Directories)
+    {
+        m_ScriptRoots = _Directories;
         ApplyScriptRoot();
     }
 
     void LuaEngine::ApplyScriptRoot()
     {
-        if (!m_pL || m_ScriptRoot.empty())
+        if (!m_pL || m_ScriptRoots.empty())
         {
             return;
         }
-        // Only our script tree: modules can't accidentally pick up a stray
+        // Only our script trees: modules can't accidentally pick up a stray
         // LUA_PATH from the environment.
-        const std::string path = m_ScriptRoot + "/?.lua;" + m_ScriptRoot + "/?/init.lua";
+        std::string path;
+        for (const std::string& root : m_ScriptRoots)
+        {
+            if (!path.empty())
+            {
+                path += ";";
+            }
+            path += root + "/?.lua;" + root + "/?/init.lua";
+        }
         lua_getglobal(m_pL, "package");
         lua_pushlstring(m_pL, path.data(), path.size());
         lua_setfield(m_pL, -2, "path");
@@ -127,6 +140,7 @@ namespace gitgud::lua
         bindings::AddRepoBindings(functions);
         bindings::AddUiBindings(functions);
         bindings::AddFeatureBindings(functions);
+        bindings::AddAppBindings(functions);
         functions.push_back({nullptr, nullptr});
 
         lua_newtable(m_pL);

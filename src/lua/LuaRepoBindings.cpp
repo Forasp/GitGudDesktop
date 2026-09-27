@@ -1166,6 +1166,33 @@ namespace gitgud::lua::bindings
                 });
         }
 
+        // gitgud.pushBranch(remote, branch, {force, as}) -> pushBranch.* events
+        int LPushBranch(lua_State* _pL)
+        {
+            const std::string remote = luaL_checkstring(_pL, 1);
+            const std::string branch = luaL_checkstring(_pL, 2);
+            bool bforce = false;
+            std::string target;
+            if (lua_istable(_pL, 3))
+            {
+                lua_getfield(_pL, 3, "force");
+                bforce = lua_toboolean(_pL, -1) != 0;
+                lua_pop(_pL, 1);
+                lua_getfield(_pL, 3, "as");
+                if (lua_isstring(_pL, -1))
+                {
+                    target = lua_tostring(_pL, -1);
+                }
+                lua_pop(_pL, 1);
+            }
+            return RunRemoteJob(_pL, "pushBranch",
+                [remote, branch, target, bforce](Repository& _R)
+                {
+                    _R.PushBranch(remote, branch, target, bforce);
+                    return branch + "|" + remote;
+                });
+        }
+
         int LDeleteRemoteBranch(lua_State* _pL)
         {
             const std::string remote = luaL_checkstring(_pL, 1);
@@ -1443,6 +1470,7 @@ namespace gitgud::lua::bindings
             {"pull", LPull},
             {"pushTags", LPushTags},
             {"deleteRemoteBranch", LDeleteRemoteBranch},
+            {"pushBranch", LPushBranch},
             {"updateSubmodule", LUpdateSubmodule},
             {"clone", LClone},
             // repo lifecycle

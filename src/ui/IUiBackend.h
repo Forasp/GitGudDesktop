@@ -78,9 +78,42 @@ namespace gitgud::ui
         virtual bool LoadLayoutInto(
             const std::string& _LayoutFile, const std::string& _ParentId) = 0;
 
+        // User-interface packages (app/UiPackages.h) ------------------------------
+        // Folder layout files resolve against: the running UI's layouts/. The base
+        // resources/layouts stays reachable as resource group "gitgud-layouts", so
+        // a package can import shared pieces:
+        //   <LayoutImport filename="dialogs/dialog.xml" resourceGroup="gitgud-layouts"/>
+        virtual void SetLayoutDirectory(const std::string& _Directory) = 0;
+        // Re-apply the skin for a UI package ("" = the base skin only): the base
+        // looknfeel, then every .xml in <package>/looknfeel on top — a package
+        // restyles "Gitgud/Button" and friends by redefining those looks — and
+        // every imageset in <package>/imagesets (its own icons). Call with no
+        // windows alive (after UnloadAll).
+        virtual void ApplySkin(const std::string& _PackageRoot) = 0;
+        // Destroy the main window's widgets and every surface.
+        virtual void UnloadAll() = 0;
+
+        // Surfaces: extra OS windows (pop-outs) -------------------------------------
+        // Each has its own widget tree, loaded from a layout whose widget names
+        // are prefixed with "<surfaceId>:" (one namespace across all windows). All
+        // surfaces share the main window's GL context: make the surface's window
+        // current before RenderSurface. "" means the main window below.
+        virtual bool CreateSurface(const std::string& _SurfaceId, int _iWidth, int _iHeight,
+            const std::string& _LayoutFile) = 0;
+        virtual void DestroySurface(const std::string& _SurfaceId) = 0;
+        virtual void ResizeSurface(const std::string& _SurfaceId, int _iWidth, int _iHeight) = 0;
+        virtual bool SurfaceNeedsRedraw(const std::string& _SurfaceId) const = 0;
+        virtual void RenderSurface(const std::string& _SurfaceId) = 0;
+        // Route the Inject* calls below (and IsTextInputFocused) to a surface.
+        virtual void SetInputSurface(const std::string& _SurfaceId) = 0;
+        // Draw a surface's cursor or not (the mouse entered / left its window).
+        virtual void SetCursorVisible(const std::string& _SurfaceId, bool _bVisible) = 0;
+
         // Per-frame ------------------------------------------------------------
+        // Resize / NeedsRedraw / Render act on the main window.
         virtual void Resize(int _iWindowWidth, int _iWindowHeight) = 0;
-        // Advance timers/animations (caret blink, tooltips) by `_fElapsed` s.
+        // Advance timers/animations (caret blink, tooltips) by `_fElapsed` s, in
+        // every window.
         virtual void Update(float _fElapsed) = 0;
         // True when something changed since the last Render() — lets the main
         // loop skip drawing (and sleep) while the app is idle.
@@ -115,7 +148,9 @@ namespace gitgud::ui
         virtual void SetProperty(const std::string& _WidgetId, const std::string& _Property,
             const std::string& _Value) = 0;
         // Keep two list widgets' vertical scroll positions in step (used by the
-        // split diff). Safe to call again with the same pair after a reload.
+        // split diff). Links are transitive: linking A-B and B-C scrolls all
+        // three together (multi-column tables). Safe to call again with the same
+        // pair after a reload.
         virtual void LinkScroll(const std::string& _WidgetIdA, const std::string& _WidgetIdB) = 0;
 
         // Replace one row of a list (0-based) without rebuilding the rest — keeps
@@ -126,9 +161,21 @@ namespace gitgud::ui
         // optionally scrolling it into view.
         virtual void SelectListItem(
             const std::string& _WidgetId, int _iIndex, bool _bEnsureVisible) = 0;
-        // Vertical scroll offset (pixels) of a list or scrollable pane.
-        virtual float GetScroll(const std::string& _WidgetId) const = 0;
-        virtual void SetScroll(const std::string& _WidgetId, float _fPosition) = 0;
+        // Multi-select lists (the "MultiSelect" property: Ctrl+click adds a row,
+        // Shift+click a range): select exactly these rows (0-based), without
+        // raising "selected".
+        virtual void SelectListItems(
+            const std::string& _WidgetId, const std::vector<int>& _Rows) = 0;
+        // Opt a widget into drag events: while the left button is held after
+        // pressing on it, "<id>.dragging" reports the cursor ("x,y", window
+        // pixels), then "<id>.dragEnded"; "<id>.dragStarted" comes first. For
+        // splitters, column dividers, panning a picture.
+        virtual void SetDraggable(const std::string& _WidgetId, bool _bDraggable) = 0;
+        // Scroll offset (pixels) of a list or scrollable pane: vertical, or
+        // horizontal with `_bHorizontal`.
+        virtual float GetScroll(const std::string& _WidgetId, bool _bHorizontal = false) const = 0;
+        virtual void SetScroll(
+            const std::string& _WidgetId, float _fPosition, bool _bHorizontal = false) = 0;
         // Give keyboard focus to a widget (e.g. the filter box of a popup).
         virtual void Focus(const std::string& _WidgetId) = 0;
         // Raise a widget above its siblings (popups opened over each other).
@@ -168,6 +215,8 @@ namespace gitgud::ui
         virtual std::string GetText(const std::string& _WidgetId) const = 0;
         // Selected row of a list widget, 0-based; -1 when nothing is selected.
         virtual int GetSelectedIndex(const std::string& _WidgetId) const = 0;
+        // Every selected row (0-based, ascending) — multi-select lists.
+        virtual std::vector<int> GetSelectedIndices(const std::string& _WidgetId) const = 0;
         // Any property's current value ("" when the widget/property is missing).
         virtual std::string GetProperty(
             const std::string& _WidgetId, const std::string& _Property) const = 0;

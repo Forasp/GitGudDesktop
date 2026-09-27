@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  toolbar.xml - P4V's icon-over-label toolbar. The buttons are built by
+  scripts/p4/toolbar.lua (one table entry per button: icon, label, action,
+  enabled); this is just the strip they sit on.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="Toolbar">
+        <Property name="Area" value="{{0,0},{0,22},{1,0},{0,72}}"/>
+        <Property name="PanelColour" value="FF28333C"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/StaticText" name="ToolbarTopLine">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,1}}"/>
+            <Property name="PanelColour" value="FF010102"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="DefaultWindow" name="ToolbarButtons">
+            <Property name="Area" value="{{0,4},{0,2},{1,-4},{1,-2}}"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="ToolbarBottomLine">
+            <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="FF010102"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

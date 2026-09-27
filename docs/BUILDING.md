@@ -86,7 +86,9 @@ D:\...\build\release\bin\gitgud.exe
 ```
 
 GitGud opens the repository in its working directory (or none — add one
-from the UI). Launched from a terminal it prints to that console;
+from the UI). The first launch asks which interface to use (the default or
+the P4V-style one); `GITGUD_UI=default`, `p4v`, or `path:<folder>` picks
+one for a run without asking. Launched from a terminal it prints to that console;
 `GITGUD_CONSOLE=1` forces a console window and `GITGUD_LOG=<file>` sends all
 output to a file. A crash writes a symbolized stack trace to that output and
 `gitgud-crash.dmp` next to the exe.
@@ -133,7 +135,7 @@ is.
 
 ## Tests
 
-- **Engine (C++)** — Catch2, 69 cases: `build\release\bin\gitgud_tests.exe`
+- **Engine (C++)** — Catch2, 76 cases: `build\release\bin\gitgud_tests.exe`
   (or `ctest --test-dir build/release`). The signing and LFS cases need
   `ssh-keygen` and `git-lfs` (Git for Windows ships both) and skip without.
 - **UI (Lua, scripted)** — `tests/ui/*.lua` drive the real UI without
@@ -142,6 +144,7 @@ is.
   ```powershell
   powershell -File tests\ui\make-testrepo.ps1 -Dir C:\temp\gg-test
   $env:GITGUD_SCRIPT = "$PWD\tests\ui\workflows.lua"   # or features / remotes / walkthrough / perf / mod-example
+  $env:GITGUD_UI     = "default"                         # p4v.lua needs "p4v"
   $env:GITGUD_SHOTS  = "C:\temp\shots"
   $env:GITGUD_LOG    = "C:\temp\gg.log"
   Start-Process build\release\bin\gitgud.exe -WorkingDirectory C:\temp\gg-test
