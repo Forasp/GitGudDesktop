@@ -1,5 +1,6 @@
 # Builds, tests, and packages GitGud Desktop on every push and pull request.
-# Pushing a tag like v1.0 also publishes a release with the zip.
+# Every run keeps the zip and the installer as the GitGud-win64 artifact;
+# pushing a tag like v1.0 also publishes a release with both.
 #
 # The first run builds every vcpkg dependency (OpenSSL among them) and CEGUI,
 # which takes a while; both are cached, so later runs only build the app.
@@ -19,6 +20,10 @@ concurrency:
 env:
   # Software OpenGL for the smoke test (the runners have no GPU).
   MESA_VERSION: "26.2.2"
+  # Inno Setup builds the installer: this release of jrsoftware/issrc, checked
+  # against the SHA-256 GitHub lists for its x64 installer. Update both together.
+  INNO_VERSION: "7.0.2"
+  INNO_SHA256: "5ad54ca3def786f8f4212552e54cc6d8d61329e2d24a1cfee0571d42c2684ff1"
 
 jobs:
   windows:
@@ -108,13 +113,33 @@ jobs:
           7z e -y -bso0 $archive x64/opengl32.dll x64/libgallium_wgl.dll "-o$out"
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
+      # Installed into a temp folder put first on PATH, so package.ps1 uses this
+      # exact version even if the runner image has another.
+      - name: Inno Setup
+        run: |
+          $tag = "is-" + ($env:INNO_VERSION -replace "\.", "_")
+          $setup = Join-Path $env:RUNNER_TEMP "innosetup-$env:INNO_VERSION-x64.exe"
+          Invoke-WebRequest "https://github.com/jrsoftware/issrc/releases/download/$tag/innosetup-$env:INNO_VERSION-x64.exe" -OutFile $setup
+          $hash = (Get-FileHash $setup -Algorithm SHA256).Hash
+          if ($hash -ne $env:INNO_SHA256) {
+            "::error title=Inno Setup download::SHA-256 mismatch: got $hash"
+            exit 1
+          }
+          $dir = Join-Path $env:RUNNER_TEMP "innosetup"
+          $p = Start-Process $setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/CURRENTUSER", "/DIR=`"$dir`"" -Wait -PassThru
+          if ($p.ExitCode -ne 0 -or -not (Test-Path (Join-Path $dir "ISCC.exe"))) {
+            "::error title=Inno Setup install::the installer exited with $($p.ExitCode)"
+            exit 1
+          }
+          $dir >> $env:GITHUB_PATH
+
       - name: Package
         run: |
           $log = Join-Path $env:RUNNER_TEMP "package.log"
-          powershell -NoProfile -ExecutionPolicy Bypass -File package.ps1 -SkipBuild -OpenGLRuntime (Join-Path $env:RUNNER_TEMP "mesa-gl") *>&1 | Tee-Object -FilePath $log
+          powershell -NoProfile -ExecutionPolicy Bypass -File package.ps1 -SkipBuild -Installer -OpenGLRuntime (Join-Path $env:RUNNER_TEMP "mesa-gl") *>&1 | Tee-Object -FilePath $log
           if ($LASTEXITCODE -ne 0) {
             $lines = @(Get-Content $log -Tail 30)
-            foreach ($extra in @("build/dist/smoke-test/gitgud.log", "build/dist/smoke-test/GitGud/CEGUI.log")) {
+            foreach ($extra in @("build/dist/smoke-test/gitgud.log", "build/dist/smoke-test/appdata/Gitgud/logs/CEGUI.log")) {
               if (Test-Path $extra) { $lines += "--- $extra"; $lines += @(Get-Content $extra -Tail 25) }
             }
             $text = $lines -join "`n"
@@ -122,11 +147,21 @@ jobs:
             exit 1
           }
 
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: GitGud-win64
+          path: |
+            build/dist/GitGud-win64.zip
+            build/dist/GitGud-win64-setup.exe
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = $env:GITHUB_REF_NAME.TrimStart("v")
-          gh release create $env:GITHUB_REF_NAME build/dist/GitGud-win64.zip --title "GitGud Desktop $version" --generate-notes
+          gh release create $env:GITHUB_REF_NAME build/dist/GitGud-win64.zip build/dist/GitGud-win64-setup.exe --title "GitGud Desktop $version" --generate-notes
           if ($LASTEXITCODE -ne 0) { exit 1 }

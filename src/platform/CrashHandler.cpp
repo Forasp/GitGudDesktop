@@ -94,7 +94,7 @@ namespace gitgud::platform
                 MiniDumpWriteDump(hprocess, GetCurrentProcessId(), hfile, MiniDumpNormal,
                     &exception, nullptr, nullptr);
                 CloseHandle(hfile);
-                std::fprintf(stderr, "[crash] minidump written next to the executable\n");
+                std::fprintf(stderr, "[crash] minidump written to %ls\n", g_DumpPath.c_str());
             }
 
             return EXCEPTION_EXECUTE_HANDLER;

@@ -8,10 +8,12 @@ account required.
 
 ## Getting started
 
-1. Download **[GitGud-win64.zip](https://github.com/Forasp/GitGudDesktop/releases/latest/download/GitGud-win64.zip)**.
-   Other versions and release notes are on the
+1. Download the **[installer](https://github.com/Forasp/GitGudDesktop/releases/latest/download/GitGud-win64-setup.exe)**
+   and run it, or the **[zip](https://github.com/Forasp/GitGudDesktop/releases/latest/download/GitGud-win64.zip)**
+   to unzip anywhere and run `gitgud.exe` without installing. Other versions
+   and release notes are on the
    [releases page](https://github.com/Forasp/GitGudDesktop/releases).
-2. Unzip it anywhere and run `gitgud.exe`. Nothing to install.
+2. Start GitGud. Next time it reopens the repository you had open.
 3. Pick an interface, then add a repository: clone one, create one, or open a
    folder you already have.
 

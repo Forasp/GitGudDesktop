@@ -25,6 +25,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <optional>
@@ -76,6 +77,32 @@ namespace
 #else
         return nullptr; // a future CustomBackend plugs in here
 #endif
+    }
+
+    // The most recently opened repository, reopened at the next launch. One
+    // UTF-8 path in the config folder, shared by every UI package.
+    constexpr const char* kLastRepoFile = "last-repo";
+
+    std::string ReadLastRepo()
+    {
+        std::ifstream in(fs::u8path(gitgud::platform::ConfigDirectory()) / kLastRepoFile,
+            std::ios::binary);
+        std::string path;
+        std::getline(in, path);
+        while (!path.empty() && (path.back() == '\r' || path.back() == ' '))
+        {
+            path.pop_back();
+        }
+        return path;
+    }
+
+    void WriteLastRepo(const std::string& _Path)
+    {
+        const fs::path dir = fs::u8path(gitgud::platform::ConfigDirectory());
+        std::error_code ec;
+        fs::create_directories(dir, ec);
+        std::ofstream out(dir / kLastRepoFile, std::ios::binary | std::ios::trunc);
+        out << _Path << "\n";
     }
 
     // Watches the UI resource files and reports when any of them changed —
@@ -673,7 +700,7 @@ namespace
 
 } // namespace
 
-int main(int /*argc*/, char* /*argv*/[])
+int main(int _iArgc, char* _aSzArgv[])
 {
     constexpr int ikWidth = 1360;
     constexpr int ikHeight = 860;
@@ -720,11 +747,7 @@ int main(int /*argc*/, char* /*argv*/[])
     }
 
     // Symbolized stack trace + minidump if we ever crash.
-    if (char* szexeDir = SDL_GetBasePath())
-    {
-        gitgud::platform::InstallCrashHandler(szexeDir);
-        SDL_free(szexeDir);
-    }
+    gitgud::platform::InstallCrashHandler(gitgud::platform::LogDirectory());
 
     // --- SDL + OpenGL window --------------------------------------------
     // The default UI draws its own title bar, so the OS frame is dropped.
@@ -791,22 +814,10 @@ int main(int /*argc*/, char* /*argv*/[])
             SDL_PushEvent(&wake);
         });
 
-    // Open the repo we're running against. Not being inside one isn't fatal:
-    // the UI still comes up and offers Open/Init/clone. Absolute path so the
-    // UI can show a real repository name instead of ".".
     std::optional<gitgud::git::Repository> repo;
-    const std::string cwd = fs::current_path().string();
-    try
-    {
-        repo.emplace(gitgud::git::Repository::Open(cwd));
-    }
-    catch (const gitgud::git::GitError& e)
-    {
-        std::fprintf(stderr, "[git] no repo at '%s': %s\n", cwd.c_str(), e.what());
-    }
 
-    // Resources live next to the exe (CMake copies them there); the cwd is
-    // reserved for the repo the user opened, so resolve from the exe path.
+    // Resources live next to the exe (CMake copies them there), so resolve
+    // them from the exe path, not the working directory.
     std::string resourceRoot = "resources";
     if (char* szbasePath = SDL_GetBasePath())
     {
@@ -822,6 +833,33 @@ int main(int /*argc*/, char* /*argv*/[])
     AppShell shell(pwindow, gl, ui.get(), bus, resourceRoot);
     shell.SetIcon(pwindow);
     shell.ChooseStartupUi();
+
+    // The repository to start with: `gitgud <path>` (`gitgud .` for the
+    // current folder), else the one opened last. None on first launch, before
+    // a UI has been picked. Failing isn't fatal: the UI still comes up and
+    // offers Open/Init/clone. Absolute so the UI can show a real name.
+    std::string startRepo;
+    if (_iArgc > 1)
+    {
+        std::error_code ec;
+        startRepo = fs::absolute(fs::u8path(_aSzArgv[1]), ec).u8string();
+    }
+    else if (!shell.FirstLaunch())
+    {
+        startRepo = ReadLastRepo();
+    }
+    if (!startRepo.empty())
+    {
+        try
+        {
+            repo.emplace(gitgud::git::Repository::Open(startRepo));
+            WriteLastRepo(repo->WorkDir());
+        }
+        catch (const gitgud::git::GitError& e)
+        {
+            std::fprintf(stderr, "[git] no repo at '%s': %s\n", startRepo.c_str(), e.what());
+        }
+    }
 
     gitgud::lua::LuaEngine lua;
     lua.Bind(repo ? &*repo : nullptr, &bus, ui.get(), &tasks, credentials.get());
@@ -870,6 +908,7 @@ int main(int /*argc*/, char* /*argv*/[])
                 repo.emplace(gitgud::git::Repository::Open(_Path));
             }
 
+            WriteLastRepo(repo->WorkDir());
             lua.Bind(&*repo, &bus, ui.get(), &tasks, credentials.get());
             bus.Publish({"repo.changed", repo->WorkDir()});
         }

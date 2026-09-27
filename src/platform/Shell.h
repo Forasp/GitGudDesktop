@@ -35,7 +35,12 @@ namespace gitgud::platform
     bool SetClipboardText(const std::string& _Text);
 
     // Per-user settings folder: %APPDATA%\Gitgud on Windows, ~/.gitgud
-    // elsewhere (UTF-8; may not exist yet).
+    // elsewhere (UTF-8; may not exist yet). Everything the app writes for
+    // itself goes under here, never next to the exe, which may be read only.
     std::string ConfigDirectory();
+
+    // ConfigDirectory()/logs, created if needed (the temp folder if it can't
+    // be): CEGUI.log and crash dumps.
+    std::string LogDirectory();
 
 } // namespace gitgud::platform
