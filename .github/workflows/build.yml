@@ -1,0 +1,132 @@
+# Builds, tests, and packages GitGud Desktop on every push and pull request.
+# Pushing a tag like v1.0 also publishes a GitHub release with the zip.
+#
+# The first run builds every vcpkg dependency (OpenSSL among them) and CEGUI,
+# which takes a while; both are cached, so later runs only build the app.
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  # Software OpenGL for the smoke test (the runners have no GPU).
+  MESA_VERSION: "26.2.2"
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 150
+    permissions:
+      contents: write # publishing releases
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Cache keys
+        id: keys
+        run: |
+          $baseline = (Get-Content vcpkg.json -Raw | ConvertFrom-Json).'builtin-baseline'
+          $cegui = (git ls-tree HEAD third_party/cegui).Split()[2]
+          "baseline=$baseline" >> $env:GITHUB_OUTPUT
+          "cegui=$cegui" >> $env:GITHUB_OUTPUT
+          "image=$env:ImageOS-$env:ImageVersion" >> $env:GITHUB_OUTPUT
+
+      # vcpkg at the manifests' baseline (setup.ps1 keeps this VCPKG_ROOT
+      # rather than Visual Studio's own copy).
+      - name: vcpkg
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP "vcpkg"
+          git clone --quiet https://github.com/microsoft/vcpkg $root
+          git -C $root checkout --quiet ${{ steps.keys.outputs.baseline }}
+          & (Join-Path $root "bootstrap-vcpkg.bat") -disableMetrics
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $cache = Join-Path $env:RUNNER_TEMP "vcpkg-binaries"
+          New-Item -ItemType Directory -Force $cache | Out-Null
+          "VCPKG_ROOT=$root" >> $env:GITHUB_ENV
+          "VCPKG_BINARY_SOURCES=clear;files,$cache,readwrite" >> $env:GITHUB_ENV
+
+      # Restored and saved as separate steps so a failure later in the job
+      # still keeps whatever was built.
+      - name: Restore vcpkg packages
+        id: vcpkg-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/vcpkg-binaries
+          key: vcpkg-${{ steps.keys.outputs.image }}-${{ steps.keys.outputs.baseline }}-${{ hashFiles('vcpkg.json', 'third_party/cegui-manifest/vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ steps.keys.outputs.image }}-${{ steps.keys.outputs.baseline }}-
+
+      - name: Restore CEGUI
+        id: cegui-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: third_party/cegui-install-release
+          key: cegui-${{ steps.keys.outputs.image }}-${{ steps.keys.outputs.cegui }}-${{ hashFiles('third_party/patches/cegui/*.patch', 'third_party/cegui-manifest/vcpkg.json') }}
+
+      - name: Build and test
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP "setup.log"
+          powershell -NoProfile -ExecutionPolicy Bypass -File setup.ps1 -Preset release -Test *>&1 | Tee-Object -FilePath $log
+          if ($LASTEXITCODE -ne 0) {
+            $tail = (Get-Content $log -Tail 60) -join "`n"
+            "::error title=Build and test failed::$($tail -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A')"
+            exit 1
+          }
+
+      - name: Save vcpkg packages
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/vcpkg-binaries
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+
+      - name: Save CEGUI
+        if: always() && steps.cegui-cache.outputs.cache-hit != 'true' && hashFiles('third_party/cegui-install-release/.gitgud-stamp') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: third_party/cegui-install-release
+          key: ${{ steps.cegui-cache.outputs.cache-primary-key }}
+
+      - name: Software OpenGL for the smoke test
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "mesa.7z"
+          $out = Join-Path $env:RUNNER_TEMP "mesa-gl"
+          Invoke-WebRequest "https://github.com/pal1000/mesa-dist-win/releases/download/$env:MESA_VERSION/mesa3d-$env:MESA_VERSION-release-msvc.7z" -OutFile $archive
+          7z e -y -bso0 $archive x64/opengl32.dll x64/libgallium_wgl.dll "-o$out"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Package
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP "package.log"
+          powershell -NoProfile -ExecutionPolicy Bypass -File package.ps1 -SkipBuild -OpenGLRuntime (Join-Path $env:RUNNER_TEMP "mesa-gl") *>&1 | Tee-Object -FilePath $log
+          if ($LASTEXITCODE -ne 0) {
+            $lines = @(Get-Content $log -Tail 30)
+            foreach ($extra in @("build/dist/smoke-test/gitgud.log", "build/dist/smoke-test/GitGud/CEGUI.log")) {
+              if (Test-Path $extra) { $lines += "--- $extra"; $lines += @(Get-Content $extra -Tail 25) }
+            }
+            $text = $lines -join "`n"
+            "::error title=Packaging failed::$($text -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A')"
+            exit 1
+          }
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart("v")
+          gh release create $env:GITHUB_REF_NAME build/dist/GitGud-win64.zip --title "GitGud Desktop $version" --generate-notes
+          if ($LASTEXITCODE -ne 0) { exit 1 }

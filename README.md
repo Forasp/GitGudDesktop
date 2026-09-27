@@ -8,6 +8,12 @@ account required.
 
 It comes with a complete default interface to start from.
 
+## Download
+
+**[GitGud Desktop for Windows (x64)](https://github.com/Forasp/GitGudDesktop/releases/latest/download/GitGud-win64.zip)**
+— unzip anywhere and run `gitgud.exe`; nothing to install. Other versions and
+release notes are on the [releases page](https://github.com/Forasp/GitGudDesktop/releases).
+
 ## Documentation
 
 Everything lives in the **[wiki](https://github.com/Forasp/GitGudDesktop/wiki)**:

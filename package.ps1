@@ -1,43 +1,36 @@
 <#
 .SYNOPSIS
     Packages the release build of GitGud Desktop into a self-contained folder
-    and (with -Publish) stores it on the repository's `dist` branch.
+    and a zip ready to attach to a GitHub release.
 
 .DESCRIPTION
     1. Builds the release preset (via setup.ps1) unless -SkipBuild.
     2. Assembles build\dist\GitGud: gitgud.exe, every DLL it needs (including
        the Visual C++ runtime, so no redistributable is required),
        resources\, docs\, and the stock CEGUI data files, plus BUILD-INFO.txt.
-    3. Smoke-tests the package: starts the packaged exe from an empty folder
-       with a throwaway settings folder and checks that the UI came up using
-       the packaged files.
-    4. With -Publish, replaces the local `dist` branch with ONE commit holding
-       exactly the package. It is built in a temporary git worktree, so your
-       own checkout, index, and branch are never touched. The branch never
-       grows (each publish replaces it), so clones of the source stay small.
-       With -Push it is also force-pushed to `origin` (a force push, because
-       the branch is replaced, not appended to).
-
-    Someone who only wants the app can then fetch just that branch:
-        git clone --branch dist --single-branch --depth 1 <repository url> GitGud
+    3. Checks that every DLL the package's binaries import is in the package
+       or part of Windows, then smoke-tests it: starts a copy from an empty
+       folder with a throwaway settings folder and checks that the UI came up
+       using the packaged files.
+    4. Zips the folder as build\dist\GitGud-win64.zip (one GitGud\ folder
+       inside). The release workflow attaches this zip to the GitHub release.
 
 .PARAMETER SkipBuild
     Package whatever is in build\release\bin without building first.
 
-.PARAMETER Publish
-    Commit the package to the local `dist` branch.
-
-.PARAMETER Push
-    With -Publish: force-push `dist` to origin afterwards.
+.PARAMETER OpenGLRuntime
+    A folder of OpenGL DLLs (e.g. Mesa's opengl32.dll and libgallium_wgl.dll)
+    for smoke-testing on a machine without a GPU, such as a CI runner. They
+    are copied next to the smoke test's copy of the app only, never into the
+    package.
 
 .EXAMPLE
-    .\package.cmd -Publish
+    .\package.cmd
 #>
 [CmdletBinding()]
 param(
     [switch]$SkipBuild,
-    [switch]$Publish,
-    [switch]$Push
+    [string]$OpenGLRuntime
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,7 +38,7 @@ $Root = $PSScriptRoot
 $Bin = Join-Path $Root "build\release\bin"
 $DistRoot = Join-Path $Root "build\dist"
 $Package = Join-Path $DistRoot "GitGud"
-$Branch = "dist"
+$Zip = Join-Path $DistRoot "GitGud-win64.zip"
 
 function Write-Step($Message) {
     Write-Host ""
@@ -94,6 +87,21 @@ function Get-CrtFolder {
         throw "The Visual C++ runtime DLLs weren't found under $redist."
     }
     return $crt.FullName
+}
+
+# dumpbin.exe from the newest MSVC toolset.
+function Get-Dumpbin {
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    $tool = Get-ChildItem (Join-Path $vs "VC\Tools\MSVC") -Directory -ErrorAction SilentlyContinue |
+        Sort-Object { [version]$_.Name } -Descending |
+        ForEach-Object { Join-Path $_.FullName "bin\Hostx64\x64\dumpbin.exe" } |
+        Where-Object { Test-Path $_ } |
+        Select-Object -First 1
+    if (-not $tool) {
+        throw "dumpbin.exe wasn't found under $vs."
+    }
+    return $tool
 }
 
 # ------------------------------------------------------------------ build --
@@ -150,6 +158,44 @@ function New-Package {
     Write-Note ("{0} files, {1:N1} MB" -f (Get-ChildItem -Recurse -File $Package).Count, $size)
 }
 
+# ------------------------------------------------------------ dependencies --
+
+# Every DLL the packaged exe and DLLs import must be in the package or part of
+# Windows. A missing one otherwise shows up as the app failing to start (on a
+# machine with no one to click the error dialog: a hang).
+function Test-Imports {
+    Write-Step "Checking DLL imports"
+    $dumpbin = Get-Dumpbin
+    $system = Join-Path $env:WINDIR "System32"
+    $present = @{}
+    Get-ChildItem $Package -File | ForEach-Object { $present[$_.Name.ToLowerInvariant()] = $true }
+
+    $missing = @()
+    foreach ($binary in Get-ChildItem $Package -File | Where-Object { $_.Extension -in ".exe", ".dll" }) {
+        $inList = $false
+        foreach ($line in & $dumpbin /nologo /dependents $binary.FullName) {
+            if ($line -match "Image has the following (delay load )?dependencies") {
+                $inList = $true
+                continue
+            }
+            if ($inList -and $line -match "^\s+(\S+\.dll)\s*$") {
+                $name = $Matches[1].ToLowerInvariant()
+                $known = $present.ContainsKey($name) -or $name -like "api-ms-win-*" -or $name -like "ext-ms-*" -or
+                    (Test-Path (Join-Path $system $name))
+                if (-not $known) {
+                    $missing += "$name (needed by $($binary.Name))"
+                }
+            } elseif ($inList -and $line -match "^\s*Summary") {
+                $inList = $false
+            }
+        }
+    }
+    if ($missing) {
+        throw "The package is missing DLLs: $(($missing | Sort-Object -Unique) -join ', ')"
+    }
+    Write-Note "every import is in the package or part of Windows"
+}
+
 # ------------------------------------------------------------- smoke test --
 
 function Test-Package {
@@ -170,18 +216,28 @@ function Test-Package {
     )
     $log = Join-Path $work "gitgud.log"
 
-    # The app writes files next to itself (CEGUI.log); keep them out of the package.
-    $before = @(Get-ChildItem -Recurse -File $Package | ForEach-Object { $_.FullName })
+    # Run a copy: the app writes files next to itself (CEGUI.log), and a
+    # GPU-less machine needs extra OpenGL DLLs; neither may reach the package.
+    $app = Join-Path $work "GitGud"
+    Copy-Item -Recurse $Package $app
+    if ($OpenGLRuntime) {
+        Get-ChildItem $OpenGLRuntime -Filter *.dll | Copy-Item -Destination $app
+        Write-Note "OpenGL from $OpenGLRuntime (test copy only)"
+    }
 
     $saved = @{}
-    foreach ($name in @("APPDATA", "GITGUD_SCRIPT", "GITGUD_LOG")) {
+    foreach ($name in @("APPDATA", "GITGUD_SCRIPT", "GITGUD_LOG", "GALLIUM_DRIVER")) {
         $saved[$name] = [Environment]::GetEnvironmentVariable($name)
     }
     try {
         $env:APPDATA = $appData
         $env:GITGUD_SCRIPT = $script
         $env:GITGUD_LOG = $log
-        $process = Start-Process -FilePath (Join-Path $Package "gitgud.exe") -WorkingDirectory $emptyDir -PassThru
+        if ($OpenGLRuntime) {
+            # Mesa's plain software renderer; its D3D12 driver needs more DLLs.
+            $env:GALLIUM_DRIVER = "llvmpipe"
+        }
+        $process = Start-Process -FilePath (Join-Path $app "gitgud.exe") -WorkingDirectory $emptyDir -PassThru
         if (-not $process.WaitForExit(60000)) {
             $process.Kill()
             throw "The packaged app didn't close within a minute (see $log)."
@@ -190,13 +246,10 @@ function Test-Package {
         foreach ($name in $saved.Keys) {
             [Environment]::SetEnvironmentVariable($name, $saved[$name])
         }
-        Get-ChildItem -Recurse -File $Package |
-            Where-Object { $before -notcontains $_.FullName } |
-            Move-Item -Destination $work -Force
     }
 
     $text = if (Test-Path $log) { Get-Content $log -Raw } else { "" }
-    $expectedData = (Join-Path $Package "cegui-datafiles") -replace "\\", "/"
+    $expectedData = (Join-Path $app "cegui-datafiles") -replace "\\", "/"
     if ($text -notmatch "\[smoke\] ui up") {
         throw "The packaged app didn't start properly. Its log: $log"
     }
@@ -209,72 +262,17 @@ function Test-Package {
     Write-Note "started from an empty folder, used its own data files, closed cleanly"
 }
 
-# ---------------------------------------------------------------- publish --
+# -------------------------------------------------------------------- zip --
 
-function Publish-Package {
-    Write-Step "Publishing to the local '$Branch' branch"
-    $worktree = Join-Path $DistRoot "worktree"
-    $temporary = "gitgud-dist-staging"
-
-    if (Test-Path $worktree) {
-        Invoke-Git $Root @("worktree", "remove", "--force", $worktree) | Out-Null
+function New-Zip {
+    Write-Step "Zipping $Zip"
+    if (Test-Path $Zip) {
+        Remove-Item -Force $Zip
     }
-    Invoke-Git $Root @("worktree", "prune") | Out-Null
-
-    Invoke-Git $Root @("worktree", "add", "--detach", $worktree, "HEAD") | Out-Null
-    try {
-        # A branch with no history, emptied, then filled with the package.
-        Invoke-Git $worktree @("checkout", "--orphan", $temporary) | Out-Null
-        Invoke-Git $worktree @("rm", "-r", "-f", "-q", "--cached", ".") | Out-Null
-        Get-ChildItem -Force $worktree | Where-Object { $_.Name -ne ".git" } | Remove-Item -Recurse -Force
-        Copy-Item -Recurse -Force (Join-Path $Package "*") $worktree
-
-        $version = Get-Version
-        $source = ((Invoke-Git $Root @("rev-parse", "--short", "HEAD")) | Select-Object -First 1)
-        $readme = @(
-            "# GitGud Desktop $version (Windows build)",
-            "",
-            "This branch holds only the latest packaged release build (built from",
-            "commit $source). It is replaced, not appended to, on every publish.",
-            "",
-            "Get just the app:",
-            "",
-            '```',
-            "git clone --branch $Branch --single-branch --depth 1 <repository url> GitGud",
-            '```',
-            "",
-            "Then run ``gitgud.exe``. See ``BUILD-INFO.txt`` and ``docs/USAGE.md``.",
-            "To update later: ``git fetch --depth 1 origin $Branch`` and",
-            "``git reset --hard origin/$Branch``.",
-            "",
-            "The source is on the ``main`` branch; build it with ``setup.cmd``."
-        )
-        Set-Content -Path (Join-Path $worktree "README.md") -Value $readme -Encoding utf8
-        # Check out byte-for-byte whatever the reader's core.autocrlf says.
-        Set-Content -Path (Join-Path $worktree ".gitattributes") -Value "* -text" -Encoding ascii
-
-        # Byte-for-byte: no line-ending conversion of the packaged files.
-        Invoke-Git $worktree @("-c", "core.autocrlf=false", "add", "-A", "--force", ".") | Out-Null
-        Invoke-Git $worktree @("commit", "-q", "-m",
-            "GitGud Desktop $version build from $source") | Out-Null
-        $commit = (Invoke-Git $worktree @("rev-parse", "HEAD")) | Select-Object -First 1
-    } finally {
-        Invoke-Git $Root @("worktree", "remove", "--force", $worktree) | Out-Null
-    }
-
-    # Point `dist` at the new single commit, and drop the staging name.
-    Invoke-Git $Root @("branch", "-f", $Branch, $commit) | Out-Null
-    Invoke-Git $Root @("branch", "-D", $temporary) | Out-Null
-    $files = (Invoke-Git $Root @("ls-tree", "-r", "--name-only", $Branch)).Count
-    Write-Note "$Branch -> $($commit.Substring(0, 9)) ($files files, one commit)"
-
-    if ($Push) {
-        Write-Step "Pushing '$Branch' to origin"
-        Invoke-Git $Root @("push", "--force", "origin", "$($Branch):$($Branch)") | Out-Null
-        Write-Note "done"
-    } else {
-        Write-Note "not pushed; to share it: git push --force origin $Branch"
-    }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::CreateFromDirectory($Package, $Zip,
+        [IO.Compression.CompressionLevel]::Optimal, $true)
+    Write-Note ("{0:N1} MB" -f ((Get-Item $Zip).Length / 1MB))
 }
 
 # ------------------------------------------------------------------ main --
@@ -284,12 +282,11 @@ try {
         Build-Release
     }
     New-Package
+    Test-Imports
     Test-Package
-    if ($Publish) {
-        Publish-Package
-    }
+    New-Zip
     Write-Host ""
-    Write-Host "Package ready: $Package" -ForegroundColor Green
+    Write-Host "Package ready: $Zip" -ForegroundColor Green
 } catch {
     Write-Host ""
     Write-Host "Packaging failed: $($_.Exception.Message)" -ForegroundColor Red
