@@ -63,6 +63,7 @@ app.use(require("views.console"))
 app.use(require("views.ssh"))
 app.use(require("views.lfs"))
 app.use(require("views.menus"))
+app.use(require("views.updates"))
 
 -- Your modules --------------------------------------------------------------
 -- Uncomment to try the example: adds a Tools menu with a statistics panel

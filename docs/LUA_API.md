@@ -248,6 +248,19 @@ pop-out's shortcuts don't reach `key`), `window.focused` (id), and
 
 See `docs/MODDING.md` ▸ "Your own interface" for UI packages.
 
+## Updates
+
+Used by `views/updates.lua` (Help ▸ Check for Updates…).
+
+| Function | |
+|---|---|
+| `updateInfo()` | `{current, packaged, staged, downloading, otherCopies}`: this version; whether it's a release build (only those update); the downloaded version waiting to be installed (`""` if none); a download is running; other copies open from this folder |
+| `updateCheck()` | check in the background: `update.check.done` with tab-separated `"none\t<latest>"` or `"available\t<version>\t<notes url>\t<bytes>\t<files>"`, or `update.check.error` |
+| `updateDownload()` | download the changed files in the background: `update.progress` (`"<done> <total>"` bytes), then `update.download.done` (the version) or `update.download.error` (`"cancelled"` after `updateCancel()`) |
+| `updateCancel()` / `updateDiscard()` | stop a download / throw away a downloaded update |
+| `updateRestart()` | install now: `true` (then quit, e.g. `emit("window.close", "")`) or `nil, msg, otherCopies` when other copies are open |
+| `updateReport()` | once after an update was installed or failed: `"ok <version>"` or `"failed <message>"`, plus `"edited <folder>"` when edited files were saved; else `nil` |
+
 ## Test harness
 
 `simulateClick(x, y, "left" | "right" | "double", window?)`,

@@ -1,6 +1,9 @@
 # Builds, tests, and packages GitGud Desktop on every push and pull request.
-# Every run keeps the zip and the installer as the GitGud-win64 artifact;
-# pushing a tag like v1.0 also publishes a release with both.
+# Every run keeps the zip, the installer, and the update files as the
+# GitGud-win64 artifact; pushing a tag like v1.0 also publishes a release with
+# all four. Installed copies update themselves from a release's update files
+# (update-manifest.txt, signed with the GITGUD_UPDATE_SIGNING_KEY secret, and
+# GitGud-win64.pack).
 #
 # The first run builds every vcpkg dependency (OpenSSL among them) and CEGUI,
 # which takes a while; both are cached, so later runs only build the app.
@@ -134,9 +137,13 @@ jobs:
           $dir >> $env:GITHUB_PATH
 
       - name: Package
+        env:
+          GITGUD_UPDATE_SIGNING_KEY: ${{ secrets.GITGUD_UPDATE_SIGNING_KEY }}
         run: |
           $log = Join-Path $env:RUNNER_TEMP "package.log"
-          powershell -NoProfile -ExecutionPolicy Bypass -File package.ps1 -SkipBuild -Installer -OpenGLRuntime (Join-Path $env:RUNNER_TEMP "mesa-gl") *>&1 | Tee-Object -FilePath $log
+          # A release's update files must be signed; branch builds may not be.
+          $signing = @(if ($env:GITHUB_REF -like "refs/tags/v*") { "-RequireSigned" })
+          powershell -NoProfile -ExecutionPolicy Bypass -File package.ps1 -SkipBuild -Installer @signing -OpenGLRuntime (Join-Path $env:RUNNER_TEMP "mesa-gl") *>&1 | Tee-Object -FilePath $log
           if ($LASTEXITCODE -ne 0) {
             $lines = @(Get-Content $log -Tail 30)
             foreach ($extra in @("build/dist/smoke-test/gitgud.log", "build/dist/smoke-test/appdata/Gitgud/logs/CEGUI.log")) {
@@ -154,6 +161,8 @@ jobs:
           path: |
             build/dist/GitGud-win64.zip
             build/dist/GitGud-win64-setup.exe
+            build/dist/GitGud-win64.pack
+            build/dist/update-manifest.txt
           if-no-files-found: error
           retention-days: 14
 
@@ -163,5 +172,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = $env:GITHUB_REF_NAME.TrimStart("v")
-          gh release create $env:GITHUB_REF_NAME build/dist/GitGud-win64.zip build/dist/GitGud-win64-setup.exe --title "GitGud Desktop $version" --generate-notes
+          gh release create $env:GITHUB_REF_NAME build/dist/GitGud-win64.zip build/dist/GitGud-win64-setup.exe build/dist/GitGud-win64.pack build/dist/update-manifest.txt --title "GitGud Desktop $version" --generate-notes
           if ($LASTEXITCODE -ne 0) { exit 1 }

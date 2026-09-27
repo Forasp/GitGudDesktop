@@ -83,7 +83,16 @@ namespace gitgud::platform
 
     bool HttpGet(const std::string& _Url, std::string& _Body, std::string& _Error)
     {
+        unsigned long ustatus = 0;
+        return HttpGetEx(_Url, "", _Body, ustatus, nullptr, _Error);
+    }
+
+    bool HttpGetEx(const std::string& _Url, const std::string& _Header, std::string& _Body,
+        unsigned long& _uStatus, const std::function<bool(std::uint64_t)>& _OnProgress,
+        std::string& _Error)
+    {
         _Body.clear();
+        _uStatus = 0;
         if (_Url.rfind("https://", 0) != 0)
         {
             _Error = "only https:// URLs are allowed";
@@ -130,8 +139,10 @@ namespace gitgud::platform
             _Error = NetworkError("creating the request");
             return false;
         }
-        if (!WinHttpSendRequest(request.m_hHandle, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
-                WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+        const std::wstring header = Widen(_Header);
+        if (!WinHttpSendRequest(request.m_hHandle,
+                header.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : header.c_str(),
+                header.empty() ? 0 : static_cast<DWORD>(-1L), WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
             !WinHttpReceiveResponse(request.m_hHandle, nullptr))
         {
             _Error = NetworkError("the request");
@@ -143,6 +154,7 @@ namespace gitgud::platform
         WinHttpQueryHeaders(request.m_hHandle,
             WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX,
             &dwstatus, &dwsize, WINHTTP_NO_HEADER_INDEX);
+        _uStatus = dwstatus;
 
         std::vector<char> chunk;
         for (;;)
@@ -170,6 +182,11 @@ namespace gitgud::platform
                 return false;
             }
             _Body.append(chunk.data(), dwread);
+            if (_OnProgress && !_OnProgress(_Body.size()))
+            {
+                _Error = "cancelled";
+                return false;
+            }
         }
 
         if (dwstatus < 200 || dwstatus >= 300)
@@ -264,6 +281,15 @@ namespace gitgud::platform
     bool HttpGet(const std::string&, std::string& _Body, std::string& _Error)
     {
         _Body.clear();
+        _Error = "downloads are not implemented on this platform";
+        return false;
+    }
+
+    bool HttpGetEx(const std::string&, const std::string&, std::string& _Body, unsigned long& _uStatus,
+        const std::function<bool(std::uint64_t)>&, std::string& _Error)
+    {
+        _Body.clear();
+        _uStatus = 0;
         _Error = "downloads are not implemented on this platform";
         return false;
     }

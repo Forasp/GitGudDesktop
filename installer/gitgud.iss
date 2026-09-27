@@ -72,6 +72,17 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
+[UninstallDelete]
+; Updates (gitgud-patcher.exe) can add files Setup never installed, which
+; its uninstall log doesn't know about: remove everything a package ships.
+Type: filesandordirs; Name: "{app}\resources"
+Type: filesandordirs; Name: "{app}\docs"
+Type: filesandordirs; Name: "{app}\cegui-datafiles"
+Type: files; Name: "{app}\*.dll"
+Type: files; Name: "{app}\gitgud*.exe"
+Type: files; Name: "{app}\*.txt"
+Type: files; Name: "{app}\LICENSE"
+
 [Code]
 // PATH lives in HKCU for a per-user install and HKLM for an all-users one.
 // RegWriteStringValue keeps the value's existing type (REG_SZ or

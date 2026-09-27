@@ -57,6 +57,7 @@ app.use(require("depot.views.workspaces"))
 app.use(require("depot.views.dashboard"))
 app.use(require("depot.toolbar"))
 app.use(require("depot.menus"))
+app.use(require("views.updates"))
 app.use(require("depot.status"))
 
 -- Refresh whenever the repository may have changed underneath us.

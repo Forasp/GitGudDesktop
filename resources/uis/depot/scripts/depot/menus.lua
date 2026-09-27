@@ -52,6 +52,7 @@ function menus.preferences()
             { label = "Show new (untracked) files in the default changelist", value = settings.get("depot.untrackedInPending", false) },
             { label = "Share shelves by default (push the shelf branch)", value = settings.get("depot.pushShelves", true) },
             { label = "Ask before reverting files", value = settings.get("confirmDiscard", true) },
+            { label = "Check for updates automatically", value = settings.get("updateCheck", true) },
         },
         alt = {
             label = "Switch User Interface…",
@@ -82,6 +83,7 @@ function menus.preferences()
             settings.set("depot.untrackedInPending", v.checks[1])
             settings.set("depot.pushShelves", v.checks[2])
             settings.set("confirmDiscard", v.checks[3])
+            settings.set("updateCheck", v.checks[4])
             app.requestRefresh()
             return true
         end,
@@ -415,6 +417,7 @@ local function helpMenu()
                     .. "Ctrl+K  Command palette      Ctrl+,  Preferences      F5  Refresh\n"
                     .. "Ctrl+Z / Ctrl+Y  Undo / Redo branch moves")
         end },
+        require("views.updates").menuItem(),
         { label = "About GitGud Desktop", action = require("views.about").show },
     })
 end

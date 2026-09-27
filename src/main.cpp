@@ -34,6 +34,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -56,6 +57,7 @@
 #include "app/IAppHost.h"
 #include "app/TaskRunner.h"
 #include "app/UiPackages.h"
+#include "app/Updater.h"
 #include "git/Repository.h"
 #include "imaging/ImageDiff.h"
 #include "lua/LuaEngine.h"
@@ -883,6 +885,30 @@ int main(int _iArgc, char* _aSzArgv[])
 
     // Symbolized stack trace + minidump if we ever crash.
     gitgud::platform::InstallCrashHandler(gitgud::platform::LogDirectory());
+
+    // Updates (app/Updater.h). While gitgud-patcher.exe is replacing files,
+    // wait for it instead of loading half-replaced ones. A downloaded update
+    // is installed now, before anything loads, but only when no other copy of
+    // GitGud is running from this folder: otherwise this copy just opens
+    // (several copies are always allowed) and the update waits for a start
+    // with none open.
+    {
+        namespace updater = gitgud::app::updater;
+        for (int i = 0; i < 1200 && updater::PatcherRunning(); ++i)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        if (!std::getenv("GITGUD_NO_UPDATE") && updater::IsPackagedBuild() &&
+            !updater::StagedVersion().empty() && updater::OtherCopies() == 0)
+        {
+            std::string error;
+            if (updater::StartPatcher(error))
+            {
+                return 0;
+            }
+            std::fprintf(stderr, "[update] %s\n", error.c_str());
+        }
+    }
 
     // --- SDL + OpenGL window --------------------------------------------
     // The default UI draws its own title bar, so the OS frame is dropped.
