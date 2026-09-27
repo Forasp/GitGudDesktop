@@ -91,11 +91,33 @@ $sections += Format-Section "DejaVu fonts (DejaVu Sans, from CEGUI's data files)
 $sections += Format-Section "Inter font" (Read-Text (Join-Path $Root "resources\fonts\LICENSE-Inter.txt"))
 $sections += Format-Section "JetBrains Mono font" (Read-Text (Join-Path $Root "resources\fonts\LICENSE-JetBrainsMono.txt"))
 
-$text = ($sections -join "`n") + "`n"
+# LF throughout, even where this script was checked out with CRLF (the
+# header above would otherwise carry them).
+$text = ((($sections -join "`n") + "`n") -replace "`r`n", "`n")
 
 if ($Check) {
     $current = if (Test-Path $Output) { ([IO.File]::ReadAllText($Output, [Text.Encoding]::UTF8)) -replace "`r`n", "`n" } else { "" }
     if ($current -ne $text) {
+        # Say which sections differ, so the cause is clear from a CI log too.
+        $expected = $text -split "\n"
+        $actual = $current -split "\n"
+        $count = [Math]::Max($expected.Count, $actual.Count)
+        for ($i = 0; $i -lt $count; $i++) {
+            $want = if ($i -lt $expected.Count) { $expected[$i] } else { "<end of file>" }
+            $have = if ($i -lt $actual.Count) { $actual[$i] } else { "<end of file>" }
+            if ($want -cne $have) {
+                $section = "(header)"
+                # A section title is the line between two rules.
+                for ($j = [Math]::Min($i, $expected.Count - 2); $j -gt 0; $j--) {
+                    if ($expected[$j - 1] -eq $Rule -and $expected[$j + 1] -eq $Rule) { $section = $expected[$j]; break }
+                }
+                Write-Host "First difference at line $($i + 1), in section: $section"
+                Write-Host "  this build: $($want -replace "`r", '<CR>')"
+                Write-Host "  committed:  $($have -replace "`r", '<CR>')"
+                break
+            }
+        }
+        Write-Host "Sections this build ships: $(($sections | ForEach-Object { ($_ -split "\n")[1] } | Select-Object -Skip 1) -join ', ')"
         throw "THIRD_PARTY_NOTICES.txt doesn't match what this build ships. Run tools\update-notices.ps1 and commit the result."
     }
     Write-Host "THIRD_PARTY_NOTICES.txt is up to date ($($packages.Count) packages, CEGUI, 3 fonts)."
