@@ -5,8 +5,7 @@
 --
 --     set GITGUD_SCRIPT=D:\path\to\tests\ui\walkthrough.lua
 --     set GITGUD_SHOTS=D:\some\folder          (where PNGs go; default ".")
---     cd <a scratch repository>
---     gitgud.exe
+--     gitgud.exe <a scratch repository>
 --
 -- Input is injected straight into the UI (gitgud.simulateClick / emit), so
 -- it never touches the real mouse or keyboard. Each step waits a moment and

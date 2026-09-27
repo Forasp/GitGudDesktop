@@ -25,17 +25,27 @@ namespace gitgud::platform
         {
             return (fs::u8path(szappdata) / "Gitgud").u8string();
         }
-        wchar_t wszexe[MAX_PATH] = {};
-        if (GetModuleFileNameW(nullptr, wszexe, MAX_PATH) > 0)
-        {
-            return (fs::path(wszexe).parent_path() / "config").u8string();
-        }
 #endif
         if (const char* szhome = std::getenv("HOME"))
         {
             return (fs::u8path(szhome) / ".gitgud").u8string();
         }
-        return (fs::current_path() / "config").u8string();
+        // Never the exe's folder: it may be read only (Program Files).
+        std::error_code ec;
+        return (fs::temp_directory_path(ec) / "Gitgud").u8string();
+    }
+
+    std::string LogDirectory()
+    {
+        namespace fs = std::filesystem;
+        const fs::path dir = fs::u8path(ConfigDirectory()) / "logs";
+        std::error_code ec;
+        fs::create_directories(dir, ec);
+        if (ec)
+        {
+            return fs::temp_directory_path(ec).u8string();
+        }
+        return dir.u8string();
     }
 
 #if defined(_WIN32)

@@ -35,6 +35,8 @@
 
 #include "ui/cegui/sdl_scancode_to_dinput_mappings.h"
 
+#include "platform/Shell.h"
+
 namespace gitgud::ui
 {
 
@@ -178,13 +180,22 @@ namespace gitgud::ui
 
         // CEGUI's default logger writes CEGUI.log into the working directory,
         // which is the user's repository. Create the logger ourselves first
-        // (System adopts an existing one) and point it next to the exe.
+        // (System adopts an existing one) and point it at the logs folder; the
+        // exe's folder may be read only (Program Files).
         if (!Logger::getSingletonPtr())
         {
             m_pLogger = new DefaultLogger();
         }
-        const std::string logDir = _ResourceRoot.substr(0, _ResourceRoot.find_last_of("/\\"));
-        Logger::getSingleton().setLogFilename(logDir + "/CEGUI.log", false);
+        const std::string logFile = gitgud::platform::LogDirectory() + "/CEGUI.log";
+        try
+        {
+            Logger::getSingleton().setLogFilename(logFile, false);
+        }
+        catch (const FileIOException&)
+        {
+            // Not fatal: CEGUI keeps its log in memory instead.
+            std::fprintf(stderr, "[cegui] can't write %s\n", logFile.c_str());
+        }
 
         m_pRenderer = &OpenGL3Renderer::bootstrapSystem(
             Sizef(static_cast<float>(_iWindowWidth), static_cast<float>(_iWindowHeight)));

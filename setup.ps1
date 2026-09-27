@@ -301,7 +301,7 @@ try {
     Write-Host ""
     Write-Host "Done in $minutes min." -ForegroundColor Green
     if (-not $SkipApp -and $Preset -ne "nogui") {
-        Write-Host "Run it from a repository folder:  & `"$Root\build\$Preset\bin\gitgud.exe`""
+        Write-Host "Run it (add a repository path to open one):  & `"$Root\build\$Preset\bin\gitgud.exe`""
     }
 } catch {
     Write-Host ""

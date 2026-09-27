@@ -81,17 +81,20 @@ Output lands in `build/<preset>/bin`. Every build mirrors `resources/` and
 ## Run
 
 ```powershell
-cd C:\path\to\some\repo
-D:\...\build\release\bin\gitgud.exe
+D:\...\build\release\bin\gitgud.exe                        # reopens the last repository
+D:\...\build\release\bin\gitgud.exe C:\path\to\some\repo   # opens that one ("." works)
 ```
 
-GitGud opens the repository in its working directory (or none — add one
-from the UI). The first launch asks which interface to use (the default or
+Without a path, GitGud reopens the repository you had open last. The first
+launch opens none: it asks which interface to use, then you add a repository
+from the UI. The first launch asks which interface to use (the default or
 the Depot one); `GITGUD_UI=default`, `depot`, or `path:<folder>` picks
 one for a run without asking. Launched from a terminal it prints to that console;
 `GITGUD_CONSOLE=1` forces a console window and `GITGUD_LOG=<file>` sends all
 output to a file. A crash writes a symbolized stack trace to that output and
-`gitgud-crash.dmp` next to the exe.
+`gitgud-crash.dmp` to `%APPDATA%\Gitgud\logs`, next to `CEGUI.log`. The app
+never writes into its own folder, which is read only when it's installed
+under Program Files.
 
 **Hot reload:** the app watches the `resources/` copy next to the exe. Edit
 layouts and scripts there (or edit the source tree and rebuild — the
@@ -108,6 +111,7 @@ when copied to another machine; the source tree's copy is only a fallback.
 ```powershell
 .\package.cmd              # build, assemble build\dist\GitGud, smoke-test it, zip it
 .\package.cmd -SkipBuild   # package the existing build\release\bin
+.\package.cmd -Installer   # and fail if Inno Setup can't build the installer
 ```
 
 The package is a self-contained folder of about 21 MB: `gitgud.exe`, every
@@ -129,8 +133,16 @@ at the upstream file, the text lives in `tools/notices/<package>.txt`.
 Before the smoke test, packaging checks that every DLL the binaries import is
 in the package or part of Windows. The smoke test then starts a copy of the
 package from an empty folder with a throwaway `%APPDATA%` and checks that it
-came up on its own files. The result is zipped as
-`build\dist\GitGud-win64.zip`, with one `GitGud\` folder inside.
+came up on its own files and wrote nothing into its own folder. The result is
+zipped as `build\dist\GitGud-win64.zip`, with one `GitGud\` folder inside.
+
+With [Inno Setup](https://jrsoftware.org/isinfo.php) 6 or later installed,
+the folder also becomes `build\dist\GitGud-win64-setup.exe`, from
+`installer\gitgud.iss` (without it, that step is skipped unless you pass
+`-Installer`). The installer defaults to Program Files for all users, offers
+a per-user install, lets you choose the folder, adds a Start menu shortcut
+(a desktop one optionally), and can add the folder to `PATH` for
+`gitgud .`. Uninstalling leaves `%APPDATA%\Gitgud` alone.
 
 ## Releases
 
@@ -138,6 +150,10 @@ CI (`.github/workflows/build.yml`) builds, runs the engine tests,
 packages, and smoke-tests every push and pull request. The runners have no
 GPU, so the smoke test borrows Mesa's software OpenGL (`-OpenGLRuntime`); those
 DLLs go next to the test's copy of the app only, never into the package.
+Inno Setup comes from its GitHub release at a pinned version, checked
+against a pinned SHA-256 (`INNO_VERSION` and `INNO_SHA256` in the workflow;
+update both together). Each run keeps the zip and the installer as its
+`GitGud-win64` artifact for two weeks.
 
 To release, set the version in `CMakeLists.txt` (`project(... VERSION x.y.z)`)
 and `vcpkg.json`, commit, and push a tag:
@@ -148,7 +164,7 @@ git push origin v1.1.0
 ```
 
 The workflow then publishes a release for the tag with
-`GitGud-win64.zip` attached. The latest one is always at
+`GitGud-win64.zip` and `GitGud-win64-setup.exe` attached. The latest one is always at
 <https://github.com/Forasp/GitGudDesktop/releases/latest>.
 
 ## Tests
@@ -165,7 +181,7 @@ The workflow then publishes a release for the tag with
   $env:GITGUD_UI     = "default"                         # depot.lua needs "depot"
   $env:GITGUD_SHOTS  = "C:\temp\shots"
   $env:GITGUD_LOG    = "C:\temp\gg.log"
-  Start-Process build\release\bin\gitgud.exe -WorkingDirectory C:\temp\gg-test
+  Start-Process build\release\bin\gitgud.exe -ArgumentList C:\temp\gg-test
   ```
 
   Grep the log for `[check]`, `[perf]`, and `failed`. Always point these at a

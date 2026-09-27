@@ -15,10 +15,16 @@
        folder with a throwaway settings folder and checks that the UI came up
        using the packaged files.
     4. Zips the folder as build\dist\GitGud-win64.zip (one GitGud\ folder
-       inside). The release workflow attaches this zip to the release.
+       inside).
+    5. Compiles installer\gitgud.iss into build\dist\GitGud-win64-setup.exe
+       when Inno Setup (6 or later) is installed. The release workflow
+       attaches the zip and the installer to the release.
 
 .PARAMETER SkipBuild
     Package whatever is in build\release\bin without building first.
+
+.PARAMETER Installer
+    Fail when Inno Setup isn't installed instead of skipping the installer.
 
 .PARAMETER OpenGLRuntime
     A folder of OpenGL DLLs (e.g. Mesa's opengl32.dll and libgallium_wgl.dll)
@@ -32,6 +38,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipBuild,
+    [switch]$Installer,
     [string]$OpenGLRuntime
 )
 
@@ -41,6 +48,7 @@ $Bin = Join-Path $Root "build\release\bin"
 $DistRoot = Join-Path $Root "build\dist"
 $Package = Join-Path $DistRoot "GitGud"
 $Zip = Join-Path $DistRoot "GitGud-win64.zip"
+$SetupName = "GitGud-win64-setup"
 
 function Write-Step($Message) {
     Write-Host ""
@@ -159,9 +167,10 @@ function New-Package {
         "Built from:  $commit$(if ($dirty) { ' plus uncommitted changes' })",
         "Built on:    $((Get-Date).ToString('yyyy-MM-dd HH:mm'))",
         "",
-        "Run gitgud.exe from inside a repository folder, or start it anywhere and",
-        "add a repository from the window. Everything it needs is in this folder;",
-        "docs\USAGE.md is the tour. Settings live in %APPDATA%\Gitgud.",
+        "Run gitgud.exe and add a repository from the window; it reopens the last",
+        "one next time. 'gitgud.exe <path>' opens a given repository ('.' for the",
+        "current folder). Everything it needs is in this folder; docs\USAGE.md is",
+        "the tour. Settings and logs live in %APPDATA%\Gitgud.",
         "",
         "GitGud Desktop is MIT licensed (LICENSE). The third-party software it",
         "includes, and their licenses, are listed in THIRD_PARTY_NOTICES.txt."
@@ -230,8 +239,8 @@ function Test-Package {
     )
     $log = Join-Path $work "gitgud.log"
 
-    # Run a copy: the app writes files next to itself (CEGUI.log), and a
-    # GPU-less machine needs extra OpenGL DLLs; neither may reach the package.
+    # Run a copy: a GPU-less machine needs extra OpenGL DLLs, which must not
+    # reach the package.
     $app = Join-Path $work "GitGud"
     Copy-Item -Recurse $Package $app
     if ($OpenGLRuntime) {
@@ -251,6 +260,7 @@ function Test-Package {
             # Mesa's plain software renderer; its D3D12 driver needs more DLLs.
             $env:GALLIUM_DRIVER = "llvmpipe"
         }
+        $started = Get-Date
         $process = Start-Process -FilePath (Join-Path $app "gitgud.exe") -WorkingDirectory $emptyDir -PassThru
         if (-not $process.WaitForExit(60000)) {
             $process.Kill()
@@ -273,7 +283,16 @@ function Test-Package {
     if ($text -match "failed to load|Lua error|\[lua\] error") {
         throw "The packaged app logged errors. Its log: $log"
     }
-    Write-Note "started from an empty folder, used its own data files, closed cleanly"
+    # Installed under Program Files, the app's folder is read only: it may
+    # write only to %APPDATA%\Gitgud.
+    if (-not (Test-Path (Join-Path $appData "Gitgud\logs\CEGUI.log"))) {
+        throw "The packaged app didn't write CEGUI.log to %APPDATA%\Gitgud\logs. Its log: $log"
+    }
+    $written = @(Get-ChildItem -Recurse -File $app | Where-Object { $_.LastWriteTime -gt $started })
+    if ($written) {
+        throw "The packaged app wrote into its own folder: $(($written | ForEach-Object { $_.Name }) -join ', ')"
+    }
+    Write-Note "started from an empty folder, used its own data files, wrote only to %APPDATA%, closed cleanly"
 }
 
 # -------------------------------------------------------------------- zip --
@@ -289,6 +308,48 @@ function New-Zip {
     Write-Note ("{0:N1} MB" -f ((Get-Item $Zip).Length / 1MB))
 }
 
+# -------------------------------------------------------------- installer --
+
+# ISCC.exe from Inno Setup 6 or later: on PATH first (CI puts a pinned copy
+# there), else the newest version in the standard install folders.
+function Get-Iscc {
+    $onPath = Get-Command iscc.exe -ErrorAction SilentlyContinue
+    if ($onPath) {
+        return $onPath.Source
+    }
+    $roots = @(${env:ProgramFiles(x86)}, $env:ProgramFiles, (Join-Path $env:LOCALAPPDATA "Programs")) |
+        Where-Object { $_ }
+    return $roots |
+        ForEach-Object { Get-ChildItem $_ -Directory -Filter "Inno Setup *" -ErrorAction SilentlyContinue } |
+        Where-Object { $_.Name -match "^Inno Setup (\d+)$" -and [int]$Matches[1] -ge 6 } |
+        Sort-Object { [int]($_.Name -replace "\D", "") } -Descending |
+        ForEach-Object { Join-Path $_.FullName "ISCC.exe" } |
+        Where-Object { Test-Path $_ } |
+        Select-Object -First 1
+}
+
+function New-Installer {
+    $iscc = Get-Iscc
+    if (-not $iscc) {
+        if ($Installer) {
+            throw "Inno Setup (ISCC.exe) wasn't found; see https://jrsoftware.org/isinfo.php."
+        }
+        Write-Step "Skipping the installer (Inno Setup isn't installed)"
+        return
+    }
+    $setup = Join-Path $DistRoot "$SetupName.exe"
+    Write-Step "Building $setup"
+    if (Test-Path $setup) {
+        Remove-Item -Force $setup
+    }
+    $output = & $iscc /Q "/DAppVersion=$(Get-Version)" "/DSourceDir=$Package" "/DOutputDir=$DistRoot" `
+        "/DOutputBaseName=$SetupName" (Join-Path $Root "installer\gitgud.iss") 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Inno Setup failed: $($output -join ' ')"
+    }
+    Write-Note ("{0:N1} MB, with {1}" -f ((Get-Item $setup).Length / 1MB), $iscc)
+}
+
 # ------------------------------------------------------------------ main --
 
 try {
@@ -299,8 +360,9 @@ try {
     Test-Imports
     Test-Package
     New-Zip
+    New-Installer
     Write-Host ""
-    Write-Host "Package ready: $Zip" -ForegroundColor Green
+    Write-Host "Package ready in $DistRoot" -ForegroundColor Green
 } catch {
     Write-Host ""
     Write-Host "Packaging failed: $($_.Exception.Message)" -ForegroundColor Red
