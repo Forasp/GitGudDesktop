@@ -106,39 +106,57 @@ when copied to another machine; the source tree's copy is only a fallback.
 ## Package a build: `package.cmd`
 
 ```powershell
-.\package.cmd                  # build, assemble build\dist\GitGud, smoke-test it
-.\package.cmd -Publish         # ...and store it on the local `dist` branch
-.\package.cmd -Publish -Push   # ...and force-push `dist` to origin
+.\package.cmd              # build, assemble build\dist\GitGud, smoke-test it, zip it
+.\package.cmd -SkipBuild   # package the existing build\release\bin
 ```
 
 The package is a self-contained folder of about 21 MB: `gitgud.exe`, every
 DLL (including the Visual C++ runtime, so no redistributable install is
-needed), `resources/`, `docs/`, `cegui-datafiles/`, and `BUILD-INFO.txt`
-(the version and source commit). The smoke test starts the packaged exe from
-an empty folder with a throwaway `%APPDATA%` and checks that it came up on
-its own files. `-SkipBuild` packages the existing `build\release\bin`.
+needed), `resources/`, `docs/`, `cegui-datafiles/`, `BUILD-INFO.txt` (the
+version and source commit), `LICENSE`, and `THIRD_PARTY_NOTICES.txt`.
 
-`-Publish` replaces the `dist` branch with **one** commit that holds exactly
-the package. The branch has no history and never grows, so it adds at most
-one build to a full clone. It's made in a temporary git worktree, so your
-checkout, index, and current branch are never touched. Because each publish
-replaces the branch, pushing it needs `--force`. Anyone who only wants the
-app fetches just that branch:
+`THIRD_PARTY_NOTICES.txt` holds the license of every third-party component
+that ships. After adding or upgrading a dependency, regenerate it and commit
+the result: packaging refuses to run while it's out of date:
 
 ```powershell
-git clone --branch dist --single-branch --depth 1 https://github.com/Forasp/GitGudDesktop.git GitGud
+powershell -ExecutionPolicy Bypass -File tools\update-notices.ps1
 ```
 
-The dist branch's `.gitattributes` turns off line-ending conversion, so the
-checkout is byte-for-byte the package whatever the reader's `core.autocrlf`
-is.
+It takes each vcpkg package's license from the build; where vcpkg only points
+at the upstream file, the text lives in `tools/notices/<package>.txt`.
+
+Before the smoke test, packaging checks that every DLL the binaries import is
+in the package or part of Windows. The smoke test then starts a copy of the
+package from an empty folder with a throwaway `%APPDATA%` and checks that it
+came up on its own files. The result is zipped as
+`build\dist\GitGud-win64.zip`, with one `GitGud\` folder inside.
+
+## Releases
+
+CI (`.github/workflows/build.yml`) builds, runs the engine tests,
+packages, and smoke-tests every push and pull request. The runners have no
+GPU, so the smoke test borrows Mesa's software OpenGL (`-OpenGLRuntime`); those
+DLLs go next to the test's copy of the app only, never into the package.
+
+To release, set the version in `CMakeLists.txt` (`project(... VERSION x.y.z)`)
+and `vcpkg.json`, commit, and push a tag:
+
+```powershell
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+The workflow then publishes a release for the tag with
+`GitGud-win64.zip` attached. The latest one is always at
+<https://github.com/Forasp/GitGudDesktop/releases/latest>.
 
 ## Tests
 
-- **Engine (C++)** — Catch2, 76 cases: `build\release\bin\gitgud_tests.exe`
+- **Engine (C++)**: Catch2, 76 cases: `build\release\bin\gitgud_tests.exe`
   (or `ctest --test-dir build/release`). The signing and LFS cases need
   `ssh-keygen` and `git-lfs` (Git for Windows ships both) and skip without.
-- **UI (Lua, scripted)** — `tests/ui/*.lua` drive the real UI without
+- **UI (Lua, scripted)**: `tests/ui/*.lua` drive the real UI without
   touching your mouse or keyboard and save screenshots:
 
   ```powershell

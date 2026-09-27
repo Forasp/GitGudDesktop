@@ -112,9 +112,14 @@ function Enter-DevEnvironment {
     Write-Note $vs
 
     # Launch-VsDevShell looks for vswhere on PATH; give it the installer's copy.
+    # It may point VCPKG_ROOT at Visual Studio's own vcpkg; one set beforehand wins.
+    $ownVcpkg = $env:VCPKG_ROOT
     $env:PATH = "$(Split-Path $vswhere);$env:PATH"
     & (Join-Path $vs "Common7\Tools\Launch-VsDevShell.ps1") -Arch amd64 -HostArch amd64 -SkipAutomaticLocation | Out-Null
     Set-Location $Root
+    if ($ownVcpkg) {
+        $env:VCPKG_ROOT = $ownVcpkg
+    }
 
     if (-not $env:VCPKG_ROOT) {
         $bundled = Join-Path $vs "VC\vcpkg"
@@ -218,6 +223,8 @@ function Build-Cegui($Configuration, $Fingerprint) {
         "-DCEGUI_BUILD_IMAGECODEC_STB=ON", "-DCEGUI_BUILD_IMAGECODEC_SILLY=OFF",
         "-DCEGUI_USE_FREETYPE=ON", "-DCEGUI_BUILD_SAMPLES=OFF",
         "-DCEGUI_BUILD_APPLICATION_TEMPLATES=OFF", "-DCEGUI_BUILD_LUA_MODULE=OFF",
+        # Off even where Python and SWIG are installed (they'd switch it on).
+        "-DCEGUI_BUILD_PYTHON_MODULES_SWIG=OFF", "-DCEGUI_BUILD_PYTHON_MODULES_PYPLUSPLUS=OFF",
         "-DCEGUI_STRING_CLASS=UTF-32"
     )
     Invoke-Checked cmake @("--build", $buildDir)

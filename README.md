@@ -8,8 +8,9 @@ account required.
 
 ## Getting started
 
-1. Download `GitGud-win64.zip` from the
-   [latest release](https://github.com/Forasp/GitGudDesktop/releases/latest).
+1. Download **[GitGud-win64.zip](https://github.com/Forasp/GitGudDesktop/releases/latest/download/GitGud-win64.zip)**.
+   Other versions and release notes are on the
+   [releases page](https://github.com/Forasp/GitGudDesktop/releases).
 2. Unzip it anywhere and run `gitgud.exe`. Nothing to install.
 3. Pick an interface, then add a repository: clone one, create one, or open a
    folder you already have.
@@ -45,6 +46,20 @@ Windows, Visual Studio 2022+ (C++ workload), and Git:
 That sets up the dev environment, the CEGUI submodule and its build, and the
 app. See [Building](https://github.com/Forasp/GitGudDesktop/wiki/Building)
 for presets, tests, and packaging.
+
+## Credits
+
+Built on [libgit2](https://libgit2.org), [CEGUI](https://github.com/cegui/cegui),
+[SDL](https://libsdl.org), [Lua](https://www.lua.org),
+[OpenSSL](https://www.openssl.org), and [FreeType](https://freetype.org),
+among others; the interface uses the [Inter](https://rsms.me/inter/) and
+[JetBrains Mono](https://www.jetbrains.com/lp/mono/) fonts.
+Portions of this software are copyright © The FreeType Project
+(https://freetype.org). All rights reserved.
+
+Every third-party component and its license is listed in
+[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt), which also ships with
+each download.
 
 ## License
 

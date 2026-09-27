@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(Gitgud
-    VERSION 0.1.0
+    VERSION 1.1.0
     DESCRIPTION "A moddable Git client with an XML+Lua GUI"
     LANGUAGES CXX)
 
@@ -194,14 +194,23 @@ if(GITGUD_UI_CEGUI AND CEGUI_FOUND)
             $<TARGET_FILE_DIR:gitgud>
         COMMENT "Copying CEGUI runtime DLLs to build output")
 
-    # CEGUIPugiXMLParser_d.dll is loaded at runtime via LoadLibrary, so vcpkg's
-    # applocal step never scans it and misses its pugixml.dll dependency. Copy
-    # it explicitly from this build's vcpkg tree (root manifest lists pugixml).
-    add_custom_command(TARGET gitgud POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}$<$<CONFIG:Debug>:/debug>/bin/pugixml.dll"
-            $<TARGET_FILE_DIR:gitgud>
-        COMMENT "Copying pugixml.dll (runtime dep of CEGUI's XML parser module)")
+    # vcpkg's applocal step only follows gitgud.exe's own imports, so the vcpkg
+    # DLLs that only CEGUI needs (FreeType and its compression/PNG libraries,
+    # GLEW, pugixml for the XML parser module CEGUI loads at runtime) would be
+    # missing from a clean build. Run the same step on each CEGUI DLL. (The
+    # root manifest lists these packages, so they're in this build's tree.)
+    get_filename_component(_vcpkg_buildsystems "${CMAKE_TOOLCHAIN_FILE}" DIRECTORY)
+    file(GLOB _cegui_dlls "${CEGUI_BIN_DIR}/*.dll")
+    foreach(_dll IN LISTS _cegui_dlls)
+        get_filename_component(_dll_name "${_dll}" NAME)
+        add_custom_command(TARGET gitgud POST_BUILD
+            COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                -File "${_vcpkg_buildsystems}/msbuild/applocal.ps1"
+                -targetBinary "$<TARGET_FILE_DIR:gitgud>/${_dll_name}"
+                -installedDir "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}$<$<CONFIG:Debug>:/debug>/bin"
+                -OutVariable out
+            VERBATIM)
+    endforeach()
 endif()
 
 # Mirror resources/ (layouts, scripts, skin) and docs/ next to the binary on

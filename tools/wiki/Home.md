@@ -13,12 +13,12 @@ build something different on the same engine.
 
 ## Where to start
 
-- **[Modding](Modding)** — how the interface is put together, the live edit
+- **[Modding](Modding)**: how the interface is put together, the live edit
   loop, adding your own panels, menus, and commands.
-- **[Lua API](Lua-API)** — every `gitgud.*` function and event scripts can use.
-- **[Building](Building)** — set up the toolchain and build from source.
-- **[Using the Default UI](Using-the-Default-UI)** — a tour of the interface
+- **[Lua API](Lua-API)**: every `gitgud.*` function and event scripts can use.
+- **[Building](Building)**: set up the toolchain and build from source.
+- **[Using the Default UI](Using-the-Default-UI)**: a tour of the interface
   GitGud ships with.
-- **[Using the Depot UI](Using-the-Depot-UI)** — the changelist-based interface, and how
+- **[Using the Depot UI](Using-the-Depot-UI)**: the changelist-based interface, and how
   its changelists and shelves map onto Git.
-- **[Principles](Principles)** — the rules the code is built around.
+- **[Principles](Principles)**: the rules the code is built around.
