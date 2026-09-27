@@ -112,6 +112,9 @@ fails the commit with the tool's message.
 Credentials: `setCredential(host, user, pass)`, `hasCredential(host)`,
 `eraseCredential(host)`, `hostForRemote(remote)`. When a server needs
 credentials that aren't stored, `credential.missing` fires with the host.
+When it refuses the saved ones, they're erased and `credential.rejected`
+fires with the host. For github.com, `views/github.lua` signs in through
+the browser with the GitHub CLI.
 
 SSH remotes use your SSH agent first, then `~/.ssh/id_ed25519`, `id_ecdsa`,
 `id_rsa`. An encrypted key's passphrase is looked up (and asked for, via
@@ -206,6 +209,11 @@ dot above HEAD for uncommitted changes. Show a row's picture inline:
 | `runProgram({program, args…}, cwd?, stdin?)` | run to completion: `{code, output, error}`, or `nil, msg` if it can't start. Blocks — quick tools only |
 | `runCommand(commandLine, cwd = repo)` | run through the shell on a worker (one at a time): output streams as `console.output` events, `console.done` carries the exit code |
 | `cancelCommand()` / `commandRunning()` | stop the running command (and its children) / is one running |
+| `startProgram(name, {program, args…}, cwd?)` | run without a shell or stdin on a worker: output streams as `<name>.output`, `<name>.done` carries the exit code (-1 if it couldn't start or was stopped); `true` or `nil, msg` |
+| `stopProgram(name)` | stop that program and its children; `true` if it was running |
+| `httpGet(name, url)` | HTTPS GET on a worker: `<name>.done` carries the body, `<name>.error` the reason |
+| `installTool(name, {url, sha256, tool, version})` | download a .zip, check its SHA-256, unpack it into `<app data>/tools/<tool>/<version>` and remove older versions; `<name>.done` carries the folder |
+| `installedTools(tool)` | `{ {version, dir}, … }` installed by `installTool` |
 | `homeDir()` | the user's home folder |
 | `version` | app version string |
 
@@ -215,6 +223,7 @@ dot above HEAD for uncommitted changes. Show a row's picture inline:
 `app.fileDropped` (path), `key` (combo, e.g. `"ctrl+shift+p"`, also plain
 `"up"`, `"down"`, `"pageup"`, `"pagedown"` — see `core/keys.lua`),
 `status.changed`, `repo.changed`, `repo.error`, `credential.missing`,
+`credential.rejected`,
 `ssh.unknownHost`, `console.output` / `console.done`, `window.state`
 (`"maximized"` / `"restored"`),
 `window.resized` (`"WxH"`), plus the network events above. Scripts can ask

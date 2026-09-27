@@ -989,15 +989,29 @@ namespace gitgud::lua::bindings
 
         // The CredentialProvider a worker job uses: read the (thread-safe, OS-backed)
         // store; when nothing is stored, tell the UI so it can prompt, and fail.
+        // A saved credential the server refused is deleted ("credential.rejected")
+        // so the next attempt asks again instead of failing the same way forever.
         gitgud::git::CredentialProvider MakeProvider(
             gitgud::platform::ICredentialStore* _pStore, gitgud::app::EventBus* _pBus)
         {
             return [_pStore, _pBus](const std::string& _Url, const std::string& _UserFromUrl,
-                       std::string& _OutUser, std::string& _OutPass) -> bool
+                       bool _bRejected, std::string& _OutUser, std::string& _OutPass) -> bool
             {
                 // SSH key passphrases are stored under "ssh-key:<key path>".
                 const bool bsshKey = _Url.rfind("ssh-key:", 0) == 0;
                 const std::string host = bsshKey ? _Url : gitgud::platform::HostFromUrl(_Url);
+                if (_bRejected)
+                {
+                    if (_pStore)
+                    {
+                        _pStore->Erase(host);
+                    }
+                    if (_pBus)
+                    {
+                        _pBus->Publish({"credential.rejected", host});
+                    }
+                    return false;
+                }
                 if (_pStore)
                 {
                     gitgud::platform::Credential cred;

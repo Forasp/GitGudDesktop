@@ -1,0 +1,169 @@
+diff --git a/cegui/include/CEGUI/widgets/EditboxBase.h b/cegui/include/CEGUI/widgets/EditboxBase.h
+index 62444122c..60fa0ff8d 100644
+--- a/cegui/include/CEGUI/widgets/EditboxBase.h
++++ b/cegui/include/CEGUI/widgets/EditboxBase.h
+@@ -221,6 +221,20 @@ public:
+     */
+     std::uint32_t getTextMaskingCodepoint() const { return d_textMaskingCodepoint; }
+ 
++    /*!
++    \brief
++        return for how many seconds a just-typed character stays readable in
++        masked text (0 = never shown).
++    */
++    float getTextMaskingRevealTime() const { return d_textMaskingRevealTime; }
++
++    /*!
++    \brief
++        set for how many seconds a just-typed character stays readable in
++        masked text before it is masked too (0 = mask it at once).
++    */
++    void setTextMaskingRevealTime(float seconds);
++
+     /*!
+     \brief
+         return the maximum text length set for this Editbox.
+@@ -618,6 +632,10 @@ protected:
+     void onFontChanged(WindowEventArgs& e) override;
+     void onTextChanged(WindowEventArgs& e) override;
+     void onCharacter(TextEventArgs& e) override;
++    void updateSelf(float elapsed) override;
++
++    //! Mask the revealed character again (if one is shown).
++    void hideRevealedCharacter();
+ 
+     virtual void processKeyDownEvent(KeyEventArgs& e);
+ 
+@@ -649,6 +667,12 @@ protected:
+ 
+     //! Code point to use when rendering masked text.
+     std::uint32_t d_textMaskingCodepoint = '*';
++    //! Seconds a just-typed character stays readable in masked text.
++    float d_textMaskingRevealTime = 0.f;
++    //! Seconds left before the revealed character is masked.
++    float d_revealTimeLeft = 0.f;
++    //! Index of the character shown unmasked, or String::npos.
++    size_t d_revealIndex = String::npos;
+ 
+     //! Default direction of the paragraph, relevant for bidirectional text.
+     DefaultParagraphDirection d_defaultParagraphDirection = DefaultParagraphDirection::LeftToRight;
+diff --git a/cegui/src/widgets/EditboxBase.cpp b/cegui/src/widgets/EditboxBase.cpp
+index 5c5b26a51..e20b585ae 100644
+--- a/cegui/src/widgets/EditboxBase.cpp
++++ b/cegui/src/widgets/EditboxBase.cpp
+@@ -100,7 +100,9 @@ void EditboxBase::updateRenderedText()
+     {
+         if (d_textMaskingEnabled)
+         {
+-            const String maskedText(getText().size(), static_cast<char32_t>(d_textMaskingCodepoint));
++            String maskedText(getText().size(), static_cast<char32_t>(d_textMaskingCodepoint));
++            if (d_revealIndex < maskedText.size())
++                maskedText[d_revealIndex] = getText()[d_revealIndex];
+             d_renderedText.renderText(maskedText, nullptr, getEffectiveFont(), d_defaultParagraphDirection);
+         }
+         else
+@@ -167,6 +169,7 @@ void EditboxBase::setTextMaskingEnabled(bool setting)
+         return;
+ 
+     d_textMaskingEnabled = setting;
++    d_revealIndex = String::npos;
+ 
+     d_renderedTextDirty = true;
+     invalidate();
+@@ -175,6 +178,38 @@ void EditboxBase::setTextMaskingEnabled(bool setting)
+     onTextMaskingEnabledChanged(args);
+ }
+ 
++//----------------------------------------------------------------------------//
++void EditboxBase::setTextMaskingRevealTime(float seconds)
++{
++    d_textMaskingRevealTime = seconds > 0.f ? seconds : 0.f;
++    if (d_textMaskingRevealTime == 0.f)
++        hideRevealedCharacter();
++}
++
++//----------------------------------------------------------------------------//
++void EditboxBase::hideRevealedCharacter()
++{
++    if (d_revealIndex == String::npos)
++        return;
++
++    d_revealIndex = String::npos;
++    d_renderedTextDirty = true;
++    invalidate();
++}
++
++//----------------------------------------------------------------------------//
++void EditboxBase::updateSelf(float elapsed)
++{
++    Window::updateSelf(elapsed);
++
++    if (d_revealIndex != String::npos)
++    {
++        d_revealTimeLeft -= elapsed;
++        if (d_revealTimeLeft <= 0.f)
++            hideRevealedCharacter();
++    }
++}
++
+ //----------------------------------------------------------------------------//
+ void EditboxBase::setTextMaskingCodepoint(std::uint32_t codePoint)
+ {
+@@ -501,7 +536,8 @@ void EditboxBase::handleCaretMovement(size_t newIndex, bool select)
+ //----------------------------------------------------------------------------//
+ bool EditboxBase::performCopy(Clipboard& clipboard) const
+ {
+-    if (!getSelectionLength())
++    // Masked text (a password) never leaves the box.
++    if (!getSelectionLength() || d_textMaskingEnabled)
+         return false;
+ 
+     clipboard.setText(getText().substr(getSelectionStart(), getSelectionLength()));
+@@ -795,6 +831,9 @@ void EditboxBase::onTextChanged(WindowEventArgs& e)
+ 
+     clearSelection();
+ 
++    // Any edit masks the revealed character; typing reveals the new one.
++    d_revealIndex = String::npos;
++
+     // Make sure the caret is within the text
+     const auto textLen = getText().size();
+     if (d_caretPos > textLen)
+@@ -820,7 +859,17 @@ void EditboxBase::onCharacter(TextEventArgs& e)
+         return;
+ 
+     if (insertString(String(1, e.d_character)))
++    {
++        // Masked text shows the character just typed for a moment.
++        if (d_textMaskingEnabled && d_textMaskingRevealTime > 0.f && d_caretPos > 0)
++        {
++            d_revealIndex = d_caretPos - 1;
++            d_revealTimeLeft = d_textMaskingRevealTime;
++            d_renderedTextDirty = true;
++            invalidate();
++        }
+         ++e.handled;
++    }
+ }
+ 
+ //----------------------------------------------------------------------------//
+@@ -861,6 +910,7 @@ void EditboxBase::onMaximumTextLengthChanged(WindowEventArgs& e)
+ //----------------------------------------------------------------------------//
+ void EditboxBase::onCaretMoved(WindowEventArgs& e)
+ {
++    hideRevealedCharacter();
+     invalidate();
+     fireEvent(EventCaretMoved, e, EventNamespace);
+ }
+@@ -987,6 +1037,11 @@ void EditboxBase::addEditboxBaseProperties()
+         &EditboxBase::setTextMaskingCodepoint, &EditboxBase::getTextMaskingCodepoint,
+         42
+     );
++    CEGUI_DEFINE_PROPERTY(EditboxBase, float,
++        "TextMaskingRevealTime", "Property to get/set for how many seconds a just-typed character "
++        "stays readable in masked text (0 = never).  Value is a float.",
++        &EditboxBase::setTextMaskingRevealTime, &EditboxBase::getTextMaskingRevealTime, 0.f
++    );
+     CEGUI_DEFINE_PROPERTY(EditboxBase, size_t,
+         "CaretIndex", "Property to get/set the current caret index.  Value is \"[uint]\".",
+         &EditboxBase::setCaretIndex, &EditboxBase::getCaretIndex, 0

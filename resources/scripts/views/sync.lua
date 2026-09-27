@@ -10,8 +10,10 @@
 -- "<op>.started" / "<op>.done" / "<op>.error" events. While one runs the
 -- toolbar shows it as busy (sync.busy()). If the server asks for
 -- credentials that aren't stored, C++ fires "credential.missing" and we ask
--- for them (or for an SSH key's passphrase — views/ssh.lua), then retry the
--- operation. Repositories that use Git LFS upload their LFS objects (through
+-- for them (an SSH key's passphrase in views/ssh.lua; GitHub signs in
+-- through the browser in views/github.lua), then retry the operation. A saved
+-- credential the server refuses is removed ("credential.rejected") and we
+-- ask again. Repositories that use Git LFS upload their LFS objects (through
 -- git-lfs) before the commits are pushed.
 --
 -- Public API: sync.sync(), sync.fetch(), sync.fetchRemote(name),
@@ -273,21 +275,22 @@ function sync.retry()
     end
 end
 
---- Ask for credentials for a host, then retry the operation.
--- @param host  server host name (or "ssh-key:<path>" for a key passphrase)
-local function signIn(host)
-    if host:sub(1, 8) == "ssh-key:" then
-        require("views.ssh").askPassphrase(host)
-        return
+--- Ask for a username and password (or token) for a host, then retry.
+-- @param host      server host name
+-- @param rejected  true when the saved one was just refused
+local function askPassword(host, rejected)
+    local message = "Stored in the Windows Credential Manager, never in plain text. "
+        .. "For hosted services use a personal access token as the password."
+    if rejected then
+        message = host .. " didn't accept the saved sign-in, so it was removed. " .. message
     end
 
     dialog.show({
         title = "Sign in to " .. host,
-        message = "Stored in the Windows Credential Manager, never in plain text. "
-            .. "For hosted services use a personal access token as the password.",
+        message = message,
         fields = {
             { label = "Username", value = "" },
-            { label = "Password or access token", value = "" },
+            { label = "Password or access token", value = "", secret = true },
         },
         ok = "Save and retry",
         onOk = function(v)
@@ -305,6 +308,31 @@ local function signIn(host)
             return true
         end,
     })
+end
+
+--- Ask for credentials for a host, then retry the operation. GitHub signs
+-- in through the browser (views/github.lua).
+-- @param host      server host name (or "ssh-key:<path>" for a key passphrase)
+-- @param rejected  true when the saved credential was just refused (and removed)
+local function signIn(host, rejected)
+    if host:sub(1, 8) == "ssh-key:" then
+        require("views.ssh").askPassphrase(host)
+        return
+    end
+
+    local github = require("views.github")
+    if github.handles(host) then
+        github.signIn(host, {
+            rejected = rejected,
+            onSignedIn = sync.retry,
+            useToken = function()
+                askPassword(host, rejected)
+            end,
+        })
+        return
+    end
+
+    askPassword(host, rejected)
 end
 
 --- (Re)start the background fetch timer per the Options setting.
@@ -394,7 +422,13 @@ function sync.init()
         end)
     end
 
-    gitgud.on("credential.missing", signIn)
+    gitgud.on("credential.missing", function(host)
+        signIn(host, false)
+    end)
+    gitgud.on("credential.rejected", function(host)
+        signIn(host, true)
+    end)
+    require("views.github").init()
 
     sync.scheduleAutoFetch()
 end
