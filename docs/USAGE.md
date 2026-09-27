@@ -245,7 +245,16 @@ and choose *Track from …* to make the current branch follow it; right-click
 a local branch to stop tracking. Renaming a remote or changing its URL keeps
 its branches and everything that tracks it. When a server wants credentials you haven't saved, GitGud asks for a
 username and password (use an access token for hosted services) and stores
-them in the Windows Credential Manager.
+them in the Windows Credential Manager. If the server later refuses them,
+GitGud forgets them and asks again.
+
+GitHub doesn't accept account passwords, so for github.com GitGud offers
+**Sign in with browser**: it shows a one-time code, opens GitHub, and saves
+the token once you approve. This runs through the GitHub CLI (`gh`): a copy
+on your PATH is used as is; otherwise GitGud asks, then downloads the latest
+release into `%APPDATA%\Gitgud\tools\gh` and keeps it up to date. If `gh`
+is already signed in, GitGud just uses that. **Use a token** takes a
+personal access token.
 
 **SSH remotes** (`git@host:owner/repo.git`) use your SSH agent, then your
 keys in `~/.ssh`. *File ▸ SSH keys…* lists them, copies a public key to paste

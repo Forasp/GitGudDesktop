@@ -383,10 +383,13 @@ namespace gitgud::git
 
     // Supplies credentials for networked operations. Return true and fill
     // user/pass to attempt an authentication; return false to give up (the
-    // operation fails with the server's auth error). SSH key passphrases are
+    // operation fails with the server's auth error). `_bRejected` is true when
+    // the server just refused what this provider answered for the same
+    // connection (a stale or wrong saved credential). SSH key passphrases are
     // asked for with `_Url` = "ssh-key:<private key path>" (fill _OutPassword).
-    using CredentialProvider = std::function<bool(const std::string& _Url,
-        const std::string& _UsernameFromUrl, std::string& _OutUsername, std::string& _OutPassword)>;
+    using CredentialProvider =
+        std::function<bool(const std::string& _Url, const std::string& _UsernameFromUrl,
+            bool _bRejected, std::string& _OutUsername, std::string& _OutPassword)>;
 
     // Decides whether to trust an SSH server whose host key isn't in
     // ~/.ssh/known_hosts. `_KnownHostsLine` is what trusting it would append

@@ -10,17 +10,24 @@
 --         fields = {
 --             { label = "URL", value = "" },
 --             { label = "Local path", value = "C:\\src", browse = true },
+--             { label = "Password", value = "", secret = true },  -- masked
 --         },
 --         checks = { { label = "Open it afterwards", value = true } },
 --         ok = "Clone",                 -- OK button text
 --         danger = false,               -- true paints OK red (destructive)
---         alt = { label = "Help", action = function(values) end },
+--         alt = { label = "Help", action = function(values) end,
+--                 stayOpen = false },   -- true: keep the dialog open
 --         onOk = function(values)       -- values.fields[i], values.checks[i]
 --             return true               -- or false, "error shown in dialog"
 --         end,
 --         onCancel = function() end,
+--         stayOpen = false,             -- true: OK runs onOk but keeps it open
 --     })
 --
+-- A secret field shows each character as "*", with the one just typed
+-- readable for a moment; its text can't be copied out.
+--
+-- dialog.close(spec) dismisses that dialog from code (no callback runs).
 -- Shortcuts: dialog.confirm, dialog.alert, dialog.prompt. Other full-screen
 -- modals (repository settings) reuse dialog.showModal / hideModal for the
 -- dimmed backdrop and Escape handling.
@@ -36,6 +43,7 @@ local dialog = {}
 local MAX_FIELDS = 5
 local MAX_CHECKS = 3
 local DEFAULT_WIDTH = 500
+local REVEAL_SECONDS = "1" -- how long a typed secret character stays readable
 
 local spec = nil          -- the dialog being shown
 local escapeToken = nil
@@ -102,6 +110,13 @@ local function messageHeight(message, width)
     return lines * 19 + 6
 end
 
+--- A button width that fits its label (estimated; the default is 116 px).
+-- @param label  button text
+-- @return width in pixels
+local function buttonWidth(label)
+    return math.max(116, math.floor(#label * 7.5 + 30))
+end
+
 --- Collect the current field and checkbox values.
 -- @return { fields = {...}, checks = {...} }
 local function values()
@@ -153,7 +168,7 @@ local function submit()
         return
     end
 
-    if spec == current then
+    if spec == current and not current.stayOpen then
         close()
     end
 end
@@ -210,6 +225,8 @@ function dialog.show(s)
             gitgud.setProperty(label, "Area", geometry.band(y, 20, 22))
             y = y + 22
 
+            gitgud.setProperty(edit, "TextMaskingEnabled", field.secret and "true" or "false")
+            gitgud.setProperty(edit, "TextMaskingRevealTime", field.secret and REVEAL_SECONDS or "0")
             gitgud.setText(edit, field.value or "")
             local right = field.browse and -122 or -22
             gitgud.setProperty(edit, "Area", geometry.area(0, 22, 0, y, 1, right, 0, y + 32))
@@ -236,7 +253,17 @@ function dialog.show(s)
     gitgud.setProperty("DialogError", "Area", geometry.band(y, 22, 22))
     y = y + 26
 
-    -- Buttons.
+    -- Buttons, wide enough for their labels.
+    local okWidth = buttonWidth(s.ok or "OK")
+    local cancelWidth = buttonWidth(s.cancel or "Cancel")
+    gitgud.setProperty("DialogOkButton", "Area", geometry.area(1, -22 - okWidth, 1, -46, 1, -22, 1, -14))
+    gitgud.setProperty("DialogOkGlow", "Area", geometry.area(1, -30 - okWidth, 1, -54, 1, -14, 1, -6))
+    gitgud.setProperty("DialogCancelButton", "Area",
+        geometry.area(1, -30 - okWidth - cancelWidth, 1, -46, 1, -30 - okWidth, 1, -14))
+    if s.alt then
+        gitgud.setProperty("DialogAltButton", "Area",
+            geometry.area(0, 22, 1, -46, 0, 22 + buttonWidth(s.alt.label), 1, -14))
+    end
     gitgud.setText("DialogOkButton", text.escape(s.ok or "OK"))
     local okFill = s.danger and C.err or C.blue
     local okHover = s.danger and "FFFF7A7C" or "FF93A4FF"
@@ -261,6 +288,14 @@ function dialog.show(s)
 
     if fields[1] then
         gitgud.focus("DialogField1")
+    end
+end
+
+--- Dismiss the dialog from code without running onOk or onCancel.
+-- @param s  only close when this spec is the one showing (nil: any)
+function dialog.close(s)
+    if s == nil or spec == s then
+        close()
     end
 end
 
@@ -319,7 +354,9 @@ function dialog.init()
         if spec and spec.alt then
             local action = spec.alt.action
             local v = values()
-            close()
+            if not spec.alt.stayOpen then
+                close()
+            end
             action(v)
         end
     end)

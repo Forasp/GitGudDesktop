@@ -43,6 +43,12 @@ namespace gitgud::platform
     int RunShellStreaming(const std::string& _CommandLine, const std::string& _WorkingDir,
         const std::function<void(const std::string&)>& _OnOutput, std::atomic<bool>* _pCancel);
 
+    // Run `_Args[0]` (found like RunProcess does) with the remaining
+    // arguments, without a shell and with no stdin, streaming its merged
+    // output like RunShellStreaming. Same cancel and return rules.
+    int RunProcessStreaming(const std::vector<std::string>& _Args, const std::string& _WorkingDir,
+        const std::function<void(const std::string&)>& _OnOutput, std::atomic<bool>* _pCancel);
+
     // Full path of a program on PATH (or in Git for Windows' install folders,
     // which carry gpg and git-lfs), or "" when it can't be found.
     std::string FindProgram(const std::string& _Name);

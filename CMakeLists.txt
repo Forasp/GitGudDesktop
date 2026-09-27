@@ -119,6 +119,7 @@ add_library(gitgud_core STATIC
     src/platform/Shell.cpp
     src/platform/CrashHandler.cpp
     src/platform/Process.cpp
+    src/platform/Http.cpp
     src/imaging/ImageDiff.cpp
     src/imaging/GraphRenderer.cpp
     src/imaging/Raster.cpp
@@ -127,8 +128,9 @@ add_library(gitgud_core STATIC
 
 if(WIN32)
     # Windows Credential Manager (CredReadW/CredWriteW) lives in advapi32;
-    # the shell helpers (recycle bin, folder picker) need shell32/ole32.
-    target_link_libraries(gitgud_core PUBLIC advapi32 shell32 ole32 dbghelp)
+    # the shell helpers (recycle bin, folder picker) need shell32/ole32;
+    # downloads use winhttp, checksums bcrypt.
+    target_link_libraries(gitgud_core PUBLIC advapi32 shell32 ole32 dbghelp winhttp bcrypt)
 endif()
 
 target_include_directories(gitgud_core PUBLIC

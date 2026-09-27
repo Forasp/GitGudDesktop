@@ -3,7 +3,8 @@
 // features: the commit graph (with its row pictures), reflog and branch moves
 // for Undo/Redo, the 3-pane conflict tool, interactive rebase, file history
 // and blame, submodules, worktrees, Git LFS, SSH keys and host trust, and the
-// console (running commands with streamed output) — plus browsing, version
+// console (running commands with streamed output), background programs,
+// downloads and tool installs (the GitHub CLI); plus browsing, version
 // diffs, shelves, and file revision graphs for the Depot UI.
 //
 // Same conventions as the rest of the table (docs/LUA_API.md): sync calls
@@ -15,11 +16,14 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <memory>
 #include <sstream>
+#include <stdexcept>
 
 #include "app/EventBus.h"
 #include "app/TaskRunner.h"
@@ -27,6 +31,7 @@
 #include "git/Repository.h"
 #include "imaging/GraphRenderer.h"
 #include "imaging/RevisionGraphRenderer.h"
+#include "platform/Http.h"
 #include "platform/Process.h"
 #include "platform/Shell.h"
 #include "ui/IUiBackend.h"
@@ -720,6 +725,257 @@ namespace gitgud::lua::bindings
             return 1;
         }
 
+        // ---- background programs, downloads, tools ------------------------------------
+
+        // One named background program (gitgud.startProgram).
+        struct ProgramRun
+        {
+            std::atomic<bool> m_bCancel{false};
+            std::atomic<bool> m_bRunning{true};
+        };
+
+        // Touched only on the UI thread; workers hold their own shared_ptr.
+        std::map<std::string, std::shared_ptr<ProgramRun>> g_Programs;
+
+        // gitgud.startProgram(name, {program, args...}, cwd?) -> true | (nil, msg).
+        // Runs without a shell and without stdin; output streams as
+        // "<name>.output" events and "<name>.done" carries the exit code
+        // (-1 when it couldn't start or was stopped).
+        int LStartProgram(lua_State* _pL)
+        {
+            LuaEngine* pengine = Self(_pL);
+            const std::string name = luaL_checkstring(_pL, 1);
+            const std::vector<std::string> args = StringList(_pL, 2);
+            const std::string cwd = luaL_optstring(_pL, 3, "");
+            auto* ptasks = pengine->TaskRunner();
+            auto* pbus = pengine->EventBus();
+            if (!ptasks || !pbus)
+            {
+                return FailWith(_pL, "no task runner");
+            }
+            if (args.empty())
+            {
+                return FailWith(_pL, "no program given");
+            }
+            auto it = g_Programs.find(name);
+            if (it != g_Programs.end() && it->second->m_bRunning.load())
+            {
+                return FailWith(_pL, "'" + name + "' is already running");
+            }
+
+            auto run = std::make_shared<ProgramRun>();
+            g_Programs[name] = run;
+            ptasks->Run(name,
+                [name, args, cwd, run, pbus]() -> std::string
+                {
+                    const int icode = gitgud::platform::RunProcessStreaming(
+                        args, cwd, [&name, pbus](const std::string& _Chunk)
+                        { pbus->Publish({name + ".output", _Chunk}); }, &run->m_bCancel);
+                    run->m_bRunning = false;
+                    return std::to_string(icode);
+                });
+            lua_pushboolean(_pL, 1);
+            return 1;
+        }
+
+        // gitgud.stopProgram(name) -> true when it was running (it ends shortly).
+        int LStopProgram(lua_State* _pL)
+        {
+            auto it = g_Programs.find(luaL_checkstring(_pL, 1));
+            const bool brunning = it != g_Programs.end() && it->second->m_bRunning.load();
+            if (brunning)
+            {
+                it->second->m_bCancel = true;
+            }
+            lua_pushboolean(_pL, brunning);
+            return 1;
+        }
+
+        // gitgud.httpGet(name, url) -> true | (nil, msg). "<name>.done" carries
+        // the response body, "<name>.error" the reason. https:// only.
+        int LHttpGet(lua_State* _pL)
+        {
+            const std::string name = luaL_checkstring(_pL, 1);
+            const std::string url = luaL_checkstring(_pL, 2);
+            auto* ptasks = Self(_pL)->TaskRunner();
+            if (!ptasks)
+            {
+                return FailWith(_pL, "no task runner");
+            }
+            if (url.rfind("https://", 0) != 0)
+            {
+                return FailWith(_pL, "only https:// URLs are allowed");
+            }
+            ptasks->Run(name,
+                [url]() -> std::string
+                {
+                    std::string body;
+                    std::string error;
+                    if (!gitgud::platform::HttpGet(url, body, error))
+                    {
+                        throw std::runtime_error(error);
+                    }
+                    return body;
+                });
+            lua_pushboolean(_pL, 1);
+            return 1;
+        }
+
+        // Tool and version names become folder names: keep them tame.
+        bool IsSafeName(const std::string& _Name)
+        {
+            if (_Name.empty() || _Name.size() > 64 || _Name == "." || _Name == "..")
+            {
+                return false;
+            }
+            return std::all_of(_Name.begin(), _Name.end(),
+                [](char _C)
+                {
+                    return std::isalnum(static_cast<unsigned char>(_C)) || _C == '.' || _C == '-' ||
+                           _C == '_';
+                });
+        }
+
+        fs::path ToolsRoot(const std::string& _Tool)
+        {
+            return fs::u8path(gitgud::platform::ConfigDirectory()) / "tools" / fs::u8path(_Tool);
+        }
+
+        // gitgud.installTool(name, {url=, sha256=, tool=, version=}) -> true |
+        // (nil, msg). Downloads a .zip, checks its SHA-256, and unpacks it into
+        // <app data>/tools/<tool>/<version>; older versions are removed unless a
+        // running copy holds them. "<name>.done" carries the install folder.
+        int LInstallTool(lua_State* _pL)
+        {
+            const std::string name = luaL_checkstring(_pL, 1);
+            luaL_checktype(_pL, 2, LUA_TTABLE);
+            auto field = [_pL](const char* _szKey)
+            {
+                lua_getfield(_pL, 2, _szKey);
+                const char* szvalue = lua_tostring(_pL, -1);
+                std::string value = szvalue ? szvalue : "";
+                lua_pop(_pL, 1);
+                return value;
+            };
+            const std::string url = field("url");
+            std::string sha256 = field("sha256");
+            const std::string tool = field("tool");
+            const std::string version = field("version");
+            std::transform(sha256.begin(), sha256.end(), sha256.begin(),
+                [](unsigned char _C) { return static_cast<char>(std::tolower(_C)); });
+
+            auto* ptasks = Self(_pL)->TaskRunner();
+            if (!ptasks)
+            {
+                return FailWith(_pL, "no task runner");
+            }
+            if (url.rfind("https://", 0) != 0)
+            {
+                return FailWith(_pL, "only https:// URLs are allowed");
+            }
+            if (!IsSafeName(tool) || !IsSafeName(version))
+            {
+                return FailWith(_pL, "invalid tool or version name");
+            }
+            if (sha256.size() != 64 ||
+                sha256.find_first_not_of("0123456789abcdef") != std::string::npos)
+            {
+                return FailWith(_pL, "a SHA-256 checksum is required");
+            }
+
+            ptasks->Run(name,
+                [url, sha256, tool, version]() -> std::string
+                {
+                    std::string body;
+                    std::string error;
+                    if (!gitgud::platform::HttpGet(url, body, error))
+                    {
+                        throw std::runtime_error("download failed: " + error);
+                    }
+                    if (gitgud::platform::Sha256Hex(body) != sha256)
+                    {
+                        throw std::runtime_error(
+                            "the download didn't match its published checksum");
+                    }
+
+                    const fs::path root = ToolsRoot(tool);
+                    const fs::path zip = root / fs::u8path(version + ".zip");
+                    const fs::path staging = root / fs::u8path(version + ".partial");
+                    const fs::path target = root / fs::u8path(version);
+                    std::error_code ec;
+                    fs::create_directories(root, ec);
+                    {
+                        std::ofstream out(zip, std::ios::binary | std::ios::trunc);
+                        out.write(body.data(), static_cast<std::streamsize>(body.size()));
+                        if (!out)
+                        {
+                            throw std::runtime_error("could not write " + zip.u8string());
+                        }
+                    }
+                    fs::remove_all(staging, ec);
+                    const bool bunpacked =
+                        gitgud::platform::ExtractZip(zip.u8string(), staging.u8string(), error);
+                    fs::remove(zip, ec);
+                    if (!bunpacked)
+                    {
+                        fs::remove_all(staging, ec);
+                        throw std::runtime_error(error);
+                    }
+                    fs::remove_all(target, ec);
+                    fs::rename(staging, target, ec);
+                    if (ec)
+                    {
+                        fs::remove_all(staging, ec);
+                        throw std::runtime_error(
+                            "could not finish installing into " + target.u8string());
+                    }
+
+                    // Best effort: a copy that's running right now stays until
+                    // the next install.
+                    for (fs::directory_iterator it(root, ec), end; !ec && it != end;
+                        it.increment(ec))
+                    {
+                        if (it->path() != target)
+                        {
+                            std::error_code ignored;
+                            fs::remove_all(it->path(), ignored);
+                        }
+                    }
+                    return target.u8string();
+                });
+            lua_pushboolean(_pL, 1);
+            return 1;
+        }
+
+        // gitgud.installedTools(tool) -> {{version=, dir=}, ...} installed by
+        // installTool (unordered; usually one).
+        int LInstalledTools(lua_State* _pL)
+        {
+            const std::string tool = luaL_checkstring(_pL, 1);
+            lua_newtable(_pL);
+            if (!IsSafeName(tool))
+            {
+                return 1;
+            }
+            lua_Integer n = 0;
+            std::error_code ec;
+            for (fs::directory_iterator it(ToolsRoot(tool), ec), end; !ec && it != end;
+                it.increment(ec))
+            {
+                const std::string version = it->path().filename().u8string();
+                std::error_code dirEc;
+                if (!it->is_directory(dirEc) || version.find(".partial") != std::string::npos)
+                {
+                    continue;
+                }
+                lua_createtable(_pL, 0, 2);
+                SetField(_pL, "version", version);
+                SetField(_pL, "dir", it->path().u8string());
+                lua_rawseti(_pL, -2, ++n);
+            }
+            return 1;
+        }
+
         int LHomeDir(lua_State* _pL)
         {
             const std::string home = HomeDir();
@@ -1117,6 +1373,11 @@ namespace gitgud::lua::bindings
             {"runCommand", LRunCommand},
             {"cancelCommand", LCancelCommand},
             {"commandRunning", LCommandRunning},
+            {"startProgram", LStartProgram},
+            {"stopProgram", LStopProgram},
+            {"httpGet", LHttpGet},
+            {"installTool", LInstallTool},
+            {"installedTools", LInstalledTools},
             {"homeDir", LHomeDir},
             {"sshKeys", LSshKeys},
             {"trustHostKey", LTrustHostKey},

@@ -194,7 +194,8 @@ namespace gitgud::git
                 {
                     std::string unusedUser;
                     if (!_pCtx->m_pProvider || !*_pCtx->m_pProvider ||
-                        !(*_pCtx->m_pProvider)("ssh-key:" + keyPath, _User, unusedUser, passphrase))
+                        !(*_pCtx->m_pProvider)(
+                            "ssh-key:" + keyPath, _User, false, unusedUser, passphrase))
                     {
                         continue; // no passphrase for it (yet): try the next key
                     }
@@ -240,6 +241,8 @@ namespace gitgud::git
             }
             // libgit2 re-asks after every rejection; returning the same stored
             // password forever would loop, so three strikes and we give up.
+            // Every call after the first means the last answer was refused.
+            const bool brejected = pctx->m_iAttempts > 0;
             if (++pctx->m_iAttempts > 3)
             {
                 git_error_set_str(GIT_ERROR_NET, "Authentication failed (3 attempts)");
@@ -248,9 +251,10 @@ namespace gitgud::git
 
             std::string user;
             std::string pass;
-            if (!(*pctx->m_pProvider)(url, userFromUrl, user, pass))
+            if (!(*pctx->m_pProvider)(url, userFromUrl, brejected, user, pass))
             {
-                git_error_set_str(GIT_ERROR_NET, "No credentials available");
+                git_error_set_str(GIT_ERROR_NET, brejected ? "The server rejected the saved sign-in"
+                                                           : "No credentials available");
                 return GIT_EAUTH;
             }
             return git_credential_userpass_plaintext_new(_ppOut, user.c_str(), pass.c_str());

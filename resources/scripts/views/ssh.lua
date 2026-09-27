@@ -100,12 +100,16 @@ function ssh.generate()
             .. "Manager. Leave it blank for no passphrase.",
         fields = {
             { label = "Label (usually your email)", value = gitgud.globalConfig("user.email") },
-            { label = "Passphrase (optional — typed text is visible)", value = "" },
+            { label = "Passphrase (optional)", value = "", secret = true },
+            { label = "Repeat the passphrase", value = "", secret = true },
         },
         ok = "Generate key",
         onOk = function(v)
             local label = text.trim(v.fields[1])
             local passphrase = v.fields[2]
+            if passphrase ~= v.fields[3] then
+                return false, "The passphrases don't match."
+            end
             local result, err = gitgud.runProgram({
                 "ssh-keygen", "-q", "-t", "ed25519", "-C", label, "-f", target, "-N", passphrase,
             })
@@ -168,7 +172,7 @@ function ssh.askPassphrase(credentialKey)
         title = "Passphrase for " .. text.basename(path),
         message = "Your SSH key " .. path .. " is protected by a passphrase. It's stored in the "
             .. "Windows Credential Manager, never in plain text.",
-        fields = { { label = "Passphrase (typed text is visible)", value = "" } },
+        fields = { { label = "Passphrase", value = "", secret = true } },
         ok = "Save and retry",
         onOk = function(v)
             if v.fields[1] == "" then

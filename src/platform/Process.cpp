@@ -325,16 +325,14 @@ namespace gitgud::platform
         return result;
     }
 
-    int RunShellStreaming(const std::string& _CommandLine, const std::string& _WorkingDir,
-        const std::function<void(const std::string&)>& _OnOutput, std::atomic<bool>* _pCancel)
+    // Start a full command line with no stdin, stream its merged
+    // stdout/stderr to `_OnOutput`, and kill its whole tree on cancel.
+    // Returns the exit code, or -1 when it couldn't start or was cancelled.
+    static int StreamCommandLine(const std::string& _CommandLine, const std::string& _WorkingDir,
+        const std::function<void(const std::string&)>& _OnOutput, std::atomic<bool>* _pCancel,
+        const std::string& _StartError)
     {
-        std::string comspec = EnvString("ComSpec");
-        if (comspec.empty())
-        {
-            comspec = "cmd.exe";
-        }
-        const std::string commandLine =
-            QuoteArgument(comspec) + " /d /s /c \"" + _CommandLine + "\"";
+        const std::string& commandLine = _CommandLine;
 
         ScopedHandle outRead;
         ScopedHandle outWrite;
@@ -380,7 +378,7 @@ namespace gitgud::platform
                 CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, cwd.empty() ? nullptr : cwd.c_str(),
                 &si, &pi))
         {
-            _OnOutput("could not start the command shell\n");
+            _OnOutput(_StartError);
             return -1;
         }
         ScopedHandle process;
@@ -454,6 +452,40 @@ namespace gitgud::platform
         return bcancelled ? -1 : static_cast<int>(dwexit);
     }
 
+    int RunShellStreaming(const std::string& _CommandLine, const std::string& _WorkingDir,
+        const std::function<void(const std::string&)>& _OnOutput, std::atomic<bool>* _pCancel)
+    {
+        std::string comspec = EnvString("ComSpec");
+        if (comspec.empty())
+        {
+            comspec = "cmd.exe";
+        }
+        const std::string commandLine =
+            QuoteArgument(comspec) + " /d /s /c \"" + _CommandLine + "\"";
+        return StreamCommandLine(
+            commandLine, _WorkingDir, _OnOutput, _pCancel, "could not start the command shell\n");
+    }
+
+    int RunProcessStreaming(const std::vector<std::string>& _Args, const std::string& _WorkingDir,
+        const std::function<void(const std::string&)>& _OnOutput, std::atomic<bool>* _pCancel)
+    {
+        const std::string program = _Args.empty() ? std::string() : FindProgram(_Args[0]);
+        if (program.empty())
+        {
+            _OnOutput(_Args.empty() ? std::string("no program given\n")
+                                    : "'" + _Args[0] + "' was not found\n");
+            return -1;
+        }
+
+        std::string commandLine = QuoteArgument(program);
+        for (std::size_t i = 1; i < _Args.size(); ++i)
+        {
+            commandLine += " " + QuoteArgument(_Args[i]);
+        }
+        return StreamCommandLine(
+            commandLine, _WorkingDir, _OnOutput, _pCancel, "could not start '" + program + "'\n");
+    }
+
 #else
 
     std::string FindProgram(const std::string&)
@@ -473,6 +505,13 @@ namespace gitgud::platform
         const std::function<void(const std::string&)>& _OnOutput, std::atomic<bool>*)
     {
         _OnOutput("the console is not implemented on this platform\n");
+        return -1;
+    }
+
+    int RunProcessStreaming(const std::vector<std::string>&, const std::string&,
+        const std::function<void(const std::string&)>& _OnOutput, std::atomic<bool>*)
+    {
+        _OnOutput("running programs is not implemented on this platform\n");
         return -1;
     }
 
