@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(Gitgud
-    VERSION 1.1.0
+    VERSION 1.2.0
     DESCRIPTION "A moddable Git client with an XML+Lua GUI"
     LANGUAGES CXX)
 
@@ -136,6 +136,9 @@ target_include_directories(gitgud_core PUBLIC
     ${LUA_INCLUDE_DIR}
 )
 target_include_directories(gitgud_core PRIVATE ${STB_INCLUDE_DIRS})
+
+# gitgud.version in Lua (About, updates) comes from project(... VERSION).
+target_compile_definitions(gitgud_core PRIVATE GITGUD_VERSION="${PROJECT_VERSION}")
 
 # PUBLIC so consumers (gitgud, gitgud_tests) inherit these transitively.
 target_link_libraries(gitgud_core PUBLIC

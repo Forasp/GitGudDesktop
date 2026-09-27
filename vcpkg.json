@@ -1,6 +1,6 @@
 {
   "name": "gitgud",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A moddable Git client with an XML+Lua GUI",
   "dependencies": [
     "sdl2",

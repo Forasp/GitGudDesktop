@@ -146,7 +146,7 @@ namespace gitgud::lua
         lua_newtable(m_pL);
         lua_pushlightuserdata(m_pL, this);
         luaL_setfuncs(m_pL, functions.data(), 1);
-        lua_pushliteral(m_pL, "0.2.0");
+        lua_pushliteral(m_pL, GITGUD_VERSION);
         lua_setfield(m_pL, -2, "version");
         lua_setglobal(m_pL, "gitgud");
     }
