@@ -69,7 +69,7 @@ function settingsView.options()
 end
 
 --- Open the user-interface picker (File > Switch user interface…, or the
--- Options dialog's "Switch UI…" button): choose the default UI, the P4V-style
+-- Options dialog's "Switch UI…" button): choose the default UI, the Depot
 -- UI, or a UI package from any folder. The picker runs in place of this UI
 -- and comes back here on Cancel.
 function settingsView.switchInterface()

@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  windows/diff.xml - the Diff window (a pop-out OS window):
+  the two versions side by side, whole files, changes tinted, with a
+  toolbar to step between differences. Opened with gitgud.openWindow: every
+  name below is prefixed with the window id ("diff3:DiffLeft").
+  scripts/depot/windows/diff.lua.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="Root">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+
+        <Window type="Gitgud/StaticText" name="Background">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="FF28333C"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="Toolbar">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,38}}"/>
+            <Property name="PanelColour" value="FF28333C"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Button" name="PrevButton">
+                <Property name="Area" value="{{0,8},{0,6},{0,118},{1,-6}}"/>
+                <Property name="Text" value="Previous Diff"/>
+                <Property name="TooltipText" value="Shift+F7"/>
+            </Window>
+            <Window type="Gitgud/Button" name="NextButton">
+                <Property name="Area" value="{{0,122},{0,6},{0,232},{1,-6}}"/>
+                <Property name="Text" value="Next Diff"/>
+                <Property name="TooltipText" value="F7"/>
+            </Window>
+            <Window type="Gitgud/Checkbox" name="WhitespaceCheck">
+                <Property name="Area" value="{{0,248},{0,6},{0,400},{1,-6}}"/>
+                <Property name="Text" value="Ignore whitespace"/>
+            </Window>
+            <Window type="Gitgud/Checkbox" name="WordsCheck">
+                <Property name="Area" value="{{0,404},{0,6},{0,560},{1,-6}}"/>
+                <Property name="Text" value="Highlight words"/>
+                <Property name="Selected" value="true"/>
+            </Window>
+            <Window type="Gitgud/Button" name="SwapButton">
+                <Property name="Area" value="{{0,566},{0,6},{0,636},{1,-6}}"/>
+                <Property name="Text" value="Swap"/>
+                <Property name="TooltipText" value="Swap the two sides"/>
+            </Window>
+            <Window type="Gitgud/Button" name="EditButton">
+                <Property name="Area" value="{{0,640},{0,6},{0,740},{1,-6}}"/>
+                <Property name="Text" value="Edit File"/>
+                <Property name="TooltipText" value="Open the workspace file in your editor"/>
+            </Window>
+            <Window type="Gitgud/Label" name="DiffCount">
+                <Property name="Area" value="{{0,750},{0,0},{1,-12},{1,0}}"/>
+                <Property name="HorzFormatting" value="RightAligned"/>
+                <Property name="Text" value=""/>
+            </Window>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="LeftHeader">
+            <Property name="Area" value="{{0,0},{0,38},{0.5,-12},{0,62}}"/>
+            <Property name="PanelColour" value="FF25484F"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="RightHeader">
+            <Property name="Area" value="{{0.5,12},{0,38},{1,0},{0,62}}"/>
+            <Property name="PanelColour" value="FF25484F"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="MidHeader">
+            <Property name="Area" value="{{0.5,-12},{0,38},{0.5,12},{0,62}}"/>
+            <Property name="PanelColour" value="FF25484F"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <Window type="Gitgud/ListWidget" name="DiffLeft">
+            <Property name="Area" value="{{0,0},{0,62},{0.5,-12},{1,-24}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="VertScrollbarDisplayMode" value="Hidden"/>
+            <Property name="SelectionColour" value="40ECF1C1"/>
+        </Window>
+        <Window type="Gitgud/ListWidget" name="DiffMid">
+            <Property name="Area" value="{{0.5,-12},{0,62},{0.5,12},{1,-24}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="VertScrollbarDisplayMode" value="Hidden"/>
+            <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+            <Property name="SelectionColour" value="00000000"/>
+            <Property name="BgColour" value="FF28333C"/>
+        </Window>
+        <Window type="Gitgud/ListWidget" name="DiffRight">
+            <Property name="Area" value="{{0.5,12},{0,62},{1,0},{1,-24}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="SelectionColour" value="40ECF1C1"/>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="Footer">
+            <Property name="Area" value="{{0,0},{1,-24},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="FF28333C"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Label" name="FooterText">
+                <Property name="Area" value="{{0,10},{0,0},{1,-10},{1,0}}"/>
+                <Property name="Text" value=""/>
+            </Window>
+        </Window>
+    </Window>
+</GUILayout>

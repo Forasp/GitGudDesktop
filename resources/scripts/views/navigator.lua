@@ -1,4 +1,4 @@
---- views/navigator.lua — the branch tree on the left (GitKraken's left panel).
+--- views/navigator.lua — the branch tree on the left.
 --
 -- One list (NavList) with collapsible sections:
 --   LOCAL        local branches (✓ the checked-out one, ↑↓ vs upstream)

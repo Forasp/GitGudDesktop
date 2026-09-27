@@ -246,7 +246,7 @@ namespace gitgud::ui
             parser->setProperty("SchemaDefaultResourceGroup", "schemas");
         }
 
-        // The Gitgud skin (GitHub-Desktop-inspired dark flat theme) lives in
+        // The Gitgud skin (a dark flat theme) lives in
         // resources/ as plain XML — reskinnable with no recompile. It reuses the
         // Vanilla imageset's brushes from the CEGUI datafiles.
         SchemeManager::getSingleton().createFromFile("Gitgud.xml", "gitgud-schemes");

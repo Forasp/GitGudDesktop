@@ -1,4 +1,4 @@
-// Headless tests for the GitHub-Desktop-parity engine surface: line-level
+// Headless tests for the core engine surface: line-level
 // staging, discarding, amend/undo, revert, cherry-pick, reset, tags, squash
 // merge, rebase, conflict resolution, file versions, and the image diff.
 // Same throwaway-temp-repo pattern as test_engine_extended.cpp.

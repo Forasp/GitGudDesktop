@@ -46,7 +46,7 @@ Scripts reach the app only through the global `gitgud` table. Conventions:
 | `fileAt(path, revision)` | the file's bytes in that version (`"workdir"`, `"index"`, `"head"`, any commit-ish, `"<oid>^"`), or `nil` when it doesn't exist there |
 | `diffVersions(oldPath, oldRevision, newPath, newRevision, opts)` | a diff table (as `diff`) between any two versions of a file; a missing side diffs as an add or delete. `opts`: `{ignoreWhitespace, context}` (a huge `context` gives the whole file) |
 | `changedFiles(oldRevision, newRevision, prefix = "")` | `{ {path, oldPath, status}, … }` — which files differ (renames detected). `newRevision` may be `"workdir"` (untracked files included), `oldRevision` `""` (nothing) |
-| `revisionGraph{path, remotes = true, exclude = {branches}, max = 300, selected, columnWidth, rowHeight, nodeWidth, nodeHeight, nodeTop, image, colours}` | a file's history across branches, drawn P4V-style and published as image `image` (default `"GitgudRevisionGraph"`). Returns `{image, width, height, columnWidth, rows = { {name, head, remote, x, y, w, h} }, nodes = { history row + {row, column, revision, action, x, y, w, h} }, edges = { {from, to, merge} } }` — `action` is `A` `M` `D` or `I` (merged in); positions are pixels in the picture, for your labels and click targets. `colours`: `{background, bandA, bandB, bandSelected, rowLine, node, nodeHead, nodeBorder, deleted, bar, edge, branchEdge, selectedFill, selectedBorder}` (hex) |
+| `revisionGraph{path, remotes = true, exclude = {branches}, max = 300, selected, columnWidth, rowHeight, nodeWidth, nodeHeight, nodeTop, image, colours}` | a file's history across branches, drawn as a revision graph and published as image `image` (default `"GitgudRevisionGraph"`). Returns `{image, width, height, columnWidth, rows = { {name, head, remote, x, y, w, h} }, nodes = { history row + {row, column, revision, action, x, y, w, h} }, edges = { {from, to, merge} } }` — `action` is `A` `M` `D` or `I` (merged in); positions are pixels in the picture, for your labels and click targets. `colours`: `{background, bandA, bandB, bandSelected, rowLine, node, nodeHead, nodeBorder, deleted, bar, edge, branchEdge, selectedFill, selectedBorder}` (hex) |
 
 ## Staging and commits
 
@@ -92,7 +92,7 @@ fails the commit with the tool's message.
 | `setUpstream(branch, "remote/branch")` | make a local branch track a remote branch; `""` or nil stops tracking |
 | `setConfig(key, value)` / `setGlobalConfig(key, value)` | empty value removes the key |
 | `stashSave(message?)` / `stashApply(i)` / `stashPop(i)` / `stashDrop(i)` | untracked files included |
-| `shelve(branch, {paths}, message)` | commit the working-tree versions of `paths` on top of HEAD onto local branch `branch` (created or moved) and return the commit id — HEAD, the index, and the files don't change. The P4V UI's shelves |
+| `shelve(branch, {paths}, message)` | commit the working-tree versions of `paths` on top of HEAD onto local branch `branch` (created or moved) and return the commit id — HEAD, the index, and the files don't change. The Depot UI's shelves |
 | `unshelve(revision, {paths}?)` | bring a shelf commit's changes (vs its parent) into the working tree: untouched files take the shelved version, edited ones get a three-way merge. Returns `{applied, conflicted, skipped}` (path arrays; `conflicted` files have conflict markers) |
 
 ## Network (asynchronous)

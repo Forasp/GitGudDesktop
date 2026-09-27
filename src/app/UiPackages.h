@@ -12,7 +12,7 @@
 //     <root>/imagesets/*.xml (optional: the package's own images / icons)
 //
 // The default UI is resources/ itself (id "default"). Built-in alternatives
-// live in resources/uis/<id>/ (the P4V-style UI, the UI picker). Users can
+// live in resources/uis/<id>/ (the Depot UI, the UI picker). Users can
 // point GitGud at a package anywhere on disk ("path:<folder>").
 //
 // Scripts of any package can `require` the default UI's modules (core/,
@@ -33,7 +33,7 @@ namespace gitgud::app
 
     struct UiPackage
     {
-        std::string m_Id;          // "default", "p4v", or "path:<folder>" for custom packages
+        std::string m_Id;          // "default", "depot", or "path:<folder>" for custom packages
         std::string m_Name;        // display name (ui.ini `name`, else the folder name)
         std::string m_Description; // ui.ini `description`
         std::string m_Root;        // folder holding scripts/ and layouts/ (forward slashes)

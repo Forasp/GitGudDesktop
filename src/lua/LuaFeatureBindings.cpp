@@ -1,10 +1,10 @@
 // -----------------------------------------------------------------------------
-// LuaFeatureBindings — the `gitgud` functions behind the GitKraken-style
+// LuaFeatureBindings — the `gitgud` functions behind the
 // features: the commit graph (with its row pictures), reflog and branch moves
 // for Undo/Redo, the 3-pane conflict tool, interactive rebase, file history
 // and blame, submodules, worktrees, Git LFS, SSH keys and host trust, and the
 // console (running commands with streamed output) — plus browsing, version
-// diffs, shelves, and file revision graphs for the P4V-style UI.
+// diffs, shelves, and file revision graphs for the Depot UI.
 //
 // Same conventions as the rest of the table (docs/LUA_API.md): sync calls
 // return a value or (nil, "message"); mutations publish "status.changed";

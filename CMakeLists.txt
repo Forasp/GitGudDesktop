@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(Gitgud
     VERSION 0.1.0
-    DESCRIPTION "A GitHub Desktop-style Git client with an XML+Lua GUI"
+    DESCRIPTION "A moddable Git client with an XML+Lua GUI"
     LANGUAGES CXX)
 
 # ---- Standard ------------------------------------------------------------

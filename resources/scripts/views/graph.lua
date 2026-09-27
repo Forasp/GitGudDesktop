@@ -1,4 +1,4 @@
---- views/graph.lua — the commit graph (GitKraken-style), as an optional view.
+--- views/graph.lua — the commit graph, as an optional view.
 --
 -- View > Commit graph (Ctrl+3) or the toolbar's Graph button swaps the
 -- sidebar for GraphPanel: every branch's history at once, drawn as coloured

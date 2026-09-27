@@ -87,7 +87,7 @@ D:\...\build\release\bin\gitgud.exe
 
 GitGud opens the repository in its working directory (or none — add one
 from the UI). The first launch asks which interface to use (the default or
-the P4V-style one); `GITGUD_UI=default`, `p4v`, or `path:<folder>` picks
+the Depot one); `GITGUD_UI=default`, `depot`, or `path:<folder>` picks
 one for a run without asking. Launched from a terminal it prints to that console;
 `GITGUD_CONSOLE=1` forces a console window and `GITGUD_LOG=<file>` sends all
 output to a file. A crash writes a symbolized stack trace to that output and
@@ -144,7 +144,7 @@ is.
   ```powershell
   powershell -File tests\ui\make-testrepo.ps1 -Dir C:\temp\gg-test
   $env:GITGUD_SCRIPT = "$PWD\tests\ui\workflows.lua"   # or features / remotes / walkthrough / perf / mod-example
-  $env:GITGUD_UI     = "default"                         # p4v.lua needs "p4v"
+  $env:GITGUD_UI     = "default"                         # depot.lua needs "depot"
   $env:GITGUD_SHOTS  = "C:\temp\shots"
   $env:GITGUD_LOG    = "C:\temp\gg.log"
   Start-Process build\release\bin\gitgud.exe -WorkingDirectory C:\temp\gg-test
@@ -157,7 +157,7 @@ is.
 
 ## Documentation
 
-`docs/` is the source for both the app's Help menu and the GitHub wiki.
+`docs/` is the source for both the app's Help menu and the project wiki.
 Edit a doc there, then republish the wiki (the Home, sidebar, and footer
 pages come from `tools/wiki/`):
 

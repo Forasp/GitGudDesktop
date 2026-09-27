@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  windows/timelapse.xml - the Time-lapse View window: a file at any of its
+  revisions, each line annotated with the revision that last changed it and
+  shaded by age (or only this revision's changes). Drag the slider or step
+  with the buttons (Page Up / Page Down). scripts/depot/windows/timelapse.lua;
+  names are prefixed with the window id.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="Root">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+
+        <Window type="Gitgud/StaticText" name="Background">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="FF28333C"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="Header">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,72}}"/>
+            <Property name="PanelColour" value="FF25484F"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Button" name="FirstButton">
+                <Property name="Area" value="{{0,10},{0,8},{0,62},{0,32}}"/>
+                <Property name="Text" value="First"/>
+            </Window>
+            <Window type="Gitgud/Button" name="PrevButton">
+                <Property name="Area" value="{{0,66},{0,8},{0,118},{0,32}}"/>
+                <Property name="Text" value="Prev"/>
+                <Property name="TooltipText" value="Page Up"/>
+            </Window>
+            <Window type="Gitgud/Button" name="SliderTrack">
+                <Property name="Area" value="{{0,126},{0,16},{1,-316},{0,24}}"/>
+                <Property name="Text" value=""/>
+                <Property name="NormalFillColour" value="FF1F2731"/>
+                <Property name="HoverFillColour" value="FF1F2731"/>
+                <Property name="PushedFillColour" value="FF1F2731"/>
+            </Window>
+            <Window type="Gitgud/Button" name="SliderThumb">
+                <Property name="Area" value="{{0,126},{0,8},{0,140},{0,32}}"/>
+                <Property name="Text" value=""/>
+                <Property name="NormalFillColour" value="FFA0A485"/>
+                <Property name="HoverFillColour" value="FFECF1C1"/>
+                <Property name="PushedFillColour" value="FFECF1C1"/>
+                <Property name="TooltipText" value="Drag to a revision"/>
+            </Window>
+            <Window type="Gitgud/Button" name="NextButton">
+                <Property name="Area" value="{{1,-308},{0,8},{1,-256},{0,32}}"/>
+                <Property name="Text" value="Next"/>
+                <Property name="TooltipText" value="Page Down"/>
+            </Window>
+            <Window type="Gitgud/Button" name="LastButton">
+                <Property name="Area" value="{{1,-252},{0,8},{1,-200},{0,32}}"/>
+                <Property name="Text" value="Last"/>
+            </Window>
+            <Window type="Gitgud/Button" name="ModeButton">
+                <Property name="Area" value="{{1,-192},{0,8},{1,-10},{0,32}}"/>
+                <Property name="Text" value=""/>
+                <Property name="TooltipText" value="Shade lines by age, or only this revision's changes"/>
+            </Window>
+            <Window type="Gitgud/Label" name="Info">
+                <Property name="Area" value="{{0,12},{0,40},{1,-12},{0,68}}"/>
+                <Property name="Text" value=""/>
+            </Window>
+        </Window>
+
+        <Window type="Gitgud/ListWidget" name="Gutter">
+            <Property name="Area" value="{{0,0},{0,72},{0,300},{1,-96}}"/>
+            <Property name="VertScrollbarDisplayMode" value="Hidden"/>
+            <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+            <Property name="BgColour" value="FF28333C"/>
+            <Property name="SelectionColour" value="00000000"/>
+        </Window>
+        <Window type="Gitgud/ListWidget" name="Content">
+            <Property name="Area" value="{{0,300},{0,72},{1,0},{1,-96}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="SelectionColour" value="40ECF1C1"/>
+        </Window>
+
+        <Window type="Gitgud/MultiLineEditbox" name="Description">
+            <Property name="Area" value="{{0,4},{1,-92},{1,-4},{1,-4}}"/>
+            <Property name="ReadOnly" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

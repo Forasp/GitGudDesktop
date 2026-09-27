@@ -744,7 +744,7 @@ namespace gitgud::lua::bindings
         }
 
         // gitgud.trashRepoFile(relativePath) -> true or (nil, msg): move a file
-        // inside the open repository to the Recycle Bin (P4V's Mark for Delete,
+        // inside the open repository to the Recycle Bin (Mark for Delete,
         // the old side of a rename)
         int LTrashRepoFile(lua_State* _pL)
         {

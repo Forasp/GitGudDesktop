@@ -1088,8 +1088,8 @@ int main(int /*argc*/, char* /*argv*/[])
             }
             else if (_Ev.window.event == SDL_WINDOWEVENT_FOCUS_GAINED)
             {
-                // Coming back from an editor/terminal: refresh, like GitHub
-                // Desktop does. Pop-outs report which window came forward.
+                // Coming back from an editor/terminal: refresh.
+                // Pop-outs report which window came forward.
                 bus.Publish({bmain ? "app.focusGained" : "window.focused", target});
             }
             break;

@@ -28,7 +28,7 @@ local PREVIEW_HEIGHT = 190
 -- Screenshots of the built-in interfaces (imagesets/Previews.xml).
 local previews = {
     default = "GitGud-Previews/Default",
-    p4v = "GitGud-Previews/P4V",
+    depot = "GitGud-Previews/Depot",
 }
 
 local cards = {}      -- { id, name } per card, in order
@@ -148,7 +148,7 @@ local function build()
         gitgud.setText("PickerSubtitle", text.escape(
             "Pick the interface you'd like to start with. Both work on the same repositories "
                 .. "and settings; you can switch at any time from the File menu (GitGud) or "
-                .. "Edit > Preferences (P4V), or build your own interface in XML and Lua."))
+                .. "Edit > Preferences (Depot), or build your own interface in XML and Lua."))
     else
         gitgud.setText("PickerHeading", "Choose your interface")
         gitgud.setText("PickerSubtitle", text.escape(

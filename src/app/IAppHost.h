@@ -49,7 +49,7 @@ namespace gitgud::app
         virtual std::vector<std::string> OpenWindows() const = 0;
 
         // The main window's OS frame: true = native title bar and borders (the
-        // P4V-style UI), false = borderless with a drawn title bar (default UI).
+        // Depot UI), false = borderless with a drawn title bar (default UI).
         virtual void SetMainWindowBordered(bool _bBordered) = 0;
 
         // User-interface packages -------------------------------------------------

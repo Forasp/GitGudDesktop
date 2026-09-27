@@ -43,7 +43,7 @@ resources/
   looknfeel/              one skin file per widget family (Button.xml, …)
   schemes/Gitgud.xml      lists the skin files; maps "Gitgud/Button" etc.
   imagesets/              the icon atlas (regenerate with make-atlas.ps1)
-  uis/                    other interfaces: p4v/ (the P4V-style UI) and
+  uis/                    other interfaces: depot/ (the Depot UI) and
                           picker/ (the chooser shown on first launch)
   ui.ini                  the default UI's name and description
 ```
@@ -231,10 +231,10 @@ throwaway repository.
 ## 9. Your own interface
 
 Mods extend the interface you have; a **UI package** replaces it. GitGud
-ships two: the default UI (`resources/` itself) and a P4V-style one
-(`resources/uis/p4v/`, see `docs/P4V.md`). Switch with **File ▸ Switch user
+ships two: the default UI (`resources/` itself) and the Depot UI
+(`resources/uis/depot/`, see `docs/DEPOT.md`). Switch with **File ▸ Switch user
 interface…** (default UI) or **Edit ▸ Preferences ▸ Switch User
-Interface…** (P4V UI); the first launch asks.
+Interface…** (Depot UI); the first launch asks.
 
 A package is a folder:
 
@@ -256,9 +256,9 @@ What a package gets for free:
 
 - **The default UI's Lua.** `require` searches your `scripts/` first, then
   `resources/scripts`, so `core/`, `ui/` (menus, dialogs, the command
-  palette), and even `views/` modules are there to reuse — the P4V UI uses
+  palette), and even `views/` modules are there to reuse — the Depot UI uses
   `views/sync.lua` for push/pull and sign-in, `views/repositories.lua` for
-  clone/open. A file of your own with the same name wins: the P4V UI's
+  clone/open. A file of your own with the same name wins: the Depot UI's
   `scripts/core/palette.lua` recolours every shared widget.
 - **The default UI's layouts.** Your `layouts/` is where layout files
   resolve; the default UI's are resource group `gitgud-layouts`:
@@ -279,8 +279,8 @@ What a package gets for free:
   opens a real OS window showing a layout from your `layouts/`; its widgets
   are named `"<id>:<name>"` (so one layout can back several windows), and
   `window.closed` / `window.key` tell you when it closes and what it was
-  typed at. The P4V UI's Diff, Revision Graph, Time-lapse, and Folder Diff
-  windows are built this way (`scripts/p4/windows*`).
+  typed at. The Depot UI's Diff, Revision Graph, Time-lapse, and Folder Diff
+  windows are built this way (`scripts/depot/windows*`).
 - **The window frame.** `gitgud.setWindowBordered(true)` gives the main
   window the OS title bar (the default UI draws its own).
 

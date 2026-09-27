@@ -183,7 +183,7 @@ TEST_CASE("pushing to a second remote leaves the upstream alone unless asked", "
     work.Stage("a.txt");
     t.Commit(work, "c1");
     work.AddRemote("origin", t.path("home.git"));
-    work.AddRemote("github", t.path("hub.git"));
+    work.AddRemote("mirror", t.path("hub.git"));
 
     work.Push("origin");
     auto ab = work.GetAheadBehind();
@@ -191,16 +191,16 @@ TEST_CASE("pushing to a second remote leaves the upstream alone unless asked", "
     CHECK(ab.m_Upstream == "origin/" + work.CurrentBranch());
 
     // A plain push elsewhere publishes the branch there but keeps tracking origin.
-    work.Push("github");
+    work.Push("mirror");
     CHECK(work.GetAheadBehind().m_UpstreamRemote == "origin");
     auto hubClone = Repository::Clone(t.path("hub.git"), t.path("hubclone"));
     REQUIRE(hubClone.Log().size() == 1);
 
     // "Push to… and track it" switches the upstream.
-    work.Push("github", false, true);
+    work.Push("mirror", false, true);
     ab = work.GetAheadBehind();
-    CHECK(ab.m_UpstreamRemote == "github");
-    CHECK(ab.m_Upstream == "github/" + work.CurrentBranch());
+    CHECK(ab.m_UpstreamRemote == "mirror");
+    CHECK(ab.m_Upstream == "mirror/" + work.CurrentBranch());
 }
 
 TEST_CASE("push and pull follow an upstream with a different branch name", "[network][remotes]")

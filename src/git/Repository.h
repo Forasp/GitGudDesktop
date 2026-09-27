@@ -211,7 +211,7 @@ namespace gitgud::git
         std::string m_UpstreamRemote; // remote the upstream lives on ("" when none)
     };
 
-    // ---- Graph / undo / conflicts / rewriting (the GitKraken-style features) ---
+    // ---- Graph / undo / conflicts / rewriting -------------------------------
 
     // Which commits GraphLog() walks: every local branch and HEAD, plus
     // (optionally) remote-tracking branches and tags.
@@ -310,7 +310,7 @@ namespace gitgud::git
         bool m_bMain = false; // the repository's own working tree
     };
 
-    // ---- Browsing, shelving, revision graphs (the P4V-style UI) ----------------
+    // ---- Browsing, shelving, revision graphs (the Depot UI) --------------------
 
     // One entry of a directory in a commit's tree.
     struct TreeEntry
@@ -339,7 +339,7 @@ namespace gitgud::git
         std::vector<std::string> m_Skipped;    // binary and changed locally: left alone
     };
 
-    // A file's history across every branch, laid out like P4V's revision
+    // A file's history across every branch, laid out as a revision
     // graph: one row per branch, one column per commit (oldest left), edges
     // from each revision to the revisions it was built from.
     struct RevisionRow
@@ -355,7 +355,7 @@ namespace gitgud::git
         CommitInfo m_Commit;
         int m_iRow = 0;
         int m_iColumn = 0;
-        int m_iRevision = 0;  // 1-based count along its row (P4V's "#n")
+        int m_iRevision = 0;  // 1-based count along its row ("#n")
         char m_cAction = 'M'; // 'A' added, 'M' edited, 'D' deleted, 'I' merged in
     };
 
@@ -494,8 +494,8 @@ namespace gitgud::git
             const std::string& _Path, DiffTarget _Target, const DiffOptions& _Options = {}) const;
 
         // ---- Hunk-level staging --------------------------------------------
-        // Apply just one hunk of the file's unstaged diff to the index (like
-        // clicking a hunk in GitHub Desktop). `hunkIndex` indexes into the hunks
+        // Apply just one hunk of the file's unstaged diff to the index (what
+        // clicking a hunk does). `hunkIndex` indexes into the hunks
         // of diffFile(path, Unstaged) captured at the same moment.
         void StageHunk(const std::string& _Path, std::size_t _HunkIndex);
         // Reverse-apply one hunk of the staged diff (partial unstage).

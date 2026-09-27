@@ -1,4 +1,4 @@
-// Headless tests for the engine behind the P4V-style UI: browsing a
+// Headless tests for the engine behind the Depot UI: browsing a
 // revision's tree, diffing arbitrary file versions, listing changed files,
 // shelving to a branch and unshelving (clean, merged, conflicting), the file
 // revision graph across branches, and its renderer. Also UI package
@@ -362,9 +362,9 @@ TEST_CASE("UI packages: built-ins, custom folders, and the remembered choice", "
     touch(root / "res/scripts/main.lua", "");
     touch(root / "res/layouts/main.xml", "");
     touch(root / "res/ui.ini", "name=GitGud\n");
-    touch(root / "res/uis/p4v/scripts/main.lua", "");
-    touch(root / "res/uis/p4v/layouts/main.xml", "");
-    touch(root / "res/uis/p4v/ui.ini", "# comment\nname = P4V style\ndescription=Like P4V\n");
+    touch(root / "res/uis/depot/scripts/main.lua", "");
+    touch(root / "res/uis/depot/layouts/main.xml", "");
+    touch(root / "res/uis/depot/ui.ini", "# comment\nname = Depot style\ndescription=Like Depot\n");
     touch(root / "res/uis/picker/scripts/main.lua", "");
     touch(root / "res/uis/picker/layouts/main.xml", "");
     touch(root / "res/uis/picker/ui.ini", "hidden=true\n");
@@ -378,9 +378,9 @@ TEST_CASE("UI packages: built-ins, custom folders, and the remembered choice", "
     REQUIRE(list.size() == 3);
     CHECK(list[0].m_Id == "default");
     CHECK(list[0].m_Name == "GitGud");
-    CHECK(list[1].m_Id == "p4v");
-    CHECK(list[1].m_Name == "P4V style");
-    CHECK(list[1].m_Description == "Like P4V");
+    CHECK(list[1].m_Id == "depot");
+    CHECK(list[1].m_Name == "Depot style");
+    CHECK(list[1].m_Description == "Like Depot");
     CHECK(list[2].m_Id == "picker");
     CHECK(list[2].m_bHidden);
 

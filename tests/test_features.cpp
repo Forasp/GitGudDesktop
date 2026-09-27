@@ -1,4 +1,4 @@
-// Headless tests for the GitKraken-style engine features: graph layout and
+// Headless tests for the extended engine features: graph layout and
 // rendering, the all-branches walk, reflog and branch moves (undo), conflict
 // reading (3-pane tool), interactive rebase, file history, blame, worktrees,
 // submodule listing, and the process runner. Same throwaway-temp-repo pattern

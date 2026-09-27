@@ -1,6 +1,6 @@
 --- views/menus.lua — the title-bar menus and their keyboard shortcuts.
 --
--- Everything the app can do, in one place, GitHub Desktop style: File, Edit,
+-- Everything the app can do, in one place: File, Edit,
 -- View, Repository, Branch, Help. Items call into the feature modules; menu
 -- shortcuts are bound automatically (ui/menu.lua), and every item is also
 -- in the command palette (Ctrl+K). Mods add their own menus or items the

@@ -1,7 +1,7 @@
 #pragma once
 
 // -----------------------------------------------------------------------------
-// RevisionGraphRenderer — draws a git::RevisionGraph the way P4V draws its
+// RevisionGraphRenderer — draws a git::RevisionGraph as a
 // revision graph: a band per branch row, a box per revision (its shape says
 // what happened: added, edited, deleted, merged in, branched), a fading bar
 // for the row's lifetime, and arrows for merges and branch points.
@@ -30,7 +30,7 @@ namespace gitgud::imaging
         int m_iMarginLeft = 12;
         int m_iMarginRight = 120; // room for the last row bar to fade out
         int m_iSelected = -1;     // node index drawn highlighted
-        // 0xRRGGBB colours (P4V's light scheme by default).
+        // 0xRRGGBB colours (a light scheme by default).
         std::uint32_t m_uiBackground = 0xFFFFFF;
         std::uint32_t m_uiBandA = 0xFFFFFF;
         std::uint32_t m_uiBandB = 0xF5F5F5;

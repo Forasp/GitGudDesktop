@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   main.xml - the user-interface picker: shown on first launch, and from
-  File > Switch user interface (default UI) / Edit > Preferences (P4V UI).
+  File > Switch user interface (default UI) / Edit > Preferences (Depot UI).
 
   One card per interface is built at runtime (scripts/main.lua), from the
   packages GitGud found: the default UI, resources/uis/*, and a package

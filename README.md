@@ -18,10 +18,9 @@ Windows, 64-bit.
 
 ## Two prebuilt interfaces, or build your own
 
-A default interface in the GitHub Desktop tradition, and one laid out like
-Perforce's P4V.
+Default interfaces similar to other popular revision control software.
 
-![The default interface behind the P4V-style interface](.github/images/ui-interfaces.png)
+![The default interface behind the Depot interface](.github/images/ui-interfaces.png)
 
 See [Modding ▸ Your own interface](https://github.com/Forasp/GitGudDesktop/wiki/Modding#9-your-own-interface).
 
@@ -32,7 +31,7 @@ Everything lives in the **[wiki](https://github.com/Forasp/GitGudDesktop/wiki)**
 [Lua API](https://github.com/Forasp/GitGudDesktop/wiki/Lua-API) ·
 [Building](https://github.com/Forasp/GitGudDesktop/wiki/Building) ·
 [Using the Default UI](https://github.com/Forasp/GitGudDesktop/wiki/Using-the-Default-UI) ·
-[Using the P4V UI](https://github.com/Forasp/GitGudDesktop/wiki/Using-the-P4V-UI) ·
+[Using the Depot UI](https://github.com/Forasp/GitGudDesktop/wiki/Using-the-Depot-UI) ·
 [Principles](https://github.com/Forasp/GitGudDesktop/wiki/Principles)
 
 ## Build

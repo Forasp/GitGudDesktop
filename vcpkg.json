@@ -1,7 +1,7 @@
 {
   "name": "gitgud",
   "version": "0.1.0",
-  "description": "A GitHub Desktop-style Git client with an XML+Lua GUI",
+  "description": "A moddable Git client with an XML+Lua GUI",
   "dependencies": [
     "sdl2",
     {

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Depot package skin: generated from resources/looknfeel/Label.xml with
+  the Dagobah palette and the Segoe UI font (Gitgud-System).
+  Loaded over the base skin while the Depot UI runs; same look names, so
+  every Gitgud/* widget (shared dialogs and menus too) picks it up.
+-->
+<Falagard version="7">
+
+    <!-- ============================ Label ============================ -->
+    <WidgetLook name="Gitgud/Label">
+        <Property name="Font" value="Gitgud-System"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFECF1C1" type="ColourRect" name="NormalTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF525445" type="ColourRect" name="DisabledTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="LeftAligned" type="HorizontalTextFormatting" name="HorzFormatting"/>
+        <Property name="CursorPassThroughEnabled" value="true"/>
+        <ImagerySection name="Label">
+            <TextComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="RightEdge"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" type="BottomEdge"/></Dim>
+                </Area>
+                <VertFormat type="CentreAligned"/>
+                <HorzFormatProperty name="HorzFormatting"/>
+            </TextComponent>
+        </ImagerySection>
+        <StateImagery name="Enabled">
+            <Layer>
+                <Section section="Label">
+                    <ColourProperty name="NormalTextColour"/>
+                </Section>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="Disabled">
+            <Layer>
+                <Section section="Label">
+                    <ColourProperty name="DisabledTextColour"/>
+                </Section>
+            </Layer>
+        </StateImagery>
+    </WidgetLook>
+
+</Falagard>

@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Depot package skin: generated from resources/looknfeel/Checkbox.xml with
+  the Dagobah palette and the Segoe UI font (Gitgud-System).
+  Loaded over the base skin while the Depot UI runs; same look names, so
+  every Gitgud/* widget (shared dialogs and menus too) picks it up.
+-->
+<Falagard version="7">
+
+    <!-- ========================== Checkbox ===========================
+         The design's square checkbox (Checkbox.jsx): a 14px box with a 1px
+         hairline border, filled neon-cyan with a dark checkmark and a soft
+         cyan halo when checked. Built from GenericBrush strips + the Gitgud
+         atlas (Check glyph, Glow* slices) — no rounded Vanilla imagery.
+         The box sits 8px in from the left so the halo (8px reach) stays
+         inside the widget rect (CEGUI clips a window to its own area);
+         widgets should be >= 30px tall for the halo to draw unclipped. -->
+    <WidgetLook name="Gitgud/Checkbox">
+        <Property name="Font" value="Gitgud-System"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFECF1C1" type="ColourRect" name="NormalTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFECF1C1" type="ColourRect" name="HoverTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFECF1C1" type="ColourRect" name="PushedTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF525445" type="ColourRect" name="DisabledTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFA0A485" type="ColourRect" name="BoxBorderColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFECF1C1" type="ColourRect" name="BoxHoverColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF34796A" type="ColourRect" name="BoxFillColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF3F8F7E" type="ColourRect" name="BoxFillHoverColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFECF1C1" type="ColourRect" name="MarkColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="00000000" type="ColourRect" name="GlowColour"/>
+        <Property name="Size" value="{{0, 128}, {0, 30}}" />
+        <ImagerySection name="label">
+            <TextComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="30"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="Width"/></Dim>
+                    <Dim type="Height"><UnifiedDim scale="1" type="Height"/></Dim>
+                </Area>
+                <VertFormat type="CentreAligned"/>
+                <HorzFormat type="LeftAligned"/>
+            </TextComponent>
+        </ImagerySection>
+        <!-- 1px square outline: top, bottom, left, right strips of the
+             14x14 box at x=8, vertically centred. -->
+        <ImagerySection name="box_border">
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="8"/></Dim>
+                    <Dim type="TopEdge">
+                        <OperatorDim op="Subtract">
+                            <UnifiedDim scale="0.5" type="Height"/>
+                            <AbsoluteDim value="7"/>
+                        </OperatorDim>
+                    </Dim>
+                    <Dim type="Width"><AbsoluteDim value="14"/></Dim>
+                    <Dim type="Height"><AbsoluteDim value="1"/></Dim>
+                </Area>
+                <Image name="Vanilla-Images/GenericBrush"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="8"/></Dim>
+                    <Dim type="TopEdge">
+                        <OperatorDim op="Add">
+                            <UnifiedDim scale="0.5" type="Height"/>
+                            <AbsoluteDim value="6"/>
+                        </OperatorDim>
+                    </Dim>
+                    <Dim type="Width"><AbsoluteDim value="14"/></Dim>
+                    <Dim type="Height"><AbsoluteDim value="1"/></Dim>
+                </Area>
+                <Image name="Vanilla-Images/GenericBrush"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="8"/></Dim>
+                    <Dim type="TopEdge">
+                        <OperatorDim op="Subtract">
+                            <UnifiedDim scale="0.5" type="Height"/>
+                            <AbsoluteDim value="7"/>
+                        </OperatorDim>
+                    </Dim>
+                    <Dim type="Width"><AbsoluteDim value="1"/></Dim>
+                    <Dim type="Height"><AbsoluteDim value="14"/></Dim>
+                </Area>
+                <Image name="Vanilla-Images/GenericBrush"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="21"/></Dim>
+                    <Dim type="TopEdge">
+                        <OperatorDim op="Subtract">
+                            <UnifiedDim scale="0.5" type="Height"/>
+                            <AbsoluteDim value="7"/>
+                        </OperatorDim>
+                    </Dim>
+                    <Dim type="Width"><AbsoluteDim value="1"/></Dim>
+                    <Dim type="Height"><AbsoluteDim value="14"/></Dim>
+                </Area>
+                <Image name="Vanilla-Images/GenericBrush"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+        </ImagerySection>
+        <ImagerySection name="box_fill">
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="8"/></Dim>
+                    <Dim type="TopEdge">
+                        <OperatorDim op="Subtract">
+                            <UnifiedDim scale="0.5" type="Height"/>
+                            <AbsoluteDim value="7"/>
+                        </OperatorDim>
+                    </Dim>
+                    <Dim type="Width"><AbsoluteDim value="14"/></Dim>
+                    <Dim type="Height"><AbsoluteDim value="14"/></Dim>
+                </Area>
+                <Image name="Vanilla-Images/GenericBrush"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+        </ImagerySection>
+        <ImagerySection name="mark">
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="9"/></Dim>
+                    <Dim type="TopEdge">
+                        <OperatorDim op="Subtract">
+                            <UnifiedDim scale="0.5" type="Height"/>
+                            <AbsoluteDim value="6"/>
+                        </OperatorDim>
+                    </Dim>
+                    <Dim type="Width"><AbsoluteDim value="12"/></Dim>
+                    <Dim type="Height"><AbsoluteDim value="12"/></Dim>
+                </Area>
+                <Image name="Gitgud-Images/Check"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+        </ImagerySection>
+        <!-- Soft halo behind the checked box: the 9-slice glow drawn on the
+             box area expanded by 8px (design: 0 0 4px rgba(cyan,.6)). -->
+        <ImagerySection name="box_glow">
+            <FrameComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge">
+                        <OperatorDim op="Subtract">
+                            <UnifiedDim scale="0.5" type="Height"/>
+                            <AbsoluteDim value="15"/>
+                        </OperatorDim>
+                    </Dim>
+                    <Dim type="Width"><AbsoluteDim value="30"/></Dim>
+                    <Dim type="Height"><AbsoluteDim value="30"/></Dim>
+                </Area>
+                <Image component="TopLeftCorner" name="Gitgud-Images/GlowTopLeft"/>
+                <Image component="TopEdge" name="Gitgud-Images/GlowTop"/>
+                <Image component="TopRightCorner" name="Gitgud-Images/GlowTopRight"/>
+                <Image component="LeftEdge" name="Gitgud-Images/GlowLeft"/>
+                <Image component="Background" name="Gitgud-Images/GlowCentre"/>
+                <Image component="RightEdge" name="Gitgud-Images/GlowRight"/>
+                <Image component="BottomLeftCorner" name="Gitgud-Images/GlowBottomLeft"/>
+                <Image component="BottomEdge" name="Gitgud-Images/GlowBottom"/>
+                <Image component="BottomRightCorner" name="Gitgud-Images/GlowBottomRight"/>
+            </FrameComponent>
+        </ImagerySection>
+        <StateImagery name="Normal">
+            <Layer>
+                <Section section="box_border"><ColourProperty name="BoxBorderColour"/></Section>
+                <Section section="label"><ColourProperty name="NormalTextColour"/></Section>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="Hover">
+            <Layer>
+                <Section section="box_border"><ColourProperty name="BoxHoverColour"/></Section>
+                <Section section="label"><ColourProperty name="HoverTextColour"/></Section>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="Disabled">
+            <Layer>
+                <Section section="box_border">
+                    <Colours topLeft="FF525445" bottomLeft="FF525445" topRight="FF525445" bottomRight="FF525445"/>
+                </Section>
+                <Section section="label"><ColourProperty name="DisabledTextColour"/></Section>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="SelectedNormal">
+            <Layer>
+                <Section section="box_glow"><ColourProperty name="GlowColour"/></Section>
+                <Section section="box_fill"><ColourProperty name="BoxFillColour"/></Section>
+                <Section section="mark"><ColourProperty name="MarkColour"/></Section>
+                <Section section="label"><ColourProperty name="NormalTextColour"/></Section>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="SelectedHover">
+            <Layer>
+                <Section section="box_glow"><ColourProperty name="GlowColour"/></Section>
+                <Section section="box_fill"><ColourProperty name="BoxFillHoverColour"/></Section>
+                <Section section="mark"><ColourProperty name="MarkColour"/></Section>
+                <Section section="label"><ColourProperty name="HoverTextColour"/></Section>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="SelectedDisabled">
+            <Layer>
+                <Section section="box_fill">
+                    <Colours topLeft="FF525445" bottomLeft="FF525445" topRight="FF525445" bottomRight="FF525445"/>
+                </Section>
+                <Section section="mark">
+                    <Colours topLeft="FF28333C" bottomLeft="FF28333C" topRight="FF28333C" bottomRight="FF28333C"/>
+                </Section>
+                <Section section="label"><ColourProperty name="DisabledTextColour"/></Section>
+            </Layer>
+        </StateImagery>
+    </WidgetLook>
+
+</Falagard>

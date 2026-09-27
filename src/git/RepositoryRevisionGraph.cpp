@@ -1,6 +1,6 @@
 // -----------------------------------------------------------------------------
-// Repository::FileRevisionGraph — one file's history across branches, in the
-// shape of P4V's revision graph.
+// Repository::FileRevisionGraph — one file's history across branches, laid
+// out as a revision graph.
 //
 // Rows: every branch (the checked-out one first, then the usual default
 // branch names, then other local branches and remote branches by recency).

@@ -162,8 +162,8 @@ namespace gitgud::git
         if (git_reference_lookup(&ref.m_pP, m_pRepo, localRefName.c_str()) != 0)
         {
             // Not a local branch. If it names a remote-tracking branch (e.g.
-            // "origin/feature"), create a local branch from it (GitHub Desktop
-            // behavior) and check that out instead.
+            // "origin/feature"), create a local branch from it and
+            // check that out instead.
             const std::string remoteRefName = "refs/remotes/" + _Name;
             ReferencePtr remoteRef;
             if (git_reference_lookup(&remoteRef.m_pP, m_pRepo, remoteRefName.c_str()) != 0)
