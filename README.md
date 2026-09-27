@@ -35,6 +35,20 @@ That sets up the dev environment, the CEGUI submodule and its build, and the
 app. See [Building](https://github.com/Forasp/GitGudDesktop/wiki/Building)
 for presets, tests, and packaging.
 
+## Credits
+
+Built on [libgit2](https://libgit2.org), [CEGUI](https://github.com/cegui/cegui),
+[SDL](https://libsdl.org), [Lua](https://www.lua.org),
+[OpenSSL](https://www.openssl.org), and [FreeType](https://freetype.org),
+among others; the interface uses the [Inter](https://rsms.me/inter/) and
+[JetBrains Mono](https://www.jetbrains.com/lp/mono/) fonts.
+Portions of this software are copyright © The FreeType Project
+(https://freetype.org). All rights reserved.
+
+Every third-party component and its license is listed in
+[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt), which also ships with
+each download.
+
 ## License
 
 [MIT](LICENSE)

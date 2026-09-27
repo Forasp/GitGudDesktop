@@ -7,7 +7,9 @@
     1. Builds the release preset (via setup.ps1) unless -SkipBuild.
     2. Assembles build\dist\GitGud: gitgud.exe, every DLL it needs (including
        the Visual C++ runtime, so no redistributable is required),
-       resources\, docs\, and the stock CEGUI data files, plus BUILD-INFO.txt.
+       resources\, docs\, and the stock CEGUI data files, plus BUILD-INFO.txt,
+       LICENSE, and THIRD_PARTY_NOTICES.txt (checked first against what the
+       build ships; see tools\update-notices.ps1).
     3. Checks that every DLL the package's binaries import is in the package
        or part of Windows, then smoke-tests it: starts a copy from an empty
        folder with a throwaway settings folder and checks that the UI came up
@@ -125,6 +127,12 @@ function New-Package {
         throw "build\release\bin\cegui-datafiles is missing. Rebuild (the resources step copies it)."
     }
 
+    # The licenses of everything shipped must match what's actually shipped.
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root "tools\update-notices.ps1") -Check
+    if ($LASTEXITCODE -ne 0) {
+        throw "THIRD_PARTY_NOTICES.txt is out of date (see above)."
+    }
+
     if (Test-Path $Package) {
         Remove-Item -Recurse -Force $Package
     }
@@ -134,6 +142,9 @@ function New-Package {
     Get-ChildItem $Bin -Filter *.dll | Copy-Item -Destination $Package
     foreach ($folder in @("resources", "docs", "cegui-datafiles")) {
         Copy-Item -Recurse (Join-Path $Bin $folder) (Join-Path $Package $folder)
+    }
+    foreach ($file in @("LICENSE", "THIRD_PARTY_NOTICES.txt")) {
+        Copy-Item (Join-Path $Root $file) $Package
     }
 
     $crt = Get-CrtFolder
@@ -150,7 +161,10 @@ function New-Package {
         "",
         "Run gitgud.exe from inside a repository folder, or start it anywhere and",
         "add a repository from the window. Everything it needs is in this folder;",
-        "docs\USAGE.md is the tour. Settings live in %APPDATA%\Gitgud."
+        "docs\USAGE.md is the tour. Settings live in %APPDATA%\Gitgud.",
+        "",
+        "GitGud Desktop is MIT licensed (LICENSE). The third-party software it",
+        "includes, and their licenses, are listed in THIRD_PARTY_NOTICES.txt."
     )
     Set-Content -Path (Join-Path $Package "BUILD-INFO.txt") -Value $info -Encoding utf8
 

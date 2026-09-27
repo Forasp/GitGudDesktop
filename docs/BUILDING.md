@@ -105,16 +105,30 @@ when copied to another machine; the source tree's copy is only a fallback.
 
 ```powershell
 .\package.cmd              # build, assemble build\dist\GitGud, smoke-test it, zip it
-.\package.cmd -SkipBuild   # package the existing buildeleasein
+.\package.cmd -SkipBuild   # package the existing build\release\bin
 ```
 
 The package is a self-contained folder of about 21 MB: `gitgud.exe`, every
 DLL (including the Visual C++ runtime, so no redistributable install is
-needed), `resources/`, `docs/`, `cegui-datafiles/`, and `BUILD-INFO.txt`
-(the version and source commit). The smoke test starts a copy of it from an
-empty folder with a throwaway `%APPDATA%` and checks that it came up on its
-own files. The result is zipped as `build\dist\GitGud-win64.zip`, with one
-`GitGud\` folder inside.
+needed), `resources/`, `docs/`, `cegui-datafiles/`, `BUILD-INFO.txt` (the
+version and source commit), `LICENSE`, and `THIRD_PARTY_NOTICES.txt`.
+
+`THIRD_PARTY_NOTICES.txt` holds the license of every third-party component
+that ships. After adding or upgrading a dependency, regenerate it and commit
+the result — packaging refuses to run while it's out of date:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\update-notices.ps1
+```
+
+It takes each vcpkg package's license from the build; where vcpkg only points
+at the upstream file, the text lives in `tools/notices/<package>.txt`.
+
+Before the smoke test, packaging checks that every DLL the binaries import is
+in the package or part of Windows. The smoke test then starts a copy of the
+package from an empty folder with a throwaway `%APPDATA%` and checks that it
+came up on its own files. The result is zipped as
+`build\dist\GitGud-win64.zip`, with one `GitGud\` folder inside.
 
 ## Releases
 
