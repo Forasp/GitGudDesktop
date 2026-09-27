@@ -17,14 +17,24 @@
     4. Zips the folder as build\dist\GitGud-win64.zip (one GitGud\ folder
        inside).
     5. Compiles installer\gitgud.iss into build\dist\GitGud-win64-setup.exe
-       when Inno Setup (6 or later) is installed. The release workflow
-       attaches the zip and the installer to the release.
+       when Inno Setup (6 or later) is installed.
+    6. Writes the update files installed copies patch themselves from:
+       build\dist\GitGud-win64.pack and update-manifest.txt, signed with
+       GITGUD_UPDATE_SIGNING_KEY when it's set. The release workflow attaches
+       the zip, the installer, and both update files to the release.
 
 .PARAMETER SkipBuild
     Package whatever is in build\release\bin without building first.
 
 .PARAMETER Installer
     Fail when Inno Setup isn't installed instead of skipping the installer.
+
+.PARAMETER RequireSigned
+    Fail when GITGUD_UPDATE_SIGNING_KEY isn't set (releases).
+
+.PARAMETER UpdatePackUrl
+    Where the manifest says the pack is. Default: the release's download URL
+    for this version. A bare file name means "next to the manifest" (tests).
 
 .PARAMETER OpenGLRuntime
     A folder of OpenGL DLLs (e.g. Mesa's opengl32.dll and libgallium_wgl.dll)
@@ -39,6 +49,8 @@
 param(
     [switch]$SkipBuild,
     [switch]$Installer,
+    [switch]$RequireSigned,
+    [string]$UpdatePackUrl,
     [string]$OpenGLRuntime
 )
 
@@ -49,6 +61,7 @@ $DistRoot = Join-Path $Root "build\dist"
 $Package = Join-Path $DistRoot "GitGud"
 $Zip = Join-Path $DistRoot "GitGud-win64.zip"
 $SetupName = "GitGud-win64-setup"
+$PackName = "GitGud-win64.pack"
 
 function Write-Step($Message) {
     Write-Host ""
@@ -126,6 +139,28 @@ function Build-Release {
 
 # --------------------------------------------------------------- assemble --
 
+# Every file in the package as {Path ('/'-separated, relative), Size, Sha256},
+# in a stable order.
+function Get-PackageFiles {
+    $prefix = (Resolve-Path $Package).Path.TrimEnd("\") + "\"
+    Get-ChildItem -Recurse -File $Package |
+        ForEach-Object {
+            [pscustomobject]@{
+                Path = $_.FullName.Substring($prefix.Length).Replace("\", "/")
+                Full = $_.FullName
+                Size = $_.Length
+                Sha256 = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant()
+            }
+        } |
+        Sort-Object { $_.Path } -CaseSensitive
+}
+
+# UTF-8 without a BOM and with "\n" line ends: manifests are hashed and
+# signed byte for byte.
+function Write-TextLf($Path, $Text) {
+    [IO.File]::WriteAllBytes($Path, (New-Object Text.UTF8Encoding($false)).GetBytes($Text))
+}
+
 function New-Package {
     Write-Step "Assembling $Package"
     if (-not (Test-Path (Join-Path $Bin "gitgud.exe"))) {
@@ -147,6 +182,7 @@ function New-Package {
     New-Item -ItemType Directory -Force $Package | Out-Null
 
     Copy-Item (Join-Path $Bin "gitgud.exe") $Package
+    Copy-Item (Join-Path $Bin "gitgud-patcher.exe") $Package
     Get-ChildItem $Bin -Filter *.dll | Copy-Item -Destination $Package
     foreach ($folder in @("resources", "docs", "cegui-datafiles")) {
         Copy-Item -Recurse (Join-Path $Bin $folder) (Join-Path $Package $folder)
@@ -176,6 +212,14 @@ function New-Package {
         "includes, and their licenses, are listed in THIRD_PARTY_NOTICES.txt."
     )
     Set-Content -Path (Join-Path $Package "BUILD-INFO.txt") -Value $info -Encoding utf8
+
+    # What this version installs: the updater compares against it to find
+    # files a later version drops, and files the user edited.
+    $lines = @("gitgud-package 1", "version $(Get-Version)")
+    foreach ($file in Get-PackageFiles) {
+        $lines += "file $($file.Sha256) $($file.Size) 0 0 $($file.Path)"
+    }
+    Write-TextLf (Join-Path $Package "package-manifest.txt") (($lines -join "`n") + "`n")
 
     $size = (Get-ChildItem -Recurse -File $Package | Measure-Object -Sum Length).Sum / 1MB
     Write-Note ("{0} files, {1:N1} MB" -f (Get-ChildItem -Recurse -File $Package).Count, $size)
@@ -350,6 +394,87 @@ function New-Installer {
     Write-Note ("{0:N1} MB, with {1}" -f ((Get-Item $setup).Length / 1MB), $iscc)
 }
 
+# ---------------------------------------------------------------- updates --
+
+# ECDSA P-256 signature (IEEE P1363 r||s) of $Bytes with a key given as
+# base64 of D||X||Y (tools\new-update-key.ps1 makes one).
+function Get-UpdateSignature($Bytes, $KeyBase64) {
+    $raw = [Convert]::FromBase64String($KeyBase64.Trim())
+    if ($raw.Length -ne 96) {
+        throw "GITGUD_UPDATE_SIGNING_KEY isn't a key from tools\new-update-key.ps1."
+    }
+    $point = New-Object Security.Cryptography.ECPoint
+    $point.X = [byte[]]$raw[32..63]
+    $point.Y = [byte[]]$raw[64..95]
+    $parameters = New-Object Security.Cryptography.ECParameters
+    $parameters.Curve = [Security.Cryptography.ECCurve+NamedCurves]::nistP256
+    $parameters.Q = $point
+    $parameters.D = [byte[]]$raw[0..31]
+    $ecdsa = [Security.Cryptography.ECDsa]::Create($parameters)
+    try {
+        return [Convert]::ToBase64String($ecdsa.SignData($Bytes, [Security.Cryptography.HashAlgorithmName]::SHA256))
+    } finally {
+        $ecdsa.Dispose()
+    }
+}
+
+# The release's update files: GitGud-win64.pack (every package file
+# raw-deflated, back to back) and update-manifest.txt (where each file sits
+# in the pack, with its hash), signed when GITGUD_UPDATE_SIGNING_KEY is set.
+# Installed copies download only the files that changed (see src\app\Updater.h).
+function New-UpdateFiles {
+    Write-Step "Building the update files"
+    $version = Get-Version
+    $packPath = Join-Path $DistRoot $PackName
+    $manifestPath = Join-Path $DistRoot "update-manifest.txt"
+    $packUrl = if ($UpdatePackUrl) { $UpdatePackUrl } else {
+        "https://github.com/Forasp/GitGudDesktop/releases/download/v$version/$PackName"
+    }
+
+    $fileLines = @()
+    $pack = [IO.File]::Create($packPath)
+    try {
+        foreach ($file in Get-PackageFiles) {
+            $buffer = New-Object IO.MemoryStream
+            $deflate = New-Object IO.Compression.DeflateStream($buffer, [IO.Compression.CompressionLevel]::Optimal, $true)
+            $bytes = [IO.File]::ReadAllBytes($file.Full)
+            $deflate.Write($bytes, 0, $bytes.Length)
+            $deflate.Dispose()
+            $offset = $pack.Position
+            $buffer.Position = 0
+            $buffer.CopyTo($pack)
+            $fileLines += "file $($file.Sha256) $($file.Size) $offset $($buffer.Length) $($file.Path)"
+            $buffer.Dispose()
+        }
+    } finally {
+        $pack.Dispose()
+    }
+    $packHash = (Get-FileHash -Algorithm SHA256 $packPath).Hash.ToLowerInvariant()
+    $packSize = (Get-Item $packPath).Length
+
+    $text = (@(
+        "gitgud-update 1",
+        "version $version",
+        "published $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))",
+        "notes https://github.com/Forasp/GitGudDesktop/releases/tag/v$version",
+        "pack $packUrl $packSize $packHash"
+    ) + $fileLines) -join "`n"
+    $text += "`n"
+
+    $key = $env:GITGUD_UPDATE_SIGNING_KEY
+    if ($key) {
+        $signature = Get-UpdateSignature ((New-Object Text.UTF8Encoding($false)).GetBytes($text)) $key
+        $text += "signature $signature`n"
+        Write-Note "signed"
+    } elseif ($RequireSigned) {
+        throw "GITGUD_UPDATE_SIGNING_KEY isn't set; a release's update files must be signed."
+    } else {
+        Write-Note "NOT signed (GITGUD_UPDATE_SIGNING_KEY isn't set): installed copies won't accept it"
+    }
+    Write-TextLf $manifestPath $text
+    Write-Note ("{0} files, pack {1:N1} MB" -f $fileLines.Count, ($packSize / 1MB))
+}
+
 # ------------------------------------------------------------------ main --
 
 try {
@@ -361,6 +486,7 @@ try {
     Test-Package
     New-Zip
     New-Installer
+    New-UpdateFiles
     Write-Host ""
     Write-Host "Package ready in $DistRoot" -ForegroundColor Green
 } catch {

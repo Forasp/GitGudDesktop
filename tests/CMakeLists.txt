@@ -9,6 +9,7 @@ add_executable(gitgud_tests
     test_workflows.cpp
     test_features.cpp
     test_depot.cpp
+    test_update.cpp
 )
 
 target_link_libraries(gitgud_tests PRIVATE

@@ -141,6 +141,7 @@ namespace gitgud::lua
         bindings::AddUiBindings(functions);
         bindings::AddFeatureBindings(functions);
         bindings::AddAppBindings(functions);
+        bindings::AddUpdateBindings(functions);
         functions.push_back({nullptr, nullptr});
 
         lua_newtable(m_pL);

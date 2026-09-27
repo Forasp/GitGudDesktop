@@ -285,6 +285,26 @@ branch name (global Git config), the commands for your editor and terminal
 pushes and to fetch in the background. *File ▸ SSH keys…* and *File ▸
 Commit signing…* set up SSH and signed commits.
 
+## Updates
+
+*Help ▸ Check for Updates…* says whether a newer version is out. **Download**
+fetches only the files that changed, in the background while you keep working
+(progress is on the status bar). When it's done, **Restart now** installs it,
+or it's installed the next time GitGud starts; your repositories and tabs
+come back as they were.
+
+Installing needs every GitGud window closed: with other copies open,
+**Restart now** asks you to close them, and a plain start leaves the update
+for later. Opening more copies is always fine. An install under Program Files
+asks for administrator permission once per update. If you edited files in
+GitGud's folder that the update replaces, your copies are saved first and
+GitGud tells you where. If anything goes wrong, the previous version stays.
+
+With *Check for updates automatically* on (Options; the default), GitGud
+checks shortly after starting and about once a day and offers each new
+version once. Every update is signed; GitGud refuses one that isn't. Builds
+you compile yourself don't update themselves.
+
 ## Switching interfaces
 
 The first time GitGud starts it asks which interface you'd like: this one,

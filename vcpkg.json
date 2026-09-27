@@ -16,7 +16,8 @@
     "glew",
     "pugixml",
     "freetype",
-    "stb"
+    "stb",
+    "zlib"
   ],
   "$comment": "CEGUI itself is not in vcpkg; we build it from source (third_party/cegui, see README) against these vcpkg-provided deps (glm/glew/pugixml/freetype) instead of its own bundled 'cegui-dependencies' pack.",
   "builtin-baseline": "1f5e0348089e8a9b187f57d42866ebc871e815da"

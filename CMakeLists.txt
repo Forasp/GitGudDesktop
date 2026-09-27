@@ -30,6 +30,9 @@ find_package(libgit2 CONFIG REQUIRED)
 # Lua (vcpkg ships the standard FindLua module targets).
 find_package(Lua REQUIRED)
 
+# zlib (already shipped for libgit2) inflates downloaded update files.
+find_package(ZLIB REQUIRED)
+
 # stb (header-only) decodes PNG/JPEG/GIF/BMP/TGA for the image diff.
 find_path(STB_INCLUDE_DIRS "stb_image.h" REQUIRED)
 
@@ -110,7 +113,10 @@ add_library(gitgud_core STATIC
     src/app/EventBus.cpp
     src/app/TaskRunner.cpp
     src/app/UiPackages.cpp
+    src/app/Updater.cpp
+    src/update/UpdateCore.cpp
     src/lua/LuaEngine.cpp
+    src/lua/LuaUpdateBindings.cpp
     src/lua/LuaRepoBindings.cpp
     src/lua/LuaUiBindings.cpp
     src/lua/LuaFeatureBindings.cpp
@@ -146,7 +152,26 @@ target_compile_definitions(gitgud_core PRIVATE GITGUD_VERSION="${PROJECT_VERSION
 target_link_libraries(gitgud_core PUBLIC
     libgit2::libgit2package
     ${LUA_LIBRARIES}
+    ZLIB::ZLIB
 )
+
+# ---- Update patcher --------------------------------------------------------
+# gitgud-patcher.exe applies a downloaded update while GitGud is closed (see
+# src/patcher/PatcherMain.cpp). It runs from a copy outside the install
+# folder, so it links the C runtime statically and uses nothing but Windows.
+if(WIN32)
+    add_executable(gitgud-patcher WIN32
+        src/patcher/PatcherMain.cpp
+        src/update/UpdateCore.cpp
+        resources/icon/gitgud.rc)
+    target_include_directories(gitgud-patcher PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(gitgud-patcher PRIVATE bcrypt shell32 advapi32 user32)
+    set_property(TARGET gitgud-patcher PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    if(MSVC)
+        target_link_options(gitgud-patcher PRIVATE "/PDBALTPATH:%_PDB%")
+    endif()
+endif()
 
 # ---- Application ---------------------------------------------------------
 # WIN32: GUI subsystem on Windows (no console window pops up). SDL2main
@@ -231,6 +256,9 @@ add_custom_target(gitgud_resources ALL
         ${CMAKE_SOURCE_DIR}/docs ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/docs
     COMMENT "Syncing resources/ and docs/ to the build output")
 add_dependencies(gitgud gitgud_resources)
+if(TARGET gitgud-patcher)
+    add_dependencies(gitgud gitgud-patcher)
+endif()
 
 # The few stock CEGUI data files GitGud uses (the Vanilla imageset, the
 # DejaVu fallback font, the XML schemas) go next to the exe too, so a build

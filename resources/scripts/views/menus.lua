@@ -412,6 +412,7 @@ local function helpMenu()
         { expand = about.docItems },
         { separator = true },
         { label = "Show keyboard shortcuts", action = menus.showShortcuts },
+        require("views.updates").menuItem(),
         { label = "About GitGud Desktop", action = about.show },
     })
 end

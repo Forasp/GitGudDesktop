@@ -37,6 +37,7 @@ function settingsView.options()
             { label = "Ask before discarding changes", value = settings.get("confirmDiscard", true) },
             { label = "Ask before force pushing", value = settings.get("confirmForcePush", true) },
             { label = "Fetch in the background every 15 minutes", value = settings.get("autoFetch", true) },
+            { label = "Check for updates automatically", value = settings.get("updateCheck", true) },
         },
         ok = "Save",
         alt = { label = "Switch UI…", action = settingsView.switchInterface },
@@ -60,6 +61,7 @@ function settingsView.options()
             settings.set("confirmDiscard", v.checks[1])
             settings.set("confirmForcePush", v.checks[2])
             settings.set("autoFetch", v.checks[3])
+            settings.set("updateCheck", v.checks[4])
 
             require("views.sync").scheduleAutoFetch()
             status.ok("Options saved.")

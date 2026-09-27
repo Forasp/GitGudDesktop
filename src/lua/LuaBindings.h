@@ -3,7 +3,7 @@
 // -----------------------------------------------------------------------------
 // LuaBindings — shared helpers for the `gitgud` binding implementation files
 // (LuaRepoBindings.cpp, LuaUiBindings.cpp, LuaFeatureBindings.cpp,
-// LuaAppBindings.cpp). Internal to src/lua/.
+// LuaAppBindings.cpp, LuaUpdateBindings.cpp). Internal to src/lua/.
 //
 // Every binding is a plain lua_CFunction whose first upvalue is the owning
 // LuaEngine (see LuaEngine::InstallBindings), reached through Self().
@@ -84,5 +84,6 @@ namespace gitgud::lua::bindings
     void AddUiBindings(std::vector<luaL_Reg>& _Out);
     void AddFeatureBindings(std::vector<luaL_Reg>& _Out);
     void AddAppBindings(std::vector<luaL_Reg>& _Out);
+    void AddUpdateBindings(std::vector<luaL_Reg>& _Out);
 
 } // namespace gitgud::lua::bindings

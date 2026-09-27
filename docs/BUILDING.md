@@ -144,6 +144,38 @@ a per-user install, lets you choose the folder, adds a Start menu shortcut
 (a desktop one optionally), and can add the folder to `PATH` for
 `gitgud .`. Uninstalling leaves `%APPDATA%\Gitgud` alone.
 
+Last come the update files that installed copies patch themselves from:
+`build\dist\GitGud-win64.pack` (every package file, deflated, back to back)
+and `update-manifest.txt` (each file's hash and place in the pack). The
+package itself carries `package-manifest.txt` (what that version installed)
+and `gitgud-patcher.exe`, which swaps the files while GitGud is closed.
+
+### Updates
+
+`src/app/Updater.*` checks the latest release's `update-manifest.txt`,
+downloads only the files whose hash differs (HTTP Range requests into the
+pack), verifies each, and stages them in `%LOCALAPPDATA%\Gitgud\updates`.
+At the next start, or on *Restart now*, `gitgud.exe` hands over to a copy of
+`gitgud-patcher.exe` (`src/patcher/`), which waits for every copy of the app
+to close, applies the files with a journal (rolled back on failure, or after
+a crash at the next attempt), and restarts GitGud. `src/update/UpdateCore.*`
+is shared by both and covered by `gitgud_tests "[update]"`.
+
+The manifest is signed (ECDSA P-256). `tools\new-update-key.ps1 -PrivateKeyFile
+<file outside the repo>` makes the key pair once: it writes the public key
+into `src\update\UpdateKey.h` (commit that) and the private key to the file,
+whose contents go into the GitHub Actions secret `GITGUD_UPDATE_SIGNING_KEY`.
+`package.ps1` signs when that variable is set; release builds
+(`-RequireSigned`, used for tags) fail without it. A build whose
+`UpdateKey.h` is empty never installs updates.
+
+To try the whole flow locally, package two versions with a test key
+(`GITGUD_UPDATE_SIGNING_KEY` set, `-UpdatePackUrl GitGud-win64.pack`), then run
+the older package with `GITGUD_UPDATE_URL` pointing at the newer
+`build\dist` folder and `GITGUD_UPDATE_PUBLIC_KEY` set to the test public key
+(base64 X||Y). `GITGUD_PATCHER_NO_UI=1` keeps the patcher from showing
+dialogs. Use scratch `APPDATA` and `LOCALAPPDATA`.
+
 ## Releases
 
 CI (`.github/workflows/build.yml`) builds, runs the engine tests,
@@ -152,8 +184,8 @@ GPU, so the smoke test borrows Mesa's software OpenGL (`-OpenGLRuntime`); those
 DLLs go next to the test's copy of the app only, never into the package.
 Inno Setup comes from its GitHub release at a pinned version, checked
 against a pinned SHA-256 (`INNO_VERSION` and `INNO_SHA256` in the workflow;
-update both together). Each run keeps the zip and the installer as its
-`GitGud-win64` artifact for two weeks.
+update both together). Each run keeps the zip, the installer, and the
+update files as its `GitGud-win64` artifact for two weeks.
 
 To release, set the version in `CMakeLists.txt` (`project(... VERSION x.y.z)`)
 and `vcpkg.json`, commit, and push a tag:
@@ -164,7 +196,9 @@ git push origin v1.3.0
 ```
 
 The workflow then publishes a release for the tag with
-`GitGud-win64.zip` and `GitGud-win64-setup.exe` attached. The latest one is always at
+`GitGud-win64.zip`, `GitGud-win64-setup.exe`, `GitGud-win64.pack`, and
+`update-manifest.txt` attached; installed copies find the new version
+through the last two. The latest one is always at
 <https://github.com/Forasp/GitGudDesktop/releases/latest>.
 
 ## Tests
