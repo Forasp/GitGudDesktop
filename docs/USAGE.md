@@ -1,6 +1,8 @@
 # Using GitGud Desktop
 
-GitGud works like GitHub Desktop, against any Git server. This is the tour.
+A tour of the interface GitGud ships with. It works like GitHub Desktop,
+against any Git server — and every part of it can be changed or replaced
+(see `MODDING.md`).
 
 ## The window
 

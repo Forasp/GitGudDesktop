@@ -124,7 +124,7 @@ replaces the branch, pushing it needs `--force`. Anyone who only wants the
 app fetches just that branch:
 
 ```powershell
-git clone --branch dist --single-branch --depth 1 <repository url> GitGud
+git clone --branch dist --single-branch --depth 1 https://github.com/Forasp/GitGudDesktop.git GitGud
 ```
 
 The dist branch's `.gitattributes` turns off line-ending conversion, so the
@@ -133,7 +133,7 @@ is.
 
 ## Tests
 
-- **Engine (C++)** — Catch2, 65 cases: `build\release\bin\gitgud_tests.exe`
+- **Engine (C++)** — Catch2, 69 cases: `build\release\bin\gitgud_tests.exe`
   (or `ctest --test-dir build/release`). The signing and LFS cases need
   `ssh-keygen` and `git-lfs` (Git for Windows ships both) and skip without.
 - **UI (Lua, scripted)** — `tests/ui/*.lua` drive the real UI without
@@ -151,6 +151,16 @@ is.
   throwaway repository — they stage, commit, branch, and push. They also save
   settings, open tabs, and recent repositories to `%APPDATA%\Gitgud`; set
   `$env:APPDATA` to a scratch folder first to keep your own untouched.
+
+## Documentation
+
+`docs/` is the source for both the app's Help menu and the GitHub wiki.
+Edit a doc there, then republish the wiki (the Home, sidebar, and footer
+pages come from `tools/wiki/`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\publish-wiki.ps1   # -DryRun to preview
+```
 
 ## Troubleshooting
 
