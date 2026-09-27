@@ -159,6 +159,12 @@ function tree.create(name, spec)
         if not entry then
             return
         end
+        -- Clicking a row that was already selected changes nothing in the
+        -- list, so no "selected" arrives: re-announce the selection so this
+        -- view becomes the one the toolbar and menus act on.
+        if state.onSelect then
+            state.onSelect(tree.selected(name))
+        end
         -- The expand arrow's column.
         local left = gitgud.getRect(name) or 0
         local arrowX = left + LIST_PADDING + entry.depth * INDENT

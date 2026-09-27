@@ -77,6 +77,14 @@ local C = {
     diffGap = "FF232C35",
     link = "FF7FC9A0",
 
+    -- Raised buttons (the toolbar, Go): a box a shade lighter than the
+    -- chrome, an olive edge, and a drop shadow.
+    raised = "FF323D46",
+    raisedHover = "FF25484F",
+    raisedPushed = "FF276460",
+    raisedBorder = "FF525445",
+    shadow = "B0010102",
+
     -- The revision graph (0xRRGGBB for gitgud.revisionGraph).
     graph = {
         background = "1F2731",

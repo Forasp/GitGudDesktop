@@ -15,8 +15,10 @@ User Interface…*.
 - **Toolbar** — Refresh, Get Latest, Submit, Check Out, Add, Delete, Revert,
   Diff, History, Time-lapse, Rev Graph, Shelve, Integrate, Fetch, Push.
   Buttons grey out when they don't apply to the selection.
-- **Address bar** — the selected file or folder as a depot path
-  (`//repo/src/main.cpp`). Type a path and press Enter to go to it.
+- **Address bar** — what's selected in the tree (or the Files tab) as a
+  depot path: `//repo/src/main.cpp` for a file, `//repo/src/...` for a
+  folder, and for several items the lowest folder that holds them all. Type
+  a path and press Enter (or **Go**) to walk the tree to it.
 - **Tree pane** — *Depot* shows the repository's files as of the latest
   submitted changelist; *Workspace* shows your working folder, new files
   included. Icons show each file's state: checked out / edited (red check),
@@ -34,7 +36,9 @@ User Interface…*.
 
 Tables sort by clicking a column header and resize by dragging the header
 dividers. Ctrl+click and Shift+click select several rows; right-click for
-the commands that apply.
+the commands that apply. The toolbar and the Actions menu work on the view
+you clicked last — click a row in the tree, a table, or the Pending list to
+make it the one they act on.
 
 ## Pending changelists
 

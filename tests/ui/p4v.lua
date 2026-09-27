@@ -98,6 +98,41 @@ if phase() == "p4v" and gitgud.currentUi().id == "p4v" then
         shot("p02-tree")
     end)
 
+    step(300, "address bar covers several items", function()
+        local selection = require("p4.selection")
+        local root = "//" .. repo.state().name
+        check("one file: its own path", selection.coveringPath({ { path = "src/main.cpp" } }) == root .. "/src/main.cpp")
+        check("one folder: path/...", selection.coveringPath({ { path = "src", folder = true } }) == root .. "/src/...")
+        check("two files in src: src/...", selection.coveringPath({ { path = "src/a.cpp" }, { path = "src/b.cpp" } })
+            == root .. "/src/...")
+        check("files in different folders: the root", selection.coveringPath({ { path = "src/a.cpp" }, { path = "README.md" } })
+            == root .. "/...")
+        -- A pending changelist becomes the selection (two files)...
+        panes.show("pending")
+        require("p4.tree").select("PendingTree", "cl:0")
+    end)
+
+    step(400, "the changelist is the active selection", function()
+        check("Rev Graph greys out for a whole changelist", gitgud.getProperty("P4Tool13", "Disabled") == "true")
+        check("the address bar still shows the tree's selection", gitgud.getText("AddressEdit")
+            == "//" .. repo.state().name .. "/src/main.cpp")
+        -- ...then clicking the file that's still highlighted in the tree.
+        local tree = require("p4.tree")
+        local row = nil
+        for i, entry in ipairs(tree.visible("DepotTree")) do
+            if entry.node.id == "depot:src/main.cpp" then
+                row = i
+            end
+        end
+        local x, y, w = gitgud.getRect("DepotTree")
+        gitgud.simulateClick(x + w - 40, y + 6 + (row - 1) * 20 + 10, "left")
+    end)
+
+    step(400, "re-clicking the tree", function()
+        check("Rev Graph is enabled again for main.cpp", gitgud.getProperty("P4Tool13", "Disabled") == "false")
+        check("Time-lapse too", gitgud.getProperty("P4Tool12", "Disabled") == "false")
+    end)
+
     step(300, "History of README", function()
         require("p4.views.history").show("README.md", false)
     end)

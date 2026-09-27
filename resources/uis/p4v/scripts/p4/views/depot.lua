@@ -366,12 +366,14 @@ function depot.init()
     gitgud.on("AddressEdit.accepted", go)
     gitgud.on("AddressGo.clicked", go)
 
-    app.subscribe("selection.changed", function(items)
-        local first = items[1]
-        local path = first and first.path and selection.depotPath(first.path) or ""
-        if first and first.folder and path ~= "" then
-            path = path .. "/..."
+    -- The address bar and status bar follow what's selected in the depot
+    -- tree or the Files tab (P4V's address bar belongs to the tree), not
+    -- the other tabs.
+    app.subscribe("selection.changed", function(items, source)
+        if source ~= "tree" and source ~= "files" then
+            return
         end
+        local path = selection.coveringPath(items)
         gitgud.setText("AddressEdit", path)
         gitgud.setText("StatusPath", text.escape(path))
     end)

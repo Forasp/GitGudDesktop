@@ -41,10 +41,15 @@
             </Window>
             <Window type="Gitgud/Button" name="TreeCollapseButton">
                 <Property name="Area" value="{{1,-28},{0,2},{1,-2},{0,24}}"/>
-                <Property name="Text" value="–"/>
+                <Property name="Text" value=""/>
                 <Property name="NormalFillColour" value="FF1F2731"/>
                 <Property name="BorderColour" value="00000000"/>
                 <Property name="TooltipText" value="Collapse all"/>
+                <Window type="Gitgud/Image" name="TreeCollapseIcon">
+                    <Property name="Area" value="{{0.5,-8},{0.5,-8},{0.5,8},{0.5,8}}"/>
+                    <Property name="Image" value="P4-Icons/CollapseAll"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
             </Window>
             <Window type="Gitgud/StaticText" name="LeftBodyLine">
                 <Property name="Area" value="{{0,1},{0,26},{1,-1},{0,27}}"/>

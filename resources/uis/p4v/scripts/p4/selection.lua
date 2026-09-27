@@ -79,6 +79,53 @@ function selection.changedFiles()
     return out
 end
 
+--- The depot path that covers a set of items: one item's own path (a
+-- folder with "/..."), or for several, the lowest folder that holds them
+-- all ("//repo/src/..."). "" when no item has a path.
+-- @param list  items (default: the current selection)
+-- @return depot path text
+function selection.coveringPath(list)
+    list = list or items
+    local paths = {}
+    local folder = false
+    for _, item in ipairs(list) do
+        if item.path then
+            paths[#paths + 1] = item.path
+            folder = item.folder == true
+        end
+    end
+    if #paths == 0 then
+        return ""
+    end
+    if #paths == 1 then
+        local path = selection.depotPath(paths[1])
+        return folder and (path .. "/...") or path
+    end
+
+    -- The segments every path starts with.
+    local common = nil
+    for _, path in ipairs(paths) do
+        local parts = {}
+        for part in path:gmatch("[^/]+") do
+            parts[#parts + 1] = part
+        end
+        if not common then
+            common = parts
+        else
+            local keep = {}
+            for i = 1, math.min(#common, #parts) do
+                if common[i] ~= parts[i] then
+                    break
+                end
+                keep[i] = common[i]
+            end
+            common = keep
+        end
+    end
+
+    return selection.depotPath(table.concat(common, "/")) .. "/..."
+end
+
 --- "//<repo>/<path>".
 -- @param path  repository-relative path
 -- @return depot path

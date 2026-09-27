@@ -10,6 +10,7 @@
 #     RemoteBranch Label16 Stash Remote Worktree Submodule TreeOpen TreeClosed
 #     FileEdit FileAdd FileDelete FileUntracked FileConflict FileMoved
 #     FileOutdated FileSynced FileShelved CheckOn CheckOff Dot Warning Info
+#     CollapseAll
 #
 # Run it after editing: powershell -ExecutionPolicy Bypass -File make-icons.ps1
 Add-Type -AssemblyName System.Drawing
@@ -240,7 +241,7 @@ $small = @(
     "ChangeShelved", "ChangeDefault", "Branch16", "RemoteBranch", "Label16", "Stash", "Remote",
     "Worktree", "Submodule", "TreeOpen", "TreeClosed", "FileEdit", "FileAdd", "FileDelete",
     "FileUntracked", "FileConflict", "FileMoved", "FileOutdated", "FileSynced", "FileShelved",
-    "CheckOn", "CheckOff", "Dot", "Warning", "Info"
+    "CheckOn", "CheckOff", "Dot", "Warning", "Info", "CollapseAll"
 )
 for ($i = 0; $i -lt $small.Count; $i++) {
     $ox = ($i % 16) * 16; $oy = 72 + [Math]::Floor($i / 16) * 16
@@ -314,6 +315,10 @@ for ($i = 0; $i -lt $small.Count; $i++) {
         "Submodule" {
             Rect $ox $oy 1.5 3 9 9 "F3D9EF" "A34A98"
             Rect $ox $oy 5.5 6 9 9 "FBEAF8" "A34A98"
+        }
+        "CollapseAll" {
+            Rect $ox $oy 2.5 2.5 11 11 $null "A0A485"
+            Line $ox $oy 5 8 11 8 "ECF1C1" 1.6
         }
         "TreeOpen" { Poly $ox $oy @(3.5, 5.5, 12.5, 5.5, 8, 11) "ECF1C1" $null }
         "TreeClosed" { Poly $ox $oy @(5.5, 3.5, 11, 8, 5.5, 12.5) "ECF1C1" $null }

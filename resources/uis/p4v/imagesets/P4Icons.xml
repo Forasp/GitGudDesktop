@@ -57,5 +57,6 @@
     <Image name="Dot" xPos="208" yPos="88" width="16" height="16"/>
     <Image name="Warning" xPos="224" yPos="88" width="16" height="16"/>
     <Image name="Info" xPos="240" yPos="88" width="16" height="16"/>
+    <Image name="CollapseAll" xPos="0" yPos="104" width="16" height="16"/>
     <Image name="Spacer" xPos="255" yPos="127" width="1" height="1"/>
 </Imageset>

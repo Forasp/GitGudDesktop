@@ -124,32 +124,78 @@
             </Area>
             <HorzAlignment type="RightAligned"/>
         </Child>
+                <ImagerySection name="flat_frame">
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="RightEdge"/></Dim>
+                    <Dim type="Height"><AbsoluteDim value="1"/></Dim>
+                </Area>
+                <Image name="Vanilla-Images/GenericBrush"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><UnifiedDim scale="1" type="BottomEdge" offset="-1"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="RightEdge"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" type="BottomEdge"/></Dim>
+                </Area>
+                <Image name="Vanilla-Images/GenericBrush"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="Width"><AbsoluteDim value="1"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" type="BottomEdge"/></Dim>
+                </Area>
+                <Image name="Vanilla-Images/GenericBrush"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><UnifiedDim scale="1" type="RightEdge" offset="-1"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="RightEdge"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" type="BottomEdge"/></Dim>
+                </Area>
+                <Image name="Vanilla-Images/GenericBrush"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+        </ImagerySection>
         <StateImagery name="Enabled"/>
         <StateImagery name="Disabled"/>
         <StateImagery name="EnabledFrame">
             <Layer>
-                <Section section="FrameOnly" look="Gitgud/Shared">
+                <Section section="flat_frame">
                     <ColourProperty name="FrameColour"/>
                 </Section>
             </Layer>
         </StateImagery>
         <StateImagery name="DisabledFrame">
             <Layer>
-                <Section section="FrameOnly" look="Gitgud/Shared">
+                <Section section="flat_frame">
                     <ColourProperty name="FrameColour"/>
                 </Section>
             </Layer>
         </StateImagery>
         <StateImagery name="WithFrameEnabledBackground">
             <Layer>
-                <Section section="BackgroundOnly" look="Gitgud/Shared">
+                <Section section="BackgroundOnlyFull" look="Gitgud/Shared">
                     <ColourProperty name="PanelColour"/>
                 </Section>
             </Layer>
         </StateImagery>
         <StateImagery name="WithFrameDisabledBackground">
             <Layer>
-                <Section section="BackgroundOnly" look="Gitgud/Shared">
+                <Section section="BackgroundOnlyFull" look="Gitgud/Shared">
                     <ColourProperty name="PanelColour"/>
                 </Section>
             </Layer>

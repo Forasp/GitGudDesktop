@@ -336,6 +336,14 @@ function grid.create(name, parent, spec)
             end
         end)
 
+        -- A click on an already-selected row raises no "selected": re-announce
+        -- the selection so this table becomes the one commands act on.
+        gitgud.on(list .. ".clicked", function()
+            if state.onSelect then
+                state.onSelect(rowsAt(state, selectedIndices(state)))
+            end
+        end)
+
         gitgud.on(list .. ".doubleClicked", function(value)
             local row = tonumber(value)
             if row and row >= 0 and state.onActivate and state.view[row + 1] then

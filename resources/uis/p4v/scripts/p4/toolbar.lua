@@ -16,9 +16,10 @@ local text = require("core.text")
 
 local toolbar = { name = "toolbar" }
 
-local WIDTH = 66
-local HEIGHT = 46
-local GAP = 2
+local WIDTH = 64
+local HEIGHT = 42
+local GAP = 7
+local SHADOW = 3   -- drop-shadow offset under each raised button
 
 --- True when a repository is open.
 local function open()
@@ -113,22 +114,28 @@ local function build()
                 gitgud.setProperty(name, "CursorPassThroughEnabled", "true")
                 gitgud.setText(name, "")
             else
+                -- The shadow first, so the button draws over it.
+                gitgud.createWindow("Gitgud/StaticText", name .. "Shadow", "ToolbarButtons")
+                gitgud.setProperty(name .. "Shadow", "PanelColour", C.shadow)
+                gitgud.setProperty(name .. "Shadow", "CursorPassThroughEnabled", "true")
+                gitgud.setText(name .. "Shadow", "")
+
                 gitgud.createWindow("Gitgud/Button", name, "ToolbarButtons")
                 gitgud.setText(name, "")
-                gitgud.setProperty(name, "NormalFillColour", C.transparent)
-                gitgud.setProperty(name, "HoverFillColour", C.header)
-                gitgud.setProperty(name, "PushedFillColour", C.selection)
-                gitgud.setProperty(name, "DisabledFillColour", C.transparent)
-                gitgud.setProperty(name, "BorderColour", C.transparent)
+                gitgud.setProperty(name, "NormalFillColour", C.raised)
+                gitgud.setProperty(name, "HoverFillColour", C.raisedHover)
+                gitgud.setProperty(name, "PushedFillColour", C.raisedPushed)
+                gitgud.setProperty(name, "DisabledFillColour", C.raised)
+                gitgud.setProperty(name, "BorderColour", C.raisedBorder)
                 gitgud.setProperty(name, "TooltipText", button.tip or button.label)
 
                 gitgud.createWindow("Gitgud/Image", name .. "Icon", name)
                 gitgud.setProperty(name .. "Icon", "Image", icons.image(button.icon))
-                gitgud.setProperty(name .. "Icon", "Area", geometry.area(0.5, -12, 0, 3, 0.5, 12, 0, 27))
+                gitgud.setProperty(name .. "Icon", "Area", geometry.area(0.5, -12, 0, 2, 0.5, 12, 0, 26))
                 gitgud.setProperty(name .. "Icon", "CursorPassThroughEnabled", "true")
 
                 gitgud.createWindow("Gitgud/Label", name .. "Label", name)
-                gitgud.setProperty(name .. "Label", "Area", geometry.area(0, 0, 0, 28, 1, 0, 1, 0))
+                gitgud.setProperty(name .. "Label", "Area", geometry.area(0, 0, 0, 25, 1, 0, 1, -1))
                 gitgud.setProperty(name .. "Label", "HorzFormatting", "CentreAligned")
                 gitgud.setProperty(name .. "Label", "Font", "Gitgud-System-Small")
                 gitgud.setProperty(name .. "Label", "CursorPassThroughEnabled", "true")
@@ -145,10 +152,11 @@ local function build()
             built = i
         end
         if button.separator then
-            gitgud.setProperty(name, "Area", geometry.rect(x + 3, 6, 1, HEIGHT - 12))
-            x = x + 8
+            gitgud.setProperty(name, "Area", geometry.rect(x + 1, 6, 1, HEIGHT - 10))
+            x = x + 9
         else
-            gitgud.setProperty(name, "Area", geometry.rect(x, 0, WIDTH, HEIGHT))
+            gitgud.setProperty(name .. "Shadow", "Area", geometry.rect(x + SHADOW, 1 + SHADOW, WIDTH, HEIGHT))
+            gitgud.setProperty(name, "Area", geometry.rect(x, 1, WIDTH, HEIGHT))
             x = x + WIDTH + GAP
         end
     end
