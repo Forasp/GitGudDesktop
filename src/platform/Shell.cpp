@@ -10,10 +10,33 @@
 #endif
 
 #include <algorithm>
+#include <cstdlib>
+#include <filesystem>
 #include <vector>
 
 namespace gitgud::platform
 {
+
+    std::string ConfigDirectory()
+    {
+        namespace fs = std::filesystem;
+#if defined(_WIN32)
+        if (const char* szappdata = std::getenv("APPDATA"))
+        {
+            return (fs::u8path(szappdata) / "Gitgud").u8string();
+        }
+        wchar_t wszexe[MAX_PATH] = {};
+        if (GetModuleFileNameW(nullptr, wszexe, MAX_PATH) > 0)
+        {
+            return (fs::path(wszexe).parent_path() / "config").u8string();
+        }
+#endif
+        if (const char* szhome = std::getenv("HOME"))
+        {
+            return (fs::u8path(szhome) / ".gitgud").u8string();
+        }
+        return (fs::current_path() / "config").u8string();
+    }
 
 #if defined(_WIN32)
 

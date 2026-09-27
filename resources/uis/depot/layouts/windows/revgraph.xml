@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  windows/revgraph.xml - the Revision Graph window: a file's
+  revisions across branches. Left: the branch filter; centre: the graph
+  (a picture drawn by the engine, with a clickable box over every revision);
+  bottom: the selected revision's Details / Integrations and a navigator.
+  scripts/depot/windows/revgraph.lua; names are prefixed with the window id.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="Root">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+
+        <Window type="Gitgud/StaticText" name="Background">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="FF28333C"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="Toolbar">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,38}}"/>
+            <Property name="PanelColour" value="FF28333C"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Button" name="RefreshButton">
+                <Property name="Area" value="{{0,8},{0,6},{0,84},{1,-6}}"/>
+                <Property name="Text" value="Refresh"/>
+            </Window>
+            <Window type="Gitgud/Button" name="ZoomOutButton">
+                <Property name="Area" value="{{0,92},{0,6},{0,122},{1,-6}}"/>
+                <Property name="Text" value="–"/>
+                <Property name="TooltipText" value="Zoom out (Ctrl+-)"/>
+            </Window>
+            <Window type="Gitgud/Label" name="ZoomLabel">
+                <Property name="Area" value="{{0,124},{0,0},{0,174},{1,0}}"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="Text" value="100%"/>
+            </Window>
+            <Window type="Gitgud/Button" name="ZoomInButton">
+                <Property name="Area" value="{{0,176},{0,6},{0,206},{1,-6}}"/>
+                <Property name="Text" value="+"/>
+                <Property name="TooltipText" value="Zoom in (Ctrl+=)"/>
+            </Window>
+            <Window type="Gitgud/Checkbox" name="RemoteCheck">
+                <Property name="Area" value="{{0,220},{0,6},{0,390},{1,-6}}"/>
+                <Property name="Text" value="Remote branches"/>
+                <Property name="Selected" value="true"/>
+            </Window>
+            <Window type="Gitgud/Button" name="DiffPrevButton">
+                <Property name="Area" value="{{0,396},{0,6},{0,536},{1,-6}}"/>
+                <Property name="Text" value="Diff with Previous"/>
+            </Window>
+            <Window type="Gitgud/Button" name="MarkButton">
+                <Property name="Area" value="{{0,540},{0,6},{0,640},{1,-6}}"/>
+                <Property name="Text" value="Mark for Diff"/>
+                <Property name="TooltipText" value="Mark this revision, select another, then Diff with Marked"/>
+            </Window>
+            <Window type="Gitgud/Button" name="DiffMarkedButton">
+                <Property name="Area" value="{{0,644},{0,6},{0,774},{1,-6}}"/>
+                <Property name="Text" value="Diff with Marked"/>
+            </Window>
+            <Window type="Gitgud/Button" name="TimelapseButton">
+                <Property name="Area" value="{{0,778},{0,6},{0,868},{1,-6}}"/>
+                <Property name="Text" value="Time-lapse"/>
+            </Window>
+            <Window type="Gitgud/Button" name="GetButton">
+                <Property name="Area" value="{{0,872},{0,6},{0,982},{1,-6}}"/>
+                <Property name="Text" value="Get Revision"/>
+            </Window>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="FilterPanel">
+            <Property name="Area" value="{{0,4},{0,40},{0,220},{1,-206}}"/>
+            <Property name="PanelColour" value="FF1F2731"/>
+            <Property name="FrameEnabled" value="true"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/StaticText" name="FilterTitle">
+                <Property name="Area" value="{{0,1},{0,1},{1,-1},{0,24}}"/>
+                <Property name="PanelColour" value="FF25484F"/>
+                <Property name="Text" value=" Branch Filter"/>
+            </Window>
+            <Window type="Gitgud/ListWidget" name="FilterList">
+                <Property name="Area" value="{{0,1},{0,24},{1,-1},{1,-1}}"/>
+                <Property name="TooltipText" value="Click a branch to show or hide its row"/>
+            </Window>
+        </Window>
+
+        <Window type="Gitgud/ScrollablePane" name="Canvas">
+            <Property name="Area" value="{{0,224},{0,40},{1,-4},{1,-206}}"/>
+        </Window>
+
+        <Window type="DefaultWindow" name="BottomTabs">
+            <Property name="Area" value="{{0,4},{1,-202},{0.62,0},{1,-178}}"/>
+        </Window>
+        <Window type="Gitgud/MultiLineEditbox" name="DetailsText">
+            <Property name="Area" value="{{0,4},{1,-178},{0.62,0},{1,-4}}"/>
+            <Property name="ReadOnly" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="NavigatorPanel">
+            <Property name="Area" value="{{0.62,6},{1,-202},{1,-4},{1,-4}}"/>
+            <Property name="PanelColour" value="FF1F2731"/>
+            <Property name="FrameEnabled" value="true"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/StaticText" name="NavigatorTitle">
+                <Property name="Area" value="{{0,1},{0,1},{1,-1},{0,24}}"/>
+                <Property name="PanelColour" value="FF25484F"/>
+                <Property name="Text" value=" Navigator"/>
+            </Window>
+            <Window type="Gitgud/Image" name="NavigatorImage">
+                <Property name="Area" value="{{0,6},{0,30},{1,-6},{1,-6}}"/>
+            </Window>
+        </Window>
+    </Window>
+</GUILayout>

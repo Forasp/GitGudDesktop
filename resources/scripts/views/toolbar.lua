@@ -1,7 +1,7 @@
 --- views/toolbar.lua — the three toolbar controls and the status summary.
 --
 -- Fills RepoValue / BranchValue / SyncLabel / SyncValue from the snapshot and
--- swaps the sync icon between fetch, push, and pull like GitHub Desktop.
+-- swaps the sync icon between fetch, push, and pull.
 -- Clicks are handled by the modules that own each popup (repositories,
 -- branches, sync).
 

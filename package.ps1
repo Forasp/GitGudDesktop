@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     Packages the release build of GitGud Desktop into a self-contained folder
-    and a zip ready to attach to a GitHub release.
+    and a zip ready to attach to a release.
 
 .DESCRIPTION
     1. Builds the release preset (via setup.ps1) unless -SkipBuild.
@@ -15,7 +15,7 @@
        folder with a throwaway settings folder and checks that the UI came up
        using the packaged files.
     4. Zips the folder as build\dist\GitGud-win64.zip (one GitGud\ folder
-       inside). The release workflow attaches this zip to the GitHub release.
+       inside). The release workflow attaches this zip to the release.
 
 .PARAMETER SkipBuild
     Package whatever is in build\release\bin without building first.

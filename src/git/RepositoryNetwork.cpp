@@ -548,6 +548,19 @@ namespace gitgud::git
         PushRefspecs(m_pRepo, _RemoteName, refspecs, m_CredProvider, m_HostKeyProvider);
     }
 
+    void Repository::PushBranch(const std::string& _RemoteName, const std::string& _Branch,
+        const std::string& _RemoteBranch, bool _bForce)
+    {
+        if (!m_pRepo)
+        {
+            throw GitError("pushBranch() on an unopened repository");
+        }
+        const std::string target = _RemoteBranch.empty() ? _Branch : _RemoteBranch;
+        const std::string refspec =
+            std::string(_bForce ? "+" : "") + "refs/heads/" + _Branch + ":refs/heads/" + target;
+        PushRefspecs(m_pRepo, _RemoteName, {refspec}, m_CredProvider, m_HostKeyProvider);
+    }
+
     void Repository::DeleteRemoteBranch(const std::string& _RemoteName, const std::string& _Branch)
     {
         if (!m_pRepo)

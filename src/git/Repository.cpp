@@ -106,7 +106,7 @@ namespace gitgud::git
         opts.show = GIT_STATUS_SHOW_INDEX_AND_WORKDIR;
         // RECURSE_UNTRACKED_DIRS: without it an untracked directory appears as a
         // single "dir/" entry, which can't be staged ("invalid path") and hides
-        // its contents. Recursing lists each file, like GitHub Desktop.
+        // its contents. Recursing lists each file.
         opts.flags = GIT_STATUS_OPT_INCLUDE_UNTRACKED | GIT_STATUS_OPT_RECURSE_UNTRACKED_DIRS |
                      GIT_STATUS_OPT_RENAMES_HEAD_TO_INDEX;
 

@@ -86,7 +86,9 @@ D:\...\build\release\bin\gitgud.exe
 ```
 
 GitGud opens the repository in its working directory (or none — add one
-from the UI). Launched from a terminal it prints to that console;
+from the UI). The first launch asks which interface to use (the default or
+the Depot one); `GITGUD_UI=default`, `depot`, or `path:<folder>` picks
+one for a run without asking. Launched from a terminal it prints to that console;
 `GITGUD_CONSOLE=1` forces a console window and `GITGUD_LOG=<file>` sends all
 output to a file. A crash writes a symbolized stack trace to that output and
 `gitgud-crash.dmp` next to the exe.
@@ -115,7 +117,7 @@ version and source commit), `LICENSE`, and `THIRD_PARTY_NOTICES.txt`.
 
 `THIRD_PARTY_NOTICES.txt` holds the license of every third-party component
 that ships. After adding or upgrading a dependency, regenerate it and commit
-the result — packaging refuses to run while it's out of date:
+the result: packaging refuses to run while it's out of date:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\update-notices.ps1
@@ -132,7 +134,7 @@ came up on its own files. The result is zipped as
 
 ## Releases
 
-GitHub Actions (`.github/workflows/build.yml`) builds, runs the engine tests,
+CI (`.github/workflows/build.yml`) builds, runs the engine tests,
 packages, and smoke-tests every push and pull request. The runners have no
 GPU, so the smoke test borrows Mesa's software OpenGL (`-OpenGLRuntime`); those
 DLLs go next to the test's copy of the app only, never into the package.
@@ -141,25 +143,26 @@ To release, set the version in `CMakeLists.txt` (`project(... VERSION x.y.z)`)
 and `vcpkg.json`, commit, and push a tag:
 
 ```powershell
-git tag v1.1
-git push origin v1.1
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
-The workflow then publishes a GitHub release for the tag with
+The workflow then publishes a release for the tag with
 `GitGud-win64.zip` attached. The latest one is always at
 <https://github.com/Forasp/GitGudDesktop/releases/latest>.
 
 ## Tests
 
-- **Engine (C++)** — Catch2, 69 cases: `build\release\bin\gitgud_tests.exe`
+- **Engine (C++)**: Catch2, 76 cases: `build\release\bin\gitgud_tests.exe`
   (or `ctest --test-dir build/release`). The signing and LFS cases need
   `ssh-keygen` and `git-lfs` (Git for Windows ships both) and skip without.
-- **UI (Lua, scripted)** — `tests/ui/*.lua` drive the real UI without
+- **UI (Lua, scripted)**: `tests/ui/*.lua` drive the real UI without
   touching your mouse or keyboard and save screenshots:
 
   ```powershell
   powershell -File tests\ui\make-testrepo.ps1 -Dir C:\temp\gg-test
   $env:GITGUD_SCRIPT = "$PWD\tests\ui\workflows.lua"   # or features / remotes / walkthrough / perf / mod-example
+  $env:GITGUD_UI     = "default"                         # depot.lua needs "depot"
   $env:GITGUD_SHOTS  = "C:\temp\shots"
   $env:GITGUD_LOG    = "C:\temp\gg.log"
   Start-Process build\release\bin\gitgud.exe -WorkingDirectory C:\temp\gg-test
@@ -172,7 +175,7 @@ The workflow then publishes a GitHub release for the tag with
 
 ## Documentation
 
-`docs/` is the source for both the app's Help menu and the GitHub wiki.
+`docs/` is the source for both the app's Help menu and the project wiki.
 Edit a doc there, then republish the wiki (the Home, sidebar, and footer
 pages come from `tools/wiki/`):
 

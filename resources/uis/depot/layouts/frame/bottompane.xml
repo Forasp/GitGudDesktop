@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  bottompane.xml - Log (every command the UI ran, with its result) and
+  Dashboard (what needs your attention) tabs. scripts/depot/log.lua and
+  dashboard.lua fill them.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="BottomPane">
+        <Property name="Area" value="{{0,0},{0.8,5},{1,0},{1,0}}"/>
+
+        <Window type="DefaultWindow" name="BottomTabs">
+            <Property name="Area" value="{{0,4},{0,0},{1,-4},{0,24}}"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="BottomBody">
+            <Property name="Area" value="{{0,4},{0,24},{1,-4},{1,-2}}"/>
+            <Property name="PanelColour" value="FF1F2731"/>
+            <Property name="FrameEnabled" value="true"/>
+            <Property name="FrameColour" value="FF525445"/>
+            <Property name="Text" value=""/>
+
+            <Window type="Gitgud/ListWidget" name="LogList">
+                <Property name="Area" value="{{0,1},{0,1},{1,-1},{1,-1}}"/>
+                <Property name="BorderColour" value="FF1F2731"/>
+                <Property name="Font" value="Gitgud-System"/>
+            </Window>
+            <Window type="Gitgud/ListWidget" name="DashboardList">
+                <Property name="Area" value="{{0,1},{0,1},{1,-1},{1,-1}}"/>
+                <Property name="BorderColour" value="FF1F2731"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+        </Window>
+    </Window>
+</GUILayout>

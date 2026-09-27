@@ -33,6 +33,7 @@ namespace gitgud::git
 namespace gitgud::app
 {
     class EventBus;
+    class IAppHost;
     class TaskRunner;
 } // namespace gitgud::app
 
@@ -73,9 +74,18 @@ namespace gitgud::lua
             gitgud::ui::IUiBackend* _pUi, gitgud::app::TaskRunner* _pTasks,
             gitgud::platform::ICredentialStore* _pCredentials);
 
+        // The application shell (pop-out windows, UI packages). May be nullptr.
+        void SetAppHost(gitgud::app::IAppHost* _pHost)
+        {
+            m_pHost = _pHost;
+        }
+
         // Directory `require` searches (`require("views.changes")` loads
         // <dir>/views/changes.lua). Applied now and after every Reset().
         void SetScriptRoot(const std::string& _Directory);
+        // Several directories, searched in order (a UI package's scripts, then
+        // the default UI's, so packages reuse and override shared modules).
+        void SetScriptRoots(const std::vector<std::string>& _Directories);
 
         // Run a script file. Returns false and logs on error.
         bool RunFile(const std::string& _Path);
@@ -128,6 +138,11 @@ namespace gitgud::lua
             return m_pCredentials;
         }
 
+        gitgud::app::IAppHost* AppHost()
+        {
+            return m_pHost;
+        }
+
         // Called by binding trampolines; not for general use.
         void RegisterHandler(const std::string& _EventName, int _iRef);
         int AddTimer(int _iDelayMs, bool _bRepeat, int _iRef);
@@ -152,7 +167,8 @@ namespace gitgud::lua
         gitgud::ui::IUiBackend* m_pUi = nullptr;
         gitgud::app::TaskRunner* m_pTasks = nullptr;
         gitgud::platform::ICredentialStore* m_pCredentials = nullptr;
-        std::string m_ScriptRoot;
+        gitgud::app::IAppHost* m_pHost = nullptr;
+        std::vector<std::string> m_ScriptRoots;
 
         // event name -> registry refs (luaL_ref) of the subscribed functions.
         std::unordered_map<std::string, std::vector<int>> m_Handlers;

@@ -1,5 +1,5 @@
 # Builds, tests, and packages GitGud Desktop on every push and pull request.
-# Pushing a tag like v1.0 also publishes a GitHub release with the zip.
+# Pushing a tag like v1.0 also publishes a release with the zip.
 #
 # The first run builds every vcpkg dependency (OpenSSL among them) and CEGUI,
 # which takes a while; both are cached, so later runs only build the app.

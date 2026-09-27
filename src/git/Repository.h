@@ -211,7 +211,7 @@ namespace gitgud::git
         std::string m_UpstreamRemote; // remote the upstream lives on ("" when none)
     };
 
-    // ---- Graph / undo / conflicts / rewriting (the GitKraken-style features) ---
+    // ---- Graph / undo / conflicts / rewriting -------------------------------
 
     // Which commits GraphLog() walks: every local branch and HEAD, plus
     // (optionally) remote-tracking branches and tags.
@@ -308,6 +308,77 @@ namespace gitgud::git
         bool m_bLocked = false;
         bool m_bValid = true; // its folder still exists
         bool m_bMain = false; // the repository's own working tree
+    };
+
+    // ---- Browsing, shelving, revision graphs (the Depot UI) --------------------
+
+    // One entry of a directory in a commit's tree.
+    struct TreeEntry
+    {
+        std::string m_Name; // "main.cpp"
+        std::string m_Path; // "src/main.cpp", relative to the repository root
+        bool m_bIsDir = false;
+        bool m_bIsSubmodule = false;
+        std::string m_Oid;       // blob / tree / commit id (hex)
+        std::int64_t m_Size = 0; // bytes (files only)
+    };
+
+    // One file that differs between two versions (name-status only).
+    struct ChangedFile
+    {
+        std::string m_Path;
+        std::string m_OldPath; // differs from m_Path only for renames
+        char m_cStatus = 'M';  // 'A', 'D', 'M', 'R', 'T'
+    };
+
+    // What unshelving did, per file.
+    struct UnshelveResult
+    {
+        std::vector<std::string> m_Applied;    // written cleanly
+        std::vector<std::string> m_Conflicted; // written with conflict markers
+        std::vector<std::string> m_Skipped;    // binary and changed locally: left alone
+    };
+
+    // A file's history across every branch, laid out as a revision
+    // graph: one row per branch, one column per commit (oldest left), edges
+    // from each revision to the revisions it was built from.
+    struct RevisionRow
+    {
+        std::string m_Name; // branch shorthand ("main", "origin/topic"), or "" for history
+                            // no branch reaches along its first parents
+        bool m_bHead = false;
+        bool m_bRemote = false;
+    };
+
+    struct RevisionNode
+    {
+        CommitInfo m_Commit;
+        int m_iRow = 0;
+        int m_iColumn = 0;
+        int m_iRevision = 0;  // 1-based count along its row ("#n")
+        char m_cAction = 'M'; // 'A' added, 'M' edited, 'D' deleted, 'I' merged in
+    };
+
+    struct RevisionEdge
+    {
+        int m_iFrom = 0; // node indices
+        int m_iTo = 0;
+        bool m_bMerge = false; // the merge parent of a merge commit (an integration)
+    };
+
+    struct RevisionGraph
+    {
+        std::vector<RevisionRow> m_Rows;
+        std::vector<RevisionNode> m_Nodes; // in column order
+        std::vector<RevisionEdge> m_Edges;
+    };
+
+    struct RevisionGraphQuery
+    {
+        bool m_bRemotes = true;
+        std::size_t m_MaxNodes = 300;
+        std::size_t m_MaxWalk = 20000;              // commits examined in total
+        std::vector<std::string> m_ExcludeBranches; // rows to leave out (branch shorthands)
     };
 
     // Supplies credentials for networked operations. Return true and fill
@@ -423,8 +494,8 @@ namespace gitgud::git
             const std::string& _Path, DiffTarget _Target, const DiffOptions& _Options = {}) const;
 
         // ---- Hunk-level staging --------------------------------------------
-        // Apply just one hunk of the file's unstaged diff to the index (like
-        // clicking a hunk in GitHub Desktop). `hunkIndex` indexes into the hunks
+        // Apply just one hunk of the file's unstaged diff to the index (what
+        // clicking a hunk does). `hunkIndex` indexes into the hunks
         // of diffFile(path, Unstaged) captured at the same moment.
         void StageHunk(const std::string& _Path, std::size_t _HunkIndex);
         // Reverse-apply one hunk of the staged diff (partial unstage).
@@ -585,6 +656,46 @@ namespace gitgud::git
         // worktree has uncommitted changes (they would be lost).
         void RemoveWorktree(const std::string& _Name);
 
+        // ---- Browsing, shelving, revision graphs ----------------------------------------
+        // The entries of directory `_Dir` ("" = root) in `_Revision`'s tree,
+        // directories first, then by name. Empty on an unborn branch.
+        std::vector<TreeEntry> ListTree(
+            const std::string& _Revision, const std::string& _Dir) const;
+
+        // Diff any two versions of a file. Revisions as for ReadFileVersion
+        // ("workdir", "index", "head", any commit-ish, "<oid>^"); a missing
+        // side diffs as empty (an add or a delete).
+        FileDiff DiffVersions(const std::string& _OldPath, const std::string& _OldRevision,
+            const std::string& _NewPath, const std::string& _NewRevision,
+            const DiffOptions& _Options = {}) const;
+
+        // Which files differ between two revisions (`_NewRevision` may be
+        // "workdir": the working tree, untracked files included; `_OldRevision`
+        // may be "" for nothing), limited to paths under `_Prefix` ("" = all).
+        // Renames detected.
+        std::vector<ChangedFile> ChangedFiles(const std::string& _OldRevision,
+            const std::string& _NewRevision, const std::string& _Prefix = "") const;
+
+        // Shelve: commit the working-tree versions of `_Paths` (deleted files
+        // stay deleted) on top of HEAD, WITHOUT touching HEAD, the index, or the
+        // working tree, and point local branch `_Branch` at that commit
+        // (created, or moved if it exists). Returns the commit id.
+        std::string Shelve(const std::string& _Branch, const std::vector<std::string>& _Paths,
+            const std::string& _Message);
+
+        // Unshelve: bring `_Revision`'s changes (vs its first parent) to
+        // `_Paths` ("" / empty = every file it changed) into the working tree.
+        // Files without local edits take the shelved version; edited ones get a
+        // three-way merge (conflict markers where both changed the same lines).
+        // Deleted files go through `_RemoveFile` (e.g. the recycle bin).
+        UnshelveResult Unshelve(const std::string& _Revision,
+            const std::vector<std::string>& _Paths,
+            const std::function<bool(const std::string&)>& _RemoveFile = nullptr);
+
+        // The history of `_Path` across branches (see RevisionGraph).
+        RevisionGraph FileRevisionGraph(
+            const std::string& _Path, const RevisionGraphQuery& _Query = {}) const;
+
         // ---- Git LFS -------------------------------------------------------------------
         // True when git-lfs was found at startup: files marked `filter=lfs` in
         // .gitattributes are then cleaned/smudged through it like the git CLI does.
@@ -604,6 +715,12 @@ namespace gitgud::git
         void Push(const std::string& _RemoteName, bool _bForce = false, bool _bSetUpstream = false);
         // Push every local tag.
         void PushTags(const std::string& _RemoteName);
+        // Push local branch `_Branch` (checked out or not) to `_RemoteBranch`
+        // on the remote ("" = the same name). No upstream is set: this is for
+        // publishing branches you don't work on, like shelves. `_bForce`
+        // replaces the remote branch (a re-shelved changelist).
+        void PushBranch(const std::string& _RemoteName, const std::string& _Branch,
+            const std::string& _RemoteBranch = "", bool _bForce = false);
         // Delete `_Branch` on the remote.
         void DeleteRemoteBranch(const std::string& _RemoteName, const std::string& _Branch);
         // Fetch `_RemoteName` and merge the current branch's upstream when it

@@ -114,7 +114,8 @@ namespace gitgud::lua::bindings
             float fpos = 0.0f;
             if (auto* pui = Self(_pL)->UiBackend())
             {
-                fpos = pui->GetScroll(szid);
+                fpos =
+                    pui->GetScroll(szid, std::string(luaL_optstring(_pL, 2, "")) == "horizontal");
             }
             lua_pushnumber(_pL, fpos);
             return 1;
@@ -126,7 +127,8 @@ namespace gitgud::lua::bindings
             const lua_Number pos = luaL_checknumber(_pL, 2);
             if (auto* pui = Self(_pL)->UiBackend())
             {
-                pui->SetScroll(szid, static_cast<float>(pos));
+                pui->SetScroll(szid, static_cast<float>(pos),
+                    std::string(luaL_optstring(_pL, 3, "")) == "horizontal");
             }
             return 0;
         }
@@ -397,12 +399,14 @@ namespace gitgud::lua::bindings
             }
             const int ibutton = kind == "right" ? 3 : 1;
             const int iclicks = kind == "double" ? 2 : 1;
+            pui->SetInputSurface(luaL_optstring(_pL, 4, ""));
             pui->InjectMousePosition(fx, fy);
             for (int i = 0; i < iclicks; ++i)
             {
                 pui->InjectMouseButton(ibutton, true);
                 pui->InjectMouseButton(ibutton, false);
             }
+            pui->SetInputSurface("");
             return 0;
         }
 
@@ -415,8 +419,10 @@ namespace gitgud::lua::bindings
             const float fdelta = static_cast<float>(luaL_checknumber(_pL, 3));
             if (auto* pui = Self(_pL)->UiBackend())
             {
+                pui->SetInputSurface(luaL_optstring(_pL, 4, ""));
                 pui->InjectMousePosition(fx, fy);
                 pui->InjectMouseScroll(fdelta);
+                pui->SetInputSurface("");
             }
             return 0;
         }
@@ -428,21 +434,78 @@ namespace gitgud::lua::bindings
             const char* sztext = luaL_checklstring(_pL, 1, &len);
             if (auto* pui = Self(_pL)->UiBackend())
             {
+                pui->SetInputSurface(luaL_optstring(_pL, 2, ""));
                 for (std::size_t i = 0; i < len; ++i)
                 {
                     pui->InjectChar(static_cast<unsigned char>(sztext[i]));
                 }
+                pui->SetInputSurface("");
             }
             return 0;
         }
 
-        // gitgud.screenshot(path) - save the next rendered frame as a PNG.
+        // gitgud.screenshot(path, window?) - save the next rendered frame of the
+        // main window (or of pop-out `window`) as a PNG.
         int LScreenshot(lua_State* _pL)
         {
-            const char* szpath = luaL_checkstring(_pL, 1);
+            const std::string path = luaL_checkstring(_pL, 1);
+            const std::string window = luaL_optstring(_pL, 2, "");
             if (auto* pbus = Self(_pL)->EventBus())
             {
-                pbus->Publish({"debug.screenshot", szpath});
+                pbus->Publish({"debug.screenshot", window.empty() ? path : window + "\n" + path});
+            }
+            return 0;
+        }
+
+        // gitgud.getSelectedIndices(name) -> 1-based rows, ascending
+        int LGetSelectedIndices(lua_State* _pL)
+        {
+            const char* szname = luaL_checkstring(_pL, 1);
+            lua_newtable(_pL);
+            if (auto* pui = Self(_pL)->UiBackend())
+            {
+                int ii = 1;
+                for (const int irow : pui->GetSelectedIndices(szname))
+                {
+                    lua_pushinteger(_pL, irow + 1);
+                    lua_rawseti(_pL, -2, ii++);
+                }
+            }
+            return 1;
+        }
+
+        // gitgud.selectListItems(name, {rows}) - 1-based; {} clears
+        int LSelectListItems(lua_State* _pL)
+        {
+            const char* szname = luaL_checkstring(_pL, 1);
+            luaL_checktype(_pL, 2, LUA_TTABLE);
+            std::vector<int> rows;
+            const lua_Integer n = luaL_len(_pL, 2);
+            for (lua_Integer i = 1; i <= n; ++i)
+            {
+                lua_rawgeti(_pL, 2, i);
+                if (lua_isinteger(_pL, -1))
+                {
+                    rows.push_back(static_cast<int>(lua_tointeger(_pL, -1)) - 1);
+                }
+                lua_pop(_pL, 1);
+            }
+            if (auto* pui = Self(_pL)->UiBackend())
+            {
+                pui->SelectListItems(szname, rows);
+            }
+            return 0;
+        }
+
+        // gitgud.setDraggable(name, bool) - raise dragStarted / dragging /
+        // dragEnded ("x,y") while the widget is dragged with the left button
+        int LSetDraggable(lua_State* _pL)
+        {
+            const char* szname = luaL_checkstring(_pL, 1);
+            const bool bon = lua_isnoneornil(_pL, 2) || lua_toboolean(_pL, 2) != 0;
+            if (auto* pui = Self(_pL)->UiBackend())
+            {
+                pui->SetDraggable(szname, bon);
             }
             return 0;
         }
@@ -525,17 +588,7 @@ namespace gitgud::lua::bindings
         // write it through configRead/configWrite only — never raw paths.
         fs::path ConfigDir()
         {
-#if defined(_WIN32)
-            if (const char* szappdata = std::getenv("APPDATA"))
-            {
-                return fs::path(szappdata) / "Gitgud";
-            }
-#endif
-            if (const char* szhome = std::getenv("HOME"))
-            {
-                return fs::path(szhome) / ".gitgud";
-            }
-            return ExeDir() / "config";
+            return fs::u8path(gitgud::platform::ConfigDirectory());
         }
 
         // gitgud.docs() -> array of {name, path} for the shipped docs/ folder.
@@ -690,6 +743,33 @@ namespace gitgud::lua::bindings
             return 1;
         }
 
+        // gitgud.trashRepoFile(relativePath) -> true or (nil, msg): move a file
+        // inside the open repository to the Recycle Bin (Mark for Delete,
+        // the old side of a rename)
+        int LTrashRepoFile(lua_State* _pL)
+        {
+            fs::path file;
+            if (!RepoFilePath(_pL, luaL_checkstring(_pL, 1), file))
+            {
+                return FailWith(_pL, "invalid repository path");
+            }
+            std::error_code ec;
+            if (!fs::exists(file, ec))
+            {
+                return FailWith(_pL, "no such file: " + file.u8string());
+            }
+            if (!gitgud::platform::MoveToTrash(file.u8string()))
+            {
+                return FailWith(_pL, "could not move " + file.u8string() + " to the Recycle Bin");
+            }
+            if (auto* pbus = Self(_pL)->EventBus())
+            {
+                pbus->Publish({"status.changed", ""});
+            }
+            lua_pushboolean(_pL, 1);
+            return 1;
+        }
+
         // Config names are bare identifiers ("recent-repos"), never paths.
         bool ValidConfigName(const char* _szName)
         {
@@ -772,6 +852,9 @@ namespace gitgud::lua::bindings
             {"suspendLayout", LSuspendLayout},
             {"linkScroll", LLinkScroll},
             {"getSelectedIndex", LGetSelectedIndex},
+            {"getSelectedIndices", LGetSelectedIndices},
+            {"selectListItems", LSelectListItems},
+            {"setDraggable", LSetDraggable},
             // images
             {"isImage", LIsImage},
             {"imageDiff", LImageDiff},
@@ -797,6 +880,7 @@ namespace gitgud::lua::bindings
             {"pathExists", LPathExists},
             {"readRepoFile", LReadRepoFile},
             {"writeRepoFile", LWriteRepoFile},
+            {"trashRepoFile", LTrashRepoFile},
             {"configRead", LConfigRead},
             {"configWrite", LConfigWrite},
         };

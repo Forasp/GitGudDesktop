@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  statusbar.xml - left: the selected item's depot path; right:
+  transient messages (StatusLabel, core/status.lua) and the repository
+  summary (StatusRight).
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="StatusBar">
+        <Property name="Area" value="{{0,0},{1,-22},{1,0},{1,0}}"/>
+        <Property name="PanelColour" value="FF28333C"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/StaticText" name="StatusLine">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,1}}"/>
+            <Property name="PanelColour" value="FF010102"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Label" name="StatusPath">
+            <Property name="Area" value="{{0,6},{0,1},{0.45,0},{1,0}}"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Label" name="StatusLabel">
+            <Property name="Area" value="{{0.45,0},{0,1},{0.8,0},{1,0}}"/>
+            <Property name="Text" value="Ready."/>
+            <Property name="HorzFormatting" value="RightAligned"/>
+        </Window>
+        <Window type="Gitgud/Label" name="StatusRight">
+            <Property name="Area" value="{{0.8,8},{0,1},{1,-8},{1,0}}"/>
+            <Property name="Text" value=""/>
+            <Property name="HorzFormatting" value="RightAligned"/>
+        </Window>
+    </Window>
+</GUILayout>

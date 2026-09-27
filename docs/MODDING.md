@@ -10,6 +10,7 @@ lives, the dev loop, and how to add your own features.
 | Change what something does | `resources/scripts/**.lua` | no — hot-reloads |
 | Add a feature (panel, menu, shortcut) | a new Lua module + XML file, one line in `main.lua` | no |
 | Re-theme a widget type | `resources/looknfeel/*.xml` | yes (app restart) |
+| Replace the whole interface | a UI package (see 9. Your own interface) | no |
 | Add a Git capability Lua doesn't have | C++ (`src/git`, `src/lua`) | rebuild |
 
 ## 1. Where things live
@@ -42,6 +43,9 @@ resources/
   looknfeel/              one skin file per widget family (Button.xml, …)
   schemes/Gitgud.xml      lists the skin files; maps "Gitgud/Button" etc.
   imagesets/              the icon atlas (regenerate with make-atlas.ps1)
+  uis/                    other interfaces: depot/ (the Depot UI) and
+                          picker/ (the chooser shown on first launch)
+  ui.ini                  the default UI's name and description
 ```
 
 ## 2. The dev loop
@@ -143,7 +147,7 @@ a time, Escape closes, and what was underneath repaints afterwards.
 | `core/palette.lua` | the colour tokens (`C.text`, `C.dim`, `C.cyan`, `C.add`, …) |
 | `core/shell.lua` | `shell.openInEditor`, `openTerminal`, `showInFolder`, `copy` |
 | `core/undo.lua` | `undo.track(label, fn, {soft, onUndo, onRedo})` — make an action undoable |
-| `ui/commands.lua` | `commands.register{label, action, keywords, enabled, group}` — add to the command palette (menu items appear there automatically) |
+| `ui/commands.lua` | `commands.register{label, action, keywords, enabled, group}` — add to the command palette (menu items appear there automatically); `commands.addSource(function(add) … end)` for entries worked out each time it opens (branches, files) |
 | `views/console.lua` | `console.run(commandLine, onDone)` — run a command in the console and get its exit code |
 
 ## 5. Adding a feature: the example mod
@@ -224,7 +228,106 @@ UI-only primitives follow the same pattern through `src/ui/IUiBackend.h`,
 `gitgud.screenshot` — see `docs/BUILDING.md` ▸ Tests. Point them at a
 throwaway repository.
 
-## 9. Pitfalls
+## 9. Your own interface
+
+Mods extend the interface you have; a **UI package** replaces it. GitGud
+ships two: the default UI (`resources/` itself) and the Depot UI
+(`resources/uis/depot/`, see `docs/DEPOT.md`). Switch with **File ▸ Switch user
+interface…** (default UI) or **Edit ▸ Preferences ▸ Switch User
+Interface…** (Depot UI); the first launch asks.
+
+A package is a folder:
+
+```
+my-ui/
+  ui.ini                 name=My UI
+                         description=What it's for (shown in the picker)
+  scripts/main.lua       the entry point, like resources/scripts/main.lua
+  layouts/main.xml       the window's root layout (a "Root" window)
+  looknfeel/*.xml        optional: skin overrides, loaded over the base skin
+  imagesets/*.xml        optional: your own images (with resourceGroup="ui-imagesets")
+```
+
+Point GitGud at it from the picker's **Use an interface from a folder…**
+(or `gitgud.switchUi("path:C:/src/my-ui")`); the choice is remembered. Put
+it in `resources/uis/<id>/` to ship it as a built-in.
+
+What a package gets for free:
+
+- **The default UI's Lua.** `require` searches your `scripts/` first, then
+  `resources/scripts`, so `core/`, `ui/` (menus, dialogs, the command
+  palette), and even `views/` modules are there to reuse — the Depot UI uses
+  `views/sync.lua` for push/pull and sign-in, `views/repositories.lua` for
+  clone/open. A file of your own with the same name wins: the Depot UI's
+  `scripts/core/palette.lua` recolours every shared widget.
+- **The default UI's layouts.** Your `layouts/` is where layout files
+  resolve; the default UI's are resource group `gitgud-layouts`:
+  ```xml
+  <LayoutImport filename="dialogs/dialog.xml" resourceGroup="gitgud-layouts"/>
+  ```
+  The shared Lua needs a few of them: `popups/blocker.xml` (menus, popups),
+  `dialogs/shade.xml` + `dialogs/dialog.xml` (dialogs), `popups/palette.xml`
+  (the command palette), and a `MenuBar` window for `ui/menu.lua`. Copy one
+  into your `layouts/` to restyle it — the Lua finds widgets by name.
+- **A skin of its own.** A look in `looknfeel/` with the same name as a base
+  look (`Gitgud/Button`, `Gitgud/ListView`, …) replaces it while your UI
+  runs — colours, fonts, imagery — and the base comes back when you switch
+  away. Fonts you can name in looks and layouts: `Gitgud-UI` (Inter),
+  `Gitgud-UI-Bold`, `-Small`, `-Title`, `-Large`, `Gitgud-Mono` (JetBrains
+  Mono), and the platform font `Gitgud-System` (Segoe UI), `-Bold`, `-Small`.
+- **Pop-out windows.** `gitgud.openWindow{id, title, layout, width, height}`
+  opens a real OS window showing a layout from your `layouts/`; its widgets
+  are named `"<id>:<name>"` (so one layout can back several windows), and
+  `window.closed` / `window.key` tell you when it closes and what it was
+  typed at. The Depot UI's Diff, Revision Graph, Time-lapse, and Folder Diff
+  windows are built this way (`scripts/depot/windows*`).
+- **The window frame.** `gitgud.setWindowBordered(true)` gives the main
+  window the OS title bar (the default UI draws its own).
+
+A minimal package:
+
+```lua
+-- my-ui/scripts/main.lua
+local app = require("core.app")
+require("core.keys").init()
+require("ui.popup").init()
+require("ui.dialog").init()
+
+gitgud.setWindowBordered(true)
+gitgud.on("HelloButton.clicked", function()
+    require("ui.dialog").alert("Hello", "Branch: " .. gitgud.currentBranch())
+end)
+gitgud.on("SwitchButton.clicked", gitgud.showUiPicker)
+app.start()
+```
+
+```xml
+<!-- my-ui/layouts/main.xml -->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="Root">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+        <Window type="Gitgud/Button" name="HelloButton">
+            <Property name="Area" value="{{0,20},{0,20},{0,180},{0,52}}"/>
+            <Property name="Text" value="Hello"/>
+        </Window>
+        <Window type="Gitgud/Button" name="SwitchButton">
+            <Property name="Area" value="{{0,190},{0,20},{0,370},{0,52}}"/>
+            <Property name="Text" value="Switch interface…"/>
+        </Window>
+        <LayoutImport filename="popups/blocker.xml" resourceGroup="gitgud-layouts"/>
+        <LayoutImport filename="dialogs/shade.xml" resourceGroup="gitgud-layouts"/>
+        <LayoutImport filename="dialogs/dialog.xml" resourceGroup="gitgud-layouts"/>
+    </Window>
+</GUILayout>
+```
+
+Always give people a way back (`gitgud.showUiPicker()`); if the
+remembered package is missing or incomplete at launch, GitGud starts the
+picker instead. Everything hot-reloads as
+usual; `looknfeel/` and `imagesets/` changes take a restart (or a switch
+away and back).
+
+## 10. Pitfalls
 
 - **A misspelled widget name fails silently** — calls on unknown names are
   no-ops. Check the name first when something "doesn't update".

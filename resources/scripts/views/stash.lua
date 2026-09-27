@@ -1,6 +1,6 @@
 --- views/stash.lua — stash your changes, look at them, bring them back.
 --
--- Like GitHub Desktop, the UI works with the stash of the CURRENT branch:
+-- The UI works with the stash of the CURRENT branch:
 -- "Stash all changes" saves everything (untracked files included) with a
 -- branch-tagged message, the Changes tab then shows a "Stashed changes" row,
 -- and viewing it offers Restore (pop) or Discard (drop).

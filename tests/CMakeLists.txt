@@ -8,6 +8,7 @@ add_executable(gitgud_tests
     test_taskrunner.cpp
     test_workflows.cpp
     test_features.cpp
+    test_depot.cpp
 )
 
 target_link_libraries(gitgud_tests PRIVATE

@@ -8,6 +8,7 @@
 
 #include <git2.h>
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -298,6 +299,32 @@ namespace gitgud::git::internal
     // (see RepositoryStaging.cpp). DiffFile(path, Head) returns exactly this.
     FileDiff CombinedFileDiff(
         git_repository* _pRepo, const std::string& _Path, const DiffOptions& _Options);
+
+    // One version of a file, repository-normalized (what a blob would hold).
+    struct FileVersion
+    {
+        std::string m_Text;
+        bool m_bExists = false;
+        uint32_t m_uiMode = GIT_FILEMODE_BLOB;
+    };
+
+    // Read `_Path` as of `_Revision`: "workdir" (filtered to ODB form, so it
+    // compares with blobs), "index", "head", or any commit-ish. Defined in
+    // RepositoryStaging.cpp.
+    FileVersion ReadVersion(
+        git_repository* _pRepo, const std::string& _Path, const std::string& _Revision);
+
+    // Write repository-normalized text to the working tree (to-worktree
+    // filters applied), creating folders as needed. RepositoryStaging.cpp.
+    void WriteWorkingFile(
+        git_repository* _pRepo, const std::string& _Path, const std::string& _Text);
+
+    // Absolute path of a working-tree file. RepositoryStaging.cpp.
+    std::filesystem::path WorkingPath(git_repository* _pRepo, const std::string& _Path);
+
+    // Diff two file versions as a FileDiff. RepositoryStaging.cpp.
+    FileDiff DiffFileVersions(const std::string& _OldPath, const FileVersion& _Old,
+        const std::string& _NewPath, const FileVersion& _New, const DiffOptions& _Options);
 
     // Translate DiffOptions onto libgit2's struct.
     inline void ApplyDiffOptions(git_diff_options& _Opts, const DiffOptions& _Options)

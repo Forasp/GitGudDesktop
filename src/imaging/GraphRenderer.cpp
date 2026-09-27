@@ -1,11 +1,11 @@
 // -----------------------------------------------------------------------------
-// GraphRenderer — see GraphRenderer.h. Shapes are rasterised with a signed
-// distance per pixel inside each shape's bounding box, which gives smooth
-// edges without a graphics library and stays cheap (a row touches a few
-// thousand pixels).
+// GraphRenderer — see GraphRenderer.h. The shapes come from imaging/Raster
+// (anti-aliased, signed-distance rasterisation).
 // -----------------------------------------------------------------------------
 
 #include "imaging/GraphRenderer.h"
+
+#include "imaging/Raster.h"
 
 #include <algorithm>
 #include <cmath>
@@ -13,150 +13,10 @@
 namespace gitgud::imaging
 {
 
+    using namespace raster;
+
     namespace
     {
-
-        struct Point
-        {
-            float m_fX = 0.0f;
-            float m_fY = 0.0f;
-        };
-
-        struct Colour
-        {
-            float m_fR = 0.0f;
-            float m_fG = 0.0f;
-            float m_fB = 0.0f;
-        };
-
-        Colour FromHex(std::uint32_t _uiRgb)
-        {
-            return {static_cast<float>((_uiRgb >> 16) & 0xFF) / 255.0f,
-                static_cast<float>((_uiRgb >> 8) & 0xFF) / 255.0f,
-                static_cast<float>(_uiRgb & 0xFF) / 255.0f};
-        }
-
-        // Straight-alpha "over" of one pixel.
-        void Blend(Image& _Img, int _iX, int _iY, const Colour& _C, float _fAlpha)
-        {
-            if (_fAlpha <= 0.0f || _iX < 0 || _iY < 0 || _iX >= _Img.m_iWidth ||
-                _iY >= _Img.m_iHeight)
-            {
-                return;
-            }
-            _fAlpha = std::min(_fAlpha, 1.0f);
-            std::uint8_t* pp =
-                &_Img.m_Rgba[(static_cast<std::size_t>(_iY) * _Img.m_iWidth + _iX) * 4];
-            const float fdstA = pp[3] / 255.0f;
-            const float foutA = _fAlpha + fdstA * (1.0f - _fAlpha);
-            if (foutA <= 0.0f)
-            {
-                return;
-            }
-            const float fsrc[3] = {_C.m_fR, _C.m_fG, _C.m_fB};
-            for (int i = 0; i < 3; ++i)
-            {
-                const float fdst = pp[i] / 255.0f;
-                const float fout = (fsrc[i] * _fAlpha + fdst * fdstA * (1.0f - _fAlpha)) / foutA;
-                pp[i] =
-                    static_cast<std::uint8_t>(std::lround(std::clamp(fout, 0.0f, 1.0f) * 255.0f));
-            }
-            pp[3] = static_cast<std::uint8_t>(std::lround(foutA * 255.0f));
-        }
-
-        float SegmentDistance(float _fPx, float _fPy, const Point& _A, const Point& _B)
-        {
-            const float fdx = _B.m_fX - _A.m_fX;
-            const float fdy = _B.m_fY - _A.m_fY;
-            const float flen2 = fdx * fdx + fdy * fdy;
-            float ft = 0.0f;
-            if (flen2 > 0.0f)
-            {
-                ft = ((_fPx - _A.m_fX) * fdx + (_fPy - _A.m_fY) * fdy) / flen2;
-                ft = std::clamp(ft, 0.0f, 1.0f);
-            }
-            const float fcx = _A.m_fX + ft * fdx - _fPx;
-            const float fcy = _A.m_fY + ft * fdy - _fPy;
-            return std::sqrt(fcx * fcx + fcy * fcy);
-        }
-
-        // A thick anti-aliased polyline (drawn as one shape: no darker joints).
-        void DrawPolyline(Image& _Img, const std::vector<Point>& _Points, float _fWidth,
-            const Colour& _C, float _fOpacity)
-        {
-            if (_Points.size() < 2)
-            {
-                return;
-            }
-            float fminX = _Points[0].m_fX;
-            float fmaxX = fminX;
-            float fminY = _Points[0].m_fY;
-            float fmaxY = fminY;
-            for (const Point& p : _Points)
-            {
-                fminX = std::min(fminX, p.m_fX);
-                fmaxX = std::max(fmaxX, p.m_fX);
-                fminY = std::min(fminY, p.m_fY);
-                fmaxY = std::max(fmaxY, p.m_fY);
-            }
-            const float fhalf = _fWidth * 0.5f;
-            const int ix0 = static_cast<int>(std::floor(fminX - fhalf - 1.0f));
-            const int ix1 = static_cast<int>(std::ceil(fmaxX + fhalf + 1.0f));
-            const int iy0 = static_cast<int>(std::floor(fminY - fhalf - 1.0f));
-            const int iy1 = static_cast<int>(std::ceil(fmaxY + fhalf + 1.0f));
-            for (int iy = std::max(iy0, 0); iy <= std::min(iy1, _Img.m_iHeight - 1); ++iy)
-            {
-                for (int ix = std::max(ix0, 0); ix <= std::min(ix1, _Img.m_iWidth - 1); ++ix)
-                {
-                    const float fpx = static_cast<float>(ix) + 0.5f;
-                    const float fpy = static_cast<float>(iy) + 0.5f;
-                    float fd = 1e9f;
-                    for (std::size_t i = 0; i + 1 < _Points.size(); ++i)
-                    {
-                        fd = std::min(fd, SegmentDistance(fpx, fpy, _Points[i], _Points[i + 1]));
-                    }
-                    Blend(_Img, ix, iy, _C, (fhalf + 0.5f - fd) * _fOpacity);
-                }
-            }
-        }
-
-        void DrawDisc(Image& _Img, const Point& _Centre, float _fRadius, const Colour& _C)
-        {
-            const int ix0 = static_cast<int>(std::floor(_Centre.m_fX - _fRadius - 1.0f));
-            const int ix1 = static_cast<int>(std::ceil(_Centre.m_fX + _fRadius + 1.0f));
-            const int iy0 = static_cast<int>(std::floor(_Centre.m_fY - _fRadius - 1.0f));
-            const int iy1 = static_cast<int>(std::ceil(_Centre.m_fY + _fRadius + 1.0f));
-            for (int iy = std::max(iy0, 0); iy <= std::min(iy1, _Img.m_iHeight - 1); ++iy)
-            {
-                for (int ix = std::max(ix0, 0); ix <= std::min(ix1, _Img.m_iWidth - 1); ++ix)
-                {
-                    const float fdx = static_cast<float>(ix) + 0.5f - _Centre.m_fX;
-                    const float fdy = static_cast<float>(iy) + 0.5f - _Centre.m_fY;
-                    const float fd = std::sqrt(fdx * fdx + fdy * fdy);
-                    Blend(_Img, ix, iy, _C, _fRadius + 0.5f - fd);
-                }
-            }
-        }
-
-        void DrawRing(
-            Image& _Img, const Point& _Centre, float _fRadius, float _fWidth, const Colour& _C)
-        {
-            const float fouter = _fRadius + _fWidth * 0.5f;
-            const int ix0 = static_cast<int>(std::floor(_Centre.m_fX - fouter - 1.0f));
-            const int ix1 = static_cast<int>(std::ceil(_Centre.m_fX + fouter + 1.0f));
-            const int iy0 = static_cast<int>(std::floor(_Centre.m_fY - fouter - 1.0f));
-            const int iy1 = static_cast<int>(std::ceil(_Centre.m_fY + fouter + 1.0f));
-            for (int iy = std::max(iy0, 0); iy <= std::min(iy1, _Img.m_iHeight - 1); ++iy)
-            {
-                for (int ix = std::max(ix0, 0); ix <= std::min(ix1, _Img.m_iWidth - 1); ++ix)
-                {
-                    const float fdx = static_cast<float>(ix) + 0.5f - _Centre.m_fX;
-                    const float fdy = static_cast<float>(iy) + 0.5f - _Centre.m_fY;
-                    const float fd = std::fabs(std::sqrt(fdx * fdx + fdy * fdy) - _fRadius);
-                    Blend(_Img, ix, iy, _C, _fWidth * 0.5f + 0.5f - fd);
-                }
-            }
-        }
 
         // A lane-to-lane edge: straight when the lane doesn't change, an S
         // curve (cubic Bezier with vertical tangents) when it does.

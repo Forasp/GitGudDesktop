@@ -42,6 +42,11 @@ Scripts reach the app only through the global `gitgud` table. Conventions:
 | `submodules()` | `{ {name, path, url, headOid, workdirOid, initialized, modified, dirty}, … }` |
 | `worktrees()` | `{ {name, path, branch, locked, valid, main}, … }` — the main working tree first |
 | `lfsAvailable()` | `true` when git-lfs was found (LFS files are then cleaned / smudged through it) |
+| `listTree(revision = "HEAD", dir = "")` | a folder's entries in a revision: `{ {name, path, isDir, isSubmodule, oid, size}, … }`, folders first |
+| `fileAt(path, revision)` | the file's bytes in that version (`"workdir"`, `"index"`, `"head"`, any commit-ish, `"<oid>^"`), or `nil` when it doesn't exist there |
+| `diffVersions(oldPath, oldRevision, newPath, newRevision, opts)` | a diff table (as `diff`) between any two versions of a file; a missing side diffs as an add or delete. `opts`: `{ignoreWhitespace, context}` (a huge `context` gives the whole file) |
+| `changedFiles(oldRevision, newRevision, prefix = "")` | `{ {path, oldPath, status}, … }` — which files differ (renames detected). `newRevision` may be `"workdir"` (untracked files included), `oldRevision` `""` (nothing) |
+| `revisionGraph{path, remotes = true, exclude = {branches}, max = 300, selected, columnWidth, rowHeight, nodeWidth, nodeHeight, nodeTop, image, colours}` | a file's history across branches, drawn as a revision graph and published as image `image` (default `"GitgudRevisionGraph"`). Returns `{image, width, height, columnWidth, rows = { {name, head, remote, x, y, w, h} }, nodes = { history row + {row, column, revision, action, x, y, w, h} }, edges = { {from, to, merge} } }` — `action` is `A` `M` `D` or `I` (merged in); positions are pixels in the picture, for your labels and click targets. `colours`: `{background, bandA, bandB, bandSelected, rowLine, node, nodeHead, nodeBorder, deleted, bar, edge, branchEdge, selectedFill, selectedBorder}` (hex) |
 
 ## Staging and commits
 
@@ -87,6 +92,8 @@ fails the commit with the tool's message.
 | `setUpstream(branch, "remote/branch")` | make a local branch track a remote branch; `""` or nil stops tracking |
 | `setConfig(key, value)` / `setGlobalConfig(key, value)` | empty value removes the key |
 | `stashSave(message?)` / `stashApply(i)` / `stashPop(i)` / `stashDrop(i)` | untracked files included |
+| `shelve(branch, {paths}, message)` | commit the working-tree versions of `paths` on top of HEAD onto local branch `branch` (created or moved) and return the commit id — HEAD, the index, and the files don't change. The Depot UI's shelves |
+| `unshelve(revision, {paths}?)` | bring a shelf commit's changes (vs its parent) into the working tree: untouched files take the shelved version, edited ones get a three-way merge. Returns `{applied, conflicted, skipped}` (path arrays; `conflicted` files have conflict markers) |
 
 ## Network (asynchronous)
 
@@ -98,6 +105,7 @@ fails the commit with the tool's message.
 | `push(remote, {force = bool, setUpstream = bool})` | `push.*` — goes to the upstream branch when it lives on `remote` (else the same name); sets the upstream on first push, or always with `setUpstream` |
 | `pushTags(remote)` | `pushTags.*` |
 | `deleteRemoteBranch(remote, branch)` | `deleteRemoteBranch.*` |
+| `pushBranch(remote, branch, {force, as})` | `pushBranch.*` — push any local branch (checked out or not) to `as` (default: the same name) without setting an upstream; `done` detail is `"branch|remote"` |
 | `updateSubmodule(name, init = true)` | `updateSubmodule.*` — clone (if `init`) and check out the recorded commit |
 | `clone(url, path)` | `clone.*` — `done` detail is the path |
 
@@ -145,13 +153,15 @@ dot above HEAD for uncommitted changes. Show a row's picture inline:
 | `setListItem(name, i, markup)` | replace one row |
 | `selectListItem(name, i \| nil, scrollIntoView = true)` | select without raising `selected` |
 | `getSelectedIndex(name)` | 1-based, or `nil` |
-| `getScroll(name)` / `setScroll(name, px)` | vertical scroll of a list or pane |
+| `getSelectedIndices(name)` / `selectListItems(name, {rows})` | every selected row (1-based) of a list with the `MultiSelect` property (Ctrl+click adds, Shift+click extends); select exactly these rows |
+| `getScroll(name, "horizontal"?)` / `setScroll(name, px, "horizontal"?)` | vertical (or horizontal) scroll of a list or pane |
+| `setDraggable(name, on = true)` | the widget raises `dragStarted`, `dragging`, `dragEnded` (`"x,y"`) while dragged with the left button — splitters, column dividers |
 | `setVisible` / `setEnabled` / `setChecked(name, bool)` | `setChecked` doesn't raise `toggled` |
 | `setProperty(name, prop, value)` / `getProperty(name, prop)` | any widget property |
 | `getRect(name)` | `x, y, width, height` on screen, or `nil` |
 | `focus(name)` / `bringToFront(name)` | |
 | `createWindow(type, name, parent)` / `destroyWindow(name)` | runtime widgets (raise events like layout widgets) |
-| `loadLayout(file, parent = "Root")` | attach a layout file (relative to `resources/layouts`) |
+| `loadLayout(file, parent = "Root")` | attach a layout file (relative to the running UI's `layouts/`; `resources/layouts` for the default UI) |
 | `suspendLayout(name, bool)` | pause/resume child layout around bulk changes |
 | `linkScroll(listA, listB)` | keep two lists scrolled together |
 | `isImage(path)` | true for image file types |
@@ -173,6 +183,7 @@ dot above HEAD for uncommitted changes. Show a row's picture inline:
 | `changed` | editboxes | the new text (not raised for `setText`) |
 | `accepted` | single-line editboxes | `""` (Enter) |
 | `dragged` | lists | `"fromRow,toRow"` (0-based) — pressed on one row, released on another |
+| `dragStarted` / `dragging` / `dragEnded` | widgets made draggable with `setDraggable` | `"x,y"` — the cursor, in window pixels |
 
 ## Events, timers, shell
 
@@ -188,6 +199,7 @@ dot above HEAD for uncommitted changes. Show a row's picture inline:
 | `setClipboard(text)` | |
 | `pathExists(path)` | |
 | `readRepoFile(rel)` / `writeRepoFile(rel, text)` | files inside the open repository only |
+| `trashRepoFile(rel)` | move a file inside the open repository to the Recycle Bin |
 | `configRead(name)` / `configWrite(name, text)` | per-user files in `%APPDATA%\Gitgud` |
 | `docs()` | `{ {name, path}, … }` for the shipped docs folder |
 | `findProgram(name)` | full path of a program on PATH (or bundled with Git for Windows), or `nil` |
@@ -207,10 +219,30 @@ dot above HEAD for uncommitted changes. Show a row's picture inline:
 (`"maximized"` / `"restored"`),
 `window.resized` (`"WxH"`), plus the network events above. Scripts can ask
 the window to `window.minimize`, `window.toggleMaximize`, `window.close`.
+Pop-out windows add `window.closed` (id), `window.key` (`"id|combo"` — a
+pop-out's shortcuts don't reach `key`), `window.focused` (id), and
+`window.popOutResized` (`"id|WxH"`).
+
+## Windows and interfaces
+
+| Function | |
+|---|---|
+| `openWindow{id, title, layout, width, height, minWidth, minHeight}` | open a separate OS window showing `layout` (from the UI's `layouts/`); its widgets are named `"<id>:<name>"`. An id that's open is raised. `true` or `nil, msg` |
+| `closeWindow(id)` / `focusWindow(id)` / `setWindowTitle(id, title)` | `""` as the id is the main window (for `setWindowTitle`) |
+| `windows()` | the open pop-out ids |
+| `setWindowBordered(bool)` | the main window's OS frame on (native title bar) or off (the UI draws its own) |
+| `currentUi()` | the running interface: `{id, name, description, root, builtIn}` — id `"default"`, a built-in's folder name, or `"path:<folder>"` |
+| `uiList()` | the interfaces to choose from (same shape), the default first |
+| `switchUi(id, remember = true)` | switch after the current handler returns (every window's widgets and the Lua VM start over); `remember` makes it the one GitGud starts with. `nil, msg` for a folder that isn't a UI package |
+| `showUiPicker()` / `previousUi()` | run the interface picker (not remembered); the interface that was running before |
+| `firstLaunch()` | `true` until an interface has been chosen |
+
+See `docs/MODDING.md` ▸ "Your own interface" for UI packages.
 
 ## Test harness
 
-`simulateClick(x, y, "left" | "right" | "double")`, `simulateText(text)`,
-`simulateScroll(x, y, delta)` (mouse wheel; positive scrolls up), and
-`screenshot(path)` (PNG of the next frame) drive the UI from a script run via
+`simulateClick(x, y, "left" | "right" | "double", window?)`,
+`simulateText(text, window?)`, `simulateScroll(x, y, delta, window?)` (mouse
+wheel; positive scrolls up), and `screenshot(path, window?)` (PNG of the next
+frame) drive the UI — or pop-out `window` — from a script run via
 `GITGUD_SCRIPT` — see `docs/BUILDING.md` ▸ Tests.

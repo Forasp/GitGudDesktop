@@ -1,4 +1,4 @@
---- tests/ui/features.lua — the GitKraken-style features through the real UI.
+--- tests/ui/features.lua — the extended features through the real UI.
 --
 -- Same harness as walkthrough.lua / workflows.lua (GITGUD_SCRIPT and
 -- GITGUD_SHOTS; run it in a repository made by make-testrepo.ps1). Covers:

@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  toolbar.xml - the three full-height toolbar controls, GitHub Desktop
-  style: current repository | current branch | fetch / push / pull, then a
+  toolbar.xml - the three full-height toolbar controls: current repository | current branch | fetch / push / pull, then a
   group of quick actions: undo / redo, the commit graph, the console, and
   the command palette.
 
@@ -124,7 +123,7 @@
         </Window>
 
         <!-- ======== tools: undo / redo | graph, console, commands ========
-             GitKraken-style quick actions (scripts/views/toolbar.lua). -->
+             quick actions (scripts/views/toolbar.lua). -->
         <Window type="Gitgud/Button" name="UndoButton">
             <Property name="Area" value="{{0,830},{0,0},{0,888},{1,-1}}"/>
             <Property name="Text" value=""/>

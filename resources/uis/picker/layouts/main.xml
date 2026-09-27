@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  main.xml - the user-interface picker: shown on first launch, and from
+  File > Switch user interface (default UI) / Edit > Preferences (Depot UI).
+
+  One card per interface is built at runtime (scripts/main.lua), from the
+  packages GitGud found: the default UI, resources/uis/*, and a package
+  picked from any folder. The shared dialog pieces come from the default
+  UI's layouts (resource group "gitgud-layouts").
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="Root">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+
+        <Window type="Gitgud/StaticText" name="AppBackground">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="tl:FF1C1433 tr:FF1C1433 bl:FF0E0A1A br:FF0E0A1A"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <!-- Borderless window: this strip moves it. -->
+        <Window type="Gitgud/StaticText" name="PickerTitleBar">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,32}}"/>
+            <Property name="PanelColour" value="FF0E0A1A"/>
+            <Property name="Text" value=""/>
+            <UserString name="AppDrag" value="true"/>
+
+            <Window type="Gitgud/Icon" name="PickerMark">
+                <Property name="Area" value="{{0,10},{0,7},{0,28},{0,25}}"/>
+                <Property name="IconImage" value="Gitgud-Logo/Mark"/>
+                <Property name="IconColour" value="FFFFFFFF"/>
+                <Property name="GlowColour" value="00000000"/>
+            </Window>
+            <Window type="Gitgud/Label" name="PickerWindowTitle">
+                <Property name="Area" value="{{0,38},{0,0},{0.5,0},{1,0}}"/>
+                <Property name="Text" value="GitGud Desktop"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="NormalTextColour" value="FF766A9C"/>
+            </Window>
+            <Window type="Gitgud/Button" name="PickerMinButton">
+                <Property name="Area" value="{{1,-92},{0,0},{1,-46},{1,-1}}"/>
+                <Property name="Text" value="–"/>
+                <Property name="NormalFillColour" value="FF0E0A1A"/>
+                <Property name="HoverFillColour" value="FF291F47"/>
+                <Property name="PushedFillColour" value="FF17102B"/>
+            </Window>
+            <Window type="Gitgud/Button" name="PickerCloseButton">
+                <Property name="Area" value="{{1,-46},{0,0},{1,0},{1,-1}}"/>
+                <Property name="Text" value="×"/>
+                <Property name="NormalFillColour" value="FF0E0A1A"/>
+                <Property name="HoverFillColour" value="FFE81123"/>
+                <Property name="PushedFillColour" value="FFB20D1C"/>
+                <Property name="TooltipText" value="Close"/>
+            </Window>
+        </Window>
+
+        <Window type="Gitgud/Label" name="PickerHeading">
+            <Property name="Area" value="{{0,48},{0,64},{1,-48},{0,100}}"/>
+            <Property name="Font" value="Gitgud-UI-Large"/>
+            <Property name="Text" value="Choose your interface"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="PickerSubtitle">
+            <Property name="Area" value="{{0,48},{0,104},{1,-48},{0,148}}"/>
+            <Property name="PanelColour" value="00000000"/>
+            <Property name="HorzFormatting" value="WordWrapLeftAligned"/>
+            <Property name="VertFormatting" value="TopAligned"/>
+            <Property name="TextColours" value="FFB7AED6"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <!-- Cards go here (built by Lua). -->
+        <Window type="DefaultWindow" name="PickerCards">
+            <Property name="Area" value="{{0,48},{0,160},{1,-48},{1,-96}}"/>
+        </Window>
+
+        <Window type="Gitgud/Button" name="PickerFolderButton">
+            <Property name="Area" value="{{0,48},{1,-72},{0,300},{1,-38}}"/>
+            <Property name="Text" value="Use an interface from a folder…"/>
+            <Property name="BorderColour" value="52C4B5FD"/>
+            <Property name="TooltipText" value="A folder with scripts/main.lua and layouts/main.xml - see the Modding guide"/>
+        </Window>
+        <Window type="Gitgud/Button" name="PickerBackButton">
+            <Property name="Area" value="{{1,-200},{1,-72},{1,-48},{1,-38}}"/>
+            <Property name="Text" value="Cancel"/>
+            <Property name="BorderColour" value="52C4B5FD"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Label" name="PickerNote">
+            <Property name="Area" value="{{0,316},{1,-72},{1,-216},{1,-38}}"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="NormalTextColour" value="FF766A9C"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <LayoutImport filename="popups/blocker.xml" resourceGroup="gitgud-layouts"/>
+        <LayoutImport filename="dialogs/shade.xml" resourceGroup="gitgud-layouts"/>
+        <LayoutImport filename="dialogs/dialog.xml" resourceGroup="gitgud-layouts"/>
+    </Window>
+</GUILayout>

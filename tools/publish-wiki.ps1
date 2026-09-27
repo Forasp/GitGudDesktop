@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Publishes docs\ to the GitHub wiki.
+    Publishes docs\ to the project wiki.
 
 .DESCRIPTION
     docs\ stays the source of truth (the app ships it for its Help menu); the
@@ -42,6 +42,7 @@ $Pages = [ordered]@{
     "LUA_API.md"    = @{ Page = "Lua-API"; Title = "Lua API" }
     "BUILDING.md"   = @{ Page = "Building"; Title = "Building" }
     "USAGE.md"      = @{ Page = "Using-the-Default-UI"; Title = "Using the Default UI" }
+    "DEPOT.md"        = @{ Page = "Using-the-Depot-UI"; Title = "Using the Depot UI" }
     "PRINCIPLES.md" = @{ Page = "Principles"; Title = "Principles" }
 }
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  navigator.xml - the branch tree on the far left (GitKraken's left panel):
+  navigator.xml - the branch tree on the far left:
   collapsible sections for local and remote branches, tags, stashes,
   submodules, and worktrees, all in one list (NavList) filled by
   scripts/views/navigator.lua. Click to select, double-click to check out,

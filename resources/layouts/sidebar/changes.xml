@@ -115,7 +115,7 @@
                 <Property name="Text" value="Summary (required)"/>
                 <Property name="NormalTextColour" value="FF766A9C"/>
             </Window>
-            <!-- Characters left before GitHub-style 50-char summaries wrap in
+            <!-- Characters left before conventional 50-char summaries wrap in
                  most tools; turns yellow then red as it runs out. -->
             <Window type="Gitgud/Label" name="SummaryCount">
                 <Property name="Area" value="{{1,-58},{0,12},{1,-22},{0,44}}"/>

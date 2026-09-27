@@ -1,4 +1,4 @@
---- views/remotes.lua — adding, editing, and removing remotes (GitKraken's
+--- views/remotes.lua — adding, editing, and removing remotes (the
 -- REMOTE section actions). The branch tree lists every remote under REMOTE;
 -- right-click one for remotes.menu(), or the section header for Add remote.
 --
