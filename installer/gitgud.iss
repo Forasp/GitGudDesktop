@@ -1,7 +1,7 @@
 ; Inno Setup script for the GitGud Desktop installer. package.ps1 compiles it
 ; from the assembled build\dist\GitGud folder; by hand:
 ;
-;   iscc /DAppVersion=1.3.0 installer\gitgud.iss
+;   iscc /DAppVersion=1.4.0 installer\gitgud.iss
 ;
 ; Installs under Program Files for all users by default. The first page
 ; offers a per-user install instead (no admin rights), and the folder is the

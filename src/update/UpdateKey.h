@@ -12,6 +12,6 @@
 namespace gitgud::update
 {
 
-    constexpr const char* kUpdatePublicKey = "";
+    constexpr const char* kUpdatePublicKey = "+qRnHtwt16ucQCVUsXxTT6qJA3xrzdhm8+FdHG4D/hs8vfUKGJDapUgbEva565+CP73TmNvsxKAQAFuGs3vzRg==";
 
 } // namespace gitgud::update
