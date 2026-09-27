@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Gitgud.xml (scheme) - maps "Gitgud/<Widget>" layout types onto CEGUI widget
+  classes + our looknfeel, and lists everything the skin is built from.
+
+  * Imagesets: CEGUI's stock Vanilla atlas (solid brushes, frames, arrows)
+    plus our own Gitgud atlas (neon glow slices, checkmark, icons) and the
+    brand mark. All tinted by the looknfeel at draw time.
+  * LookNFeels: one file per widget family in resources/looknfeel/. To add
+    a new widget look, drop a file there, list it below, and map a window
+    type to it. (Skin edits need an app restart; layouts and Lua hot-reload.)
+-->
+<GUIScheme version="5" name="Gitgud">
+    <Imageset filename="Vanilla.imageset" />
+    <Imageset filename="Gitgud.xml" resourceGroup="gitgud-imagesets" />
+    <Imageset filename="GitgudLogo.xml" resourceGroup="gitgud-imagesets" />
+
+    <LookNFeel filename="Shared.xml" resourceGroup="gitgud-looknfeel" />
+    <LookNFeel filename="Label.xml" resourceGroup="gitgud-looknfeel" />
+    <LookNFeel filename="Button.xml" resourceGroup="gitgud-looknfeel" />
+    <LookNFeel filename="Editbox.xml" resourceGroup="gitgud-looknfeel" />
+    <LookNFeel filename="Scrollbars.xml" resourceGroup="gitgud-looknfeel" />
+    <LookNFeel filename="StaticText.xml" resourceGroup="gitgud-looknfeel" />
+    <LookNFeel filename="Checkbox.xml" resourceGroup="gitgud-looknfeel" />
+    <LookNFeel filename="Lists.xml" resourceGroup="gitgud-looknfeel" />
+    <LookNFeel filename="Decorations.xml" resourceGroup="gitgud-looknfeel" />
+
+    <WindowRendererSet filename="CEGUICoreWindowRendererSet" />
+
+    <FalagardMapping windowType="Gitgud/Label" targetType="DefaultWindow" renderer="Core/Default" lookNFeel="Gitgud/Label" />
+    <FalagardMapping windowType="Gitgud/Button" targetType="CEGUI/PushButton" renderer="Core/Button" lookNFeel="Gitgud/Button" />
+    <FalagardMapping windowType="Gitgud/Editbox" targetType="CEGUI/Editbox" renderer="Core/Editbox" lookNFeel="Gitgud/Editbox" />
+    <FalagardMapping windowType="Gitgud/MultiLineEditbox" targetType="CEGUI/MultiLineEditbox" renderer="Core/MultiLineEditbox" lookNFeel="Gitgud/MultiLineEditbox" />
+    <FalagardMapping windowType="Gitgud/StaticText" targetType="DefaultWindow" renderer="Core/StaticText" lookNFeel="Gitgud/StaticText" />
+    <FalagardMapping windowType="Gitgud/Checkbox" targetType="CEGUI/ToggleButton" renderer="Core/ToggleButton" lookNFeel="Gitgud/Checkbox" />
+    <FalagardMapping windowType="Gitgud/VerticalScrollbarThumb" targetType="CEGUI/Thumb" renderer="Core/Button" lookNFeel="Gitgud/VerticalScrollbarThumb" />
+    <FalagardMapping windowType="Gitgud/VerticalScrollbar" targetType="CEGUI/Scrollbar" renderer="Core/Scrollbar" lookNFeel="Gitgud/VerticalScrollbar" />
+    <FalagardMapping windowType="Gitgud/HorizontalScrollbarThumb" targetType="CEGUI/Thumb" renderer="Core/Button" lookNFeel="Gitgud/HorizontalScrollbarThumb" />
+    <FalagardMapping windowType="Gitgud/HorizontalScrollbar" targetType="CEGUI/Scrollbar" renderer="Core/Scrollbar" lookNFeel="Gitgud/HorizontalScrollbar" />
+    <FalagardMapping windowType="Gitgud/ListView" targetType="CEGUI/ListView" renderer="Core/ListView" lookNFeel="Gitgud/ListView" />
+    <FalagardMapping windowType="Gitgud/ListWidget" targetType="CEGUI/ListWidget" renderer="Core/ListView" lookNFeel="Gitgud/ListView" />
+    <FalagardMapping windowType="Gitgud/ScrollablePane" targetType="CEGUI/ScrollablePane" renderer="Core/ScrollablePane" lookNFeel="Gitgud/ScrollablePane" />
+    <FalagardMapping windowType="Gitgud/Glow" targetType="DefaultWindow" renderer="Core/Default" lookNFeel="Gitgud/Glow" />
+    <FalagardMapping windowType="Gitgud/Icon" targetType="DefaultWindow" renderer="Core/Default" lookNFeel="Gitgud/Icon" />
+    <FalagardMapping windowType="Gitgud/Image" targetType="DefaultWindow" renderer="Core/Default" lookNFeel="Gitgud/Image" />
+    <FalagardMapping windowType="Gitgud/Tooltip" targetType="CEGUI/Tooltip" renderer="Core/Tooltip" lookNFeel="Gitgud/Tooltip" />
+</GUIScheme>

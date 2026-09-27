@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Label.xml - plain text labels.
+
+  Transparent, click-through text; colour and alignment are properties.
+
+  Part of the Gitgud skin: resources/schemes/Gitgud.xml lists every
+  looknfeel file. All colours are widget PROPERTIES, so layouts (or Lua via
+  gitgud.setProperty) can restyle a widget without touching this file.
+-->
+<Falagard version="7">
+
+    <!-- ============================ Label ============================ -->
+    <WidgetLook name="Gitgud/Label">
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFF3EEFC" type="ColourRect" name="NormalTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF4D4470" type="ColourRect" name="DisabledTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="LeftAligned" type="HorizontalTextFormatting" name="HorzFormatting"/>
+        <Property name="CursorPassThroughEnabled" value="true"/>
+        <ImagerySection name="Label">
+            <TextComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="RightEdge"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" type="BottomEdge"/></Dim>
+                </Area>
+                <VertFormat type="CentreAligned"/>
+                <HorzFormatProperty name="HorzFormatting"/>
+            </TextComponent>
+        </ImagerySection>
+        <StateImagery name="Enabled">
+            <Layer>
+                <Section section="Label">
+                    <ColourProperty name="NormalTextColour"/>
+                </Section>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="Disabled">
+            <Layer>
+                <Section section="Label">
+                    <ColourProperty name="DisabledTextColour"/>
+                </Section>
+            </Layer>
+        </StateImagery>
+    </WidgetLook>
+
+</Falagard>

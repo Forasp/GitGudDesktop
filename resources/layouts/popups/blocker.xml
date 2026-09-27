@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  blocker.xml - an invisible full-window button placed just under any open
+  popup (menus, context menus, the repository/branch dropdowns). Clicking
+  anywhere outside the popup hits this instead of the widget underneath,
+  and scripts/ui/popup.lua closes the popup.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/Button" name="PopupBlocker">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+        <Property name="Text" value=""/>
+        <Property name="NormalFillColour" value="00000000"/>
+        <Property name="HoverFillColour" value="00000000"/>
+        <Property name="PushedFillColour" value="00000000"/>
+        <Property name="BorderColour" value="00000000"/>
+        <Property name="AlwaysOnTop" value="true"/>
+        <Property name="Visible" value="false"/>
+    </Window>
+</GUILayout>

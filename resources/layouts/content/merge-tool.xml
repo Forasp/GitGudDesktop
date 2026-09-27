@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  merge-tool.xml - the 3-pane conflict resolver, over the content pane.
+  Top left: your version (the checked-out branch); top right: the incoming
+  version; bottom: the result. Click a conflict block on either side to take
+  it (click both to keep both, in the order clicked); "Edit result" switches
+  the bottom pane to a text editor for anything else. "Save and mark
+  resolved" writes the file and stages it. scripts/views/mergetool.lua.
+
+  Binary files and modify/delete conflicts can't be merged line by line:
+  MergeChoicePanel offers keeping one side instead.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="MergeToolPanel">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+        <Property name="PanelColour" value="FF17102B"/>
+        <Property name="Visible" value="false"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/StaticText" name="MergeHeader">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,44}}"/>
+            <Property name="PanelColour" value="FF1A1331"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Label" name="MergeTitle">
+                <Property name="Area" value="{{0,16},{0,0},{1,-560},{1,0}}"/>
+                <Property name="Font" value="Gitgud-Mono"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/Button" name="MergePrevButton">
+                <Property name="Area" value="{{1,-552},{0,8},{1,-516},{1,-8}}"/>
+                <Property name="Text" value="↑"/>
+                <Property name="TooltipText" value="Previous conflict"/>
+            </Window>
+            <Window type="Gitgud/Button" name="MergeNextButton">
+                <Property name="Area" value="{{1,-512},{0,8},{1,-476},{1,-8}}"/>
+                <Property name="Text" value="↓"/>
+                <Property name="TooltipText" value="Next conflict"/>
+            </Window>
+            <Window type="Gitgud/Button" name="MergeAllOursButton">
+                <Property name="Area" value="{{1,-468},{0,8},{1,-378},{1,-8}}"/>
+                <Property name="Text" value="All mine"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="TooltipText" value="Take your side for every conflict"/>
+            </Window>
+            <Window type="Gitgud/Button" name="MergeAllTheirsButton">
+                <Property name="Area" value="{{1,-374},{0,8},{1,-284},{1,-8}}"/>
+                <Property name="Text" value="All theirs"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="TooltipText" value="Take the incoming side for every conflict"/>
+            </Window>
+            <Window type="Gitgud/Button" name="MergeSaveButton">
+                <Property name="Area" value="{{1,-278},{0,7},{1,-110},{1,-7}}"/>
+                <Property name="Text" value="Save and mark resolved"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="NormalFillColour" value="FF7C93FF"/>
+                <Property name="HoverFillColour" value="FF93A4FF"/>
+                <Property name="DisabledFillColour" value="FF291F47"/>
+                <Property name="NormalTextColour" value="FF0E0A1A"/>
+                <Property name="HoverTextColour" value="FF0E0A1A"/>
+            </Window>
+            <Window type="Gitgud/Button" name="MergeCloseButton">
+                <Property name="Area" value="{{1,-104},{0,8},{1,-12},{1,-8}}"/>
+                <Property name="Text" value="Close"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="TooltipText" value="Leave the file as it is  (Escape)"/>
+            </Window>
+            <Window type="Gitgud/StaticText" name="MergeHeaderHairline">
+                <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+                <Property name="PanelColour" value="2EC4B5FD"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+        </Window>
+
+        <Window type="Gitgud/Label" name="MergeOursCaption">
+            <Property name="Area" value="{{0,14},{0,46},{0.5,-4},{0,70}}"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="Text" value="MINE (current branch)"/>
+            <Property name="NormalTextColour" value="FF7EF2D6"/>
+        </Window>
+        <Window type="Gitgud/Label" name="MergeTheirsCaption">
+            <Property name="Area" value="{{0.5,14},{0,46},{1,-4},{0,70}}"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="Text" value="THEIRS (incoming)"/>
+            <Property name="NormalTextColour" value="FFFF7EDB"/>
+        </Window>
+        <Window type="Gitgud/ListWidget" name="MergeOursList">
+            <Property name="Area" value="{{0,0},{0,70},{0.5,-1},{0.5,0}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="BgColour" value="FF17102B"/>
+            <Property name="BorderColour" value="FF17102B"/>
+            <Property name="SelectionColour" value="00000000"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="MergeSplitV">
+            <Property name="Area" value="{{0.5,-1},{0,46},{0.5,0},{0.5,0}}"/>
+            <Property name="PanelColour" value="2EC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/ListWidget" name="MergeTheirsList">
+            <Property name="Area" value="{{0.5,0},{0,70},{1,0},{0.5,0}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="BgColour" value="FF17102B"/>
+            <Property name="BorderColour" value="FF17102B"/>
+            <Property name="SelectionColour" value="00000000"/>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="MergeResultBar">
+            <Property name="Area" value="{{0,0},{0.5,0},{1,0},{0.5,30}}"/>
+            <Property name="PanelColour" value="FF1A1331"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Label" name="MergeResultCaption">
+                <Property name="Area" value="{{0,14},{0,0},{1,-200},{1,0}}"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="Text" value="RESULT"/>
+                <Property name="NormalTextColour" value="FFB7AED6"/>
+            </Window>
+            <Window type="Gitgud/Button" name="MergeEditButton">
+                <Property name="Area" value="{{1,-150},{0,3},{1,-12},{1,-3}}"/>
+                <Property name="Text" value="Edit result"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="TooltipText" value="Edit the merged text by hand"/>
+            </Window>
+        </Window>
+        <Window type="Gitgud/ListWidget" name="MergeOutputList">
+            <Property name="Area" value="{{0,0},{0.5,30},{1,0},{1,0}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="BgColour" value="FF0E0A1A"/>
+            <Property name="BorderColour" value="FF0E0A1A"/>
+            <Property name="SelectionColour" value="00000000"/>
+        </Window>
+        <Window type="Gitgud/MultiLineEditbox" name="MergeOutputEdit">
+            <Property name="Area" value="{{0,0},{0.5,30},{1,0},{1,0}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="MergeChoicePanel">
+            <Property name="Area" value="{{0,0},{0,44},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="FF17102B"/>
+            <Property name="Visible" value="false"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/StaticText" name="MergeChoiceText">
+                <Property name="Area" value="{{0.5,-260},{0.4,-60},{0.5,260},{0.4,0}}"/>
+                <Property name="PanelColour" value="00000000"/>
+                <Property name="HorzFormatting" value="WordWrapCentreAligned"/>
+                <Property name="TextColours" value="FFB7AED6"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/Button" name="MergeChoiceOurs">
+                <Property name="Area" value="{{0.5,-150},{0.4,10},{0.5,150},{0.4,46}}"/>
+                <Property name="Text" value="Keep mine"/>
+            </Window>
+            <Window type="Gitgud/Button" name="MergeChoiceTheirs">
+                <Property name="Area" value="{{0.5,-150},{0.4,54},{0.5,150},{0.4,90}}"/>
+                <Property name="Text" value="Take theirs"/>
+            </Window>
+        </Window>
+    </Window>
+</GUILayout>

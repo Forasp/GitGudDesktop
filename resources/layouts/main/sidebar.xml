@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  sidebar.xml - the left column: Changes / History tabs over their panels
+  (sidebar/changes.xml and sidebar/history.xml). The active tab gets a neon
+  underline (a Gitgud/Glow whose 8px-inset core is the 2px strip); Lua
+  toggles which bar and panel are visible.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="Sidebar">
+        <Property name="Area" value="{{0,0},{0,0},{0,320},{1,0}}"/>
+        <Property name="PanelColour" value="FF1F1738"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/Button" name="ChangesTab">
+            <Property name="Area" value="{{0,0},{0,0},{0.5,0},{0,40}}"/>
+            <Property name="Text" value="Changes"/>
+            <Property name="NormalFillColour" value="FF1F1738"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="PushedFillColour" value="FF1F1738"/>
+            <Property name="TooltipText" value="Uncommitted changes  (Ctrl+1)"/>
+        </Window>
+        <Window type="Gitgud/Button" name="HistoryTab">
+            <Property name="Area" value="{{0.5,0},{0,0},{1,0},{0,40}}"/>
+            <Property name="Text" value="History"/>
+            <Property name="NormalFillColour" value="FF1F1738"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="PushedFillColour" value="FF1F1738"/>
+            <Property name="NormalTextColour" value="FFB7AED6"/>
+            <Property name="TooltipText" value="Commit history  (Ctrl+2)"/>
+        </Window>
+        <Window type="Gitgud/Glow" name="ChangesTabBar">
+            <Property name="Area" value="{{0,4},{0,30},{0.5,-4},{0,48}}"/>
+            <Property name="CoreColour" value="FF7C93FF"/>
+            <Property name="GlowColour" value="907C93FF"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+        </Window>
+        <Window type="Gitgud/Glow" name="HistoryTabBar">
+            <Property name="Area" value="{{0.5,4},{0,30},{1,-4},{0,48}}"/>
+            <Property name="CoreColour" value="FF7C93FF"/>
+            <Property name="GlowColour" value="907C93FF"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="TabHairline">
+            <Property name="Area" value="{{0,0},{0,40},{1,0},{0,41}}"/>
+            <Property name="PanelColour" value="1FC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <LayoutImport filename="sidebar/changes.xml"/>
+        <LayoutImport filename="sidebar/history.xml"/>
+
+        <!-- 1px border between the sidebar and the content pane -->
+        <Window type="Gitgud/StaticText" name="SidebarBorder">
+            <Property name="Area" value="{{1,-1},{0,0},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="2EC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

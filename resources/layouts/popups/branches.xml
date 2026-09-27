@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  branches.xml - the "Current branch" dropdown. In its normal mode picking a
+  branch switches to it; "Merge into current…" and "Rebase current…" put it
+  into a pick-a-branch mode for that operation (the title says which).
+  Right-click a branch for rename / delete / merge / squash / rebase /
+  compare / branch-from. scripts/views/branches.lua drives it.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="BranchPopup">
+        <Property name="Area" value="{{0,289},{0,88},{0,709},{0,600}}"/>
+        <Property name="PanelColour" value="FF1F1738"/>
+        <Property name="FrameEnabled" value="true"/>
+        <Property name="AlwaysOnTop" value="true"/>
+        <Property name="Visible" value="false"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/Label" name="BranchPopupTitle">
+            <Property name="Area" value="{{0,16},{0,8},{1,-140},{0,36}}"/>
+            <Property name="Text" value="Branches"/>
+            <Property name="Font" value="Gitgud-UI-Bold"/>
+        </Window>
+        <Window type="Gitgud/Button" name="NewBranchButton">
+            <Property name="Area" value="{{1,-130},{0,9},{1,-10},{0,35}}"/>
+            <Property name="Text" value="New branch"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="TooltipText" value="Create a branch from the current one  (Ctrl+Shift+N)"/>
+        </Window>
+
+        <Window type="Gitgud/Editbox" name="BranchFilterEdit">
+            <Property name="Area" value="{{0,10},{0,42},{1,-10},{0,70}}"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Label" name="BranchFilterPlaceholder">
+            <Property name="Area" value="{{0,20},{0,42},{1,-44},{0,70}}"/>
+            <Property name="Text" value="Filter branches"/>
+            <Property name="NormalTextColour" value="FF766A9C"/>
+        </Window>
+        <Window type="Gitgud/Icon" name="BranchFilterIcon">
+            <Property name="Area" value="{{1,-38},{0,46},{1,-18},{0,66}}"/>
+            <Property name="IconImage" value="Gitgud-Images/IconSearch"/>
+            <Property name="IconColour" value="FF766A9C"/>
+            <Property name="GlowColour" value="00000000"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+        </Window>
+
+        <Window type="Gitgud/ListWidget" name="BranchList">
+            <Property name="Area" value="{{0,2},{0,78},{1,-2},{1,-50}}"/>
+            <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+            <Property name="BgColour" value="FF1F1738"/>
+            <Property name="BorderColour" value="FF1F1738"/>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="BranchActionsHairline">
+            <Property name="Area" value="{{0,0},{1,-48},{1,0},{1,-47}}"/>
+            <Property name="PanelColour" value="2EC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Button" name="MergeIntoButton">
+            <Property name="Area" value="{{0,10},{1,-40},{0.5,-4},{1,-10}}"/>
+            <Property name="Text" value="Merge into current…"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+        </Window>
+        <Window type="Gitgud/Button" name="RebaseOntoButton">
+            <Property name="Area" value="{{0.5,4},{1,-40},{1,-10},{1,-10}}"/>
+            <Property name="Text" value="Rebase current…"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+        </Window>
+    </Window>
+</GUILayout>

@@ -1,0 +1,35 @@
+# Gitgud Desktop naming convention (Hungarian notation) — applied via
+# readability-identifier-naming. Run over src/ only (see -header-filter).
+Checks: '-*,readability-identifier-naming'
+HeaderFilterRegex: '.*[/\\]src[/\\].*'
+CheckOptions:
+  # 1) Globals: g_ + Hungarian type letter
+  readability-identifier-naming.GlobalVariableCase: CamelCase
+  readability-identifier-naming.GlobalVariablePrefix: g_
+  readability-identifier-naming.GlobalVariableHungarianPrefix: 'On'
+
+  # 2/3) Members: m_ + Hungarian type letter
+  readability-identifier-naming.MemberCase: CamelCase
+  readability-identifier-naming.MemberPrefix: m_
+  readability-identifier-naming.MemberHungarianPrefix: 'On'
+
+  # 4) Function parameters: _ + Hungarian type letter
+  readability-identifier-naming.ParameterCase: CamelCase
+  readability-identifier-naming.ParameterPrefix: _
+  readability-identifier-naming.ParameterHungarianPrefix: 'On'
+
+  # 5) Locals: camelCase with Hungarian type letter, no prefix
+  readability-identifier-naming.LocalVariableCase: camelBack
+  readability-identifier-naming.LocalVariableHungarianPrefix: 'On'
+  readability-identifier-naming.LocalConstantCase: camelBack
+  readability-identifier-naming.LocalConstantHungarianPrefix: 'On'
+
+  # 7) Functions are PascalCase
+  readability-identifier-naming.FunctionCase: CamelCase
+  readability-identifier-naming.MethodCase: CamelCase
+
+  # Common type-letter overrides / user-defined types
+  readability-identifier-naming.HungarianNotation.PrimitiveType.int: i
+  readability-identifier-naming.HungarianNotation.PrimitiveType.bool: b
+  readability-identifier-naming.HungarianNotation.UserDefinedType.std::string: s
+  readability-identifier-naming.HungarianNotation.UserDefinedType.string: s

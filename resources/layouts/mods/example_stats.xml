@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  example_stats.xml - layout for the example mod (scripts/mods/
+  example_stats.lua). Not imported by main.xml: the mod attaches it at
+  runtime (its module sets `layout = "mods/example_stats.xml"`), which is
+  how your own features add widgets without editing the built-in layouts.
+  Widget names share one namespace with the rest of the UI, so prefix them.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="StatsPanel">
+        <Property name="Area" value="{{0.5,-190},{0.5,-130},{0.5,190},{0.5,130}}"/>
+        <Property name="PanelColour" value="FF1F1738"/>
+        <Property name="FrameEnabled" value="true"/>
+        <Property name="AlwaysOnTop" value="true"/>
+        <Property name="Visible" value="false"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/Label" name="StatsTitle">
+            <Property name="Area" value="{{0,22},{0,16},{1,-22},{0,44}}"/>
+            <Property name="Font" value="Gitgud-UI-Title"/>
+            <Property name="Text" value="Repository statistics"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="StatsBody">
+            <Property name="Area" value="{{0,22},{0,52},{1,-22},{1,-64}}"/>
+            <Property name="PanelColour" value="00000000"/>
+            <Property name="VertFormatting" value="TopAligned"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Button" name="StatsCloseButton">
+            <Property name="Area" value="{{1,-122},{1,-48},{1,-22},{1,-16}}"/>
+            <Property name="Text" value="Close"/>
+        </Window>
+    </Window>
+</GUILayout>

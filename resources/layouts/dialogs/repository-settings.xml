@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  repository-settings.xml - per-repository settings: the origin remote, the
+  .gitignore file, and an optional commit identity for just this repository.
+  scripts/views/settings.lua fills it and saves it.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="RepoSettingsDialog">
+        <Property name="Area" value="{{0.5,-300},{0.5,-270},{0.5,300},{0.5,270}}"/>
+        <Property name="PanelColour" value="FF1F1738"/>
+        <Property name="FrameEnabled" value="true"/>
+        <Property name="AlwaysOnTop" value="true"/>
+        <Property name="Visible" value="false"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/Label" name="RepoSettingsTitle">
+            <Property name="Area" value="{{0,22},{0,16},{1,-22},{0,44}}"/>
+            <Property name="Font" value="Gitgud-UI-Title"/>
+            <Property name="Text" value="Repository settings"/>
+        </Window>
+
+        <Window type="Gitgud/Label" name="RepoSettingsRemoteLabel">
+            <Property name="Area" value="{{0,22},{0,56},{1,-22},{0,76}}"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="Text" value="Primary remote (origin) URL"/>
+            <Property name="NormalTextColour" value="FFB7AED6"/>
+        </Window>
+        <Window type="Gitgud/Editbox" name="RepoSettingsRemoteEdit">
+            <Property name="Area" value="{{0,22},{0,78},{1,-22},{0,110}}"/>
+        </Window>
+
+        <Window type="Gitgud/Label" name="RepoSettingsNameLabel">
+            <Property name="Area" value="{{0,22},{0,120},{0.5,-6},{0,140}}"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="Text" value="Name for this repository (optional)"/>
+            <Property name="NormalTextColour" value="FFB7AED6"/>
+        </Window>
+        <Window type="Gitgud/Editbox" name="RepoSettingsNameEdit">
+            <Property name="Area" value="{{0,22},{0,142},{0.5,-6},{0,174}}"/>
+        </Window>
+        <Window type="Gitgud/Label" name="RepoSettingsEmailLabel">
+            <Property name="Area" value="{{0.5,6},{0,120},{1,-22},{0,140}}"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="Text" value="Email for this repository (optional)"/>
+            <Property name="NormalTextColour" value="FFB7AED6"/>
+        </Window>
+        <Window type="Gitgud/Editbox" name="RepoSettingsEmailEdit">
+            <Property name="Area" value="{{0.5,6},{0,142},{1,-22},{0,174}}"/>
+        </Window>
+
+        <Window type="Gitgud/Label" name="RepoSettingsIgnoreLabel">
+            <Property name="Area" value="{{0,22},{0,186},{1,-22},{0,206}}"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="Text" value="Ignored files (.gitignore)"/>
+            <Property name="NormalTextColour" value="FFB7AED6"/>
+        </Window>
+        <Window type="Gitgud/MultiLineEditbox" name="RepoSettingsIgnoreEdit">
+            <Property name="Area" value="{{0,22},{0,208},{1,-22},{1,-74}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="RepoSettingsHairline">
+            <Property name="Area" value="{{0,0},{1,-61},{1,0},{1,-60}}"/>
+            <Property name="PanelColour" value="1FC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Button" name="RepoSettingsCancelButton">
+            <Property name="Area" value="{{1,-262},{1,-46},{1,-146},{1,-14}}"/>
+            <Property name="Text" value="Cancel"/>
+        </Window>
+        <Window type="Gitgud/Button" name="RepoSettingsSaveButton">
+            <Property name="Area" value="{{1,-138},{1,-46},{1,-22},{1,-14}}"/>
+            <Property name="Text" value="Save"/>
+            <Property name="NormalFillColour" value="FF7C93FF"/>
+            <Property name="HoverFillColour" value="FF93A4FF"/>
+            <Property name="PushedFillColour" value="FF6F84E6"/>
+            <Property name="NormalTextColour" value="FF0E0A1A"/>
+            <Property name="HoverTextColour" value="FF0E0A1A"/>
+            <Property name="PushedTextColour" value="FF0E0A1A"/>
+            <Property name="BorderColour" value="FF93A4FF"/>
+            <Property name="Font" value="Gitgud-UI-Bold"/>
+        </Window>
+    </Window>
+</GUILayout>

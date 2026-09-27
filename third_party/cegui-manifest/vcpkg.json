@@ -1,0 +1,12 @@
+{
+  "name": "cegui-build-deps",
+  "version": "0.0.0",
+  "$comment": "Standalone vcpkg manifest used only to configure the third_party/cegui build (see docs/BUILDING.md). Kept separate from the root vcpkg.json so building CEGUI doesn't also rebuild sdl2/libgit2/lua/catch2 in a second vcpkg_installed tree.",
+  "dependencies": [
+    "glm",
+    "glew",
+    "pugixml",
+    "freetype"
+  ],
+  "builtin-baseline": "1f5e0348089e8a9b187f57d42866ebc871e815da"
+}

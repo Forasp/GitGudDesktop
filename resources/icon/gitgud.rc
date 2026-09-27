@@ -1,0 +1,4 @@
+// Embeds the app icon into gitgud.exe (Explorer, taskbar pins, Alt-Tab).
+// ID 1 = the exe's first icon, which Windows shows by default. The running
+// window's icon is also set at runtime via SDL_SetWindowIcon (main.cpp).
+1 ICON "gitgud.ico"

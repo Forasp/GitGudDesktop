@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GitgudLogo.xml (imageset) — the Jera-rune brand mark (user-provided art, square
+  crop, generated from resources/icon/gitgud-mark.jpg by make-icons.ps1).
+  Per the design kit's brand rules it appears ONLY at favicon scale in the
+  title bar (and as the app icon); in-app chrome otherwise stays plain type.
+-->
+<Imageset version="2" name="Gitgud-Logo" imagefile="GitgudLogo.png"
+          resourceGroup="gitgud-imagesets" autoScaled="false"
+          nativeHorzRes="1280" nativeVertRes="720">
+    <Image name="Mark" xPos="0" yPos="0" width="64" height="64"/>
+</Imageset>

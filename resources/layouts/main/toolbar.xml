@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  toolbar.xml - the three full-height toolbar controls, GitHub Desktop
+  style: current repository | current branch | fetch / push / pull, then a
+  group of quick actions: undo / redo, the commit graph, the console, and
+  the command palette.
+
+  Each control is a borderless button with an icon, a small-caps label, a
+  bold value, and (for the two dropdowns) a chevron. The layout owns the
+  labels; scripts/views/toolbar.lua fills the *Value labels and swaps the
+  sync icon between fetch / push / pull.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="Toolbar">
+        <Property name="Area" value="{{0,0},{0,32},{1,0},{0,88}}"/>
+        <Property name="PanelColour" value="FF17102B"/>
+        <Property name="Text" value=""/>
+
+        <!-- ================= current repository ================= -->
+        <Window type="Gitgud/Button" name="RepoButton">
+            <Property name="Area" value="{{0,0},{0,0},{0,288},{1,-1}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="FF17102B"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="PushedFillColour" value="FF0E0A1A"/>
+            <Property name="TooltipText" value="Switch, add, clone, or create a repository  (Ctrl+T)"/>
+            <Window type="Gitgud/Icon" name="RepoIcon">
+                <Property name="Area" value="{{0,14},{0.5,-10},{0,34},{0.5,10}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconRepo"/>
+            </Window>
+            <Window type="Gitgud/Label" name="RepoLabel">
+                <Property name="Area" value="{{0,46},{0,9},{1,-30},{0,24}}"/>
+                <Property name="Text" value="CURRENT REPOSITORY"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="NormalTextColour" value="FF766A9C"/>
+            </Window>
+            <Window type="Gitgud/Label" name="RepoValue">
+                <Property name="Area" value="{{0,46},{0,24},{1,-30},{1,-8}}"/>
+                <Property name="Text" value=""/>
+                <Property name="Font" value="Gitgud-UI-Bold"/>
+            </Window>
+            <Window type="Gitgud/Icon" name="RepoChevron">
+                <Property name="Area" value="{{1,-26},{0.5,-4},{1,-14},{0.5,4}}"/>
+                <Property name="IconImage" value="Gitgud-Images/Chevron"/>
+                <Property name="IconColour" value="FF766A9C"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+        <Window type="Gitgud/StaticText" name="ToolbarDivider1">
+            <Property name="Area" value="{{0,288},{0,0},{0,289},{1,-1}}"/>
+            <Property name="PanelColour" value="2EC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <!-- ==================== current branch ==================== -->
+        <Window type="Gitgud/Button" name="BranchButton">
+            <Property name="Area" value="{{0,289},{0,0},{0,577},{1,-1}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="FF17102B"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="PushedFillColour" value="FF0E0A1A"/>
+            <Property name="TooltipText" value="Switch, create, merge, or rebase branches  (Ctrl+B)"/>
+            <Window type="Gitgud/Icon" name="BranchIcon">
+                <Property name="Area" value="{{0,14},{0.5,-10},{0,34},{0.5,10}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconBranch"/>
+            </Window>
+            <Window type="Gitgud/Label" name="BranchLabel">
+                <Property name="Area" value="{{0,46},{0,9},{1,-30},{0,24}}"/>
+                <Property name="Text" value="CURRENT BRANCH"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="NormalTextColour" value="FF766A9C"/>
+            </Window>
+            <Window type="Gitgud/Label" name="BranchValue">
+                <Property name="Area" value="{{0,46},{0,24},{1,-30},{1,-8}}"/>
+                <Property name="Text" value=""/>
+                <Property name="Font" value="Gitgud-UI-Bold"/>
+            </Window>
+            <Window type="Gitgud/Icon" name="BranchChevron">
+                <Property name="Area" value="{{1,-26},{0.5,-4},{1,-14},{0.5,4}}"/>
+                <Property name="IconImage" value="Gitgud-Images/Chevron"/>
+                <Property name="IconColour" value="FF766A9C"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+        <Window type="Gitgud/StaticText" name="ToolbarDivider2">
+            <Property name="Area" value="{{0,577},{0,0},{0,578},{1,-1}}"/>
+            <Property name="PanelColour" value="2EC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <!-- ================= fetch / push / pull ================== -->
+        <Window type="Gitgud/Button" name="SyncButton">
+            <Property name="Area" value="{{0,578},{0,0},{0,826},{1,-1}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="FF17102B"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="PushedFillColour" value="FF0E0A1A"/>
+            <Property name="TooltipText" value="Fetch, then push or pull as needed  (Ctrl+Shift+T)"/>
+            <Window type="Gitgud/Icon" name="SyncIcon">
+                <Property name="Area" value="{{0,14},{0.5,-10},{0,34},{0.5,10}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconSync"/>
+            </Window>
+            <Window type="Gitgud/Label" name="SyncLabel">
+                <Property name="Area" value="{{0,46},{0,9},{1,-12},{0,24}}"/>
+                <Property name="Text" value="FETCH ORIGIN"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="NormalTextColour" value="FF766A9C"/>
+            </Window>
+            <Window type="Gitgud/Label" name="SyncValue">
+                <Property name="Area" value="{{0,46},{0,24},{1,-12},{1,-8}}"/>
+                <Property name="Text" value=""/>
+                <Property name="Font" value="Gitgud-UI-Bold"/>
+            </Window>
+        </Window>
+        <Window type="Gitgud/StaticText" name="ToolbarDivider3">
+            <Property name="Area" value="{{0,826},{0,0},{0,827},{1,-1}}"/>
+            <Property name="PanelColour" value="2EC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <!-- ======== tools: undo / redo | graph, console, commands ========
+             GitKraken-style quick actions (scripts/views/toolbar.lua). -->
+        <Window type="Gitgud/Button" name="UndoButton">
+            <Property name="Area" value="{{0,830},{0,0},{0,888},{1,-1}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="FF17102B"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="PushedFillColour" value="FF0E0A1A"/>
+            <Property name="TooltipText" value="Undo the last action  (Ctrl+Z)"/>
+            <Window type="Gitgud/Icon" name="UndoButtonIcon">
+                <Property name="Area" value="{{0.5,-10},{0,8},{0.5,10},{0,28}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconUndo"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="UndoButtonLabel">
+                <Property name="Area" value="{{0,0},{0,31},{1,0},{1,-6}}"/>
+                <Property name="Text" value="Undo"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="NormalTextColour" value="FFB7AED6"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+        <Window type="Gitgud/Button" name="RedoButton">
+            <Property name="Area" value="{{0,888},{0,0},{0,946},{1,-1}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="FF17102B"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="PushedFillColour" value="FF0E0A1A"/>
+            <Property name="TooltipText" value="Redo  (Ctrl+Shift+Z)"/>
+            <Window type="Gitgud/Icon" name="RedoButtonIcon">
+                <Property name="Area" value="{{0.5,-10},{0,8},{0.5,10},{0,28}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconRedo"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="RedoButtonLabel">
+                <Property name="Area" value="{{0,0},{0,31},{1,0},{1,-6}}"/>
+                <Property name="Text" value="Redo"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="NormalTextColour" value="FFB7AED6"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+        <Window type="Gitgud/StaticText" name="ToolbarDivider4">
+            <Property name="Area" value="{{0,948},{0,10},{0,949},{1,-11}}"/>
+            <Property name="PanelColour" value="2EC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Button" name="GraphButton">
+            <Property name="Area" value="{{0,952},{0,0},{0,1010},{1,-1}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="FF17102B"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="PushedFillColour" value="FF0E0A1A"/>
+            <Property name="TooltipText" value="Show the commit graph  (Ctrl+3)"/>
+            <Window type="Gitgud/Icon" name="GraphButtonIcon">
+                <Property name="Area" value="{{0.5,-10},{0,8},{0.5,10},{0,28}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconGraph"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="GraphButtonLabel">
+                <Property name="Area" value="{{0,0},{0,31},{1,0},{1,-6}}"/>
+                <Property name="Text" value="Graph"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="NormalTextColour" value="FFB7AED6"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+        <Window type="Gitgud/Button" name="ConsoleButton">
+            <Property name="Area" value="{{0,1010},{0,0},{0,1068},{1,-1}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="FF17102B"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="PushedFillColour" value="FF0E0A1A"/>
+            <Property name="TooltipText" value="Show the console  (Ctrl+J)"/>
+            <Window type="Gitgud/Icon" name="ConsoleButtonIcon">
+                <Property name="Area" value="{{0.5,-10},{0,8},{0.5,10},{0,28}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconTerminal"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="ConsoleButtonLabel">
+                <Property name="Area" value="{{0,0},{0,31},{1,0},{1,-6}}"/>
+                <Property name="Text" value="Console"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="NormalTextColour" value="FFB7AED6"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+        <Window type="Gitgud/Button" name="PaletteButton">
+            <Property name="Area" value="{{0,1068},{0,0},{0,1126},{1,-1}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="FF17102B"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="PushedFillColour" value="FF0E0A1A"/>
+            <Property name="TooltipText" value="Search every command  (Ctrl+K)"/>
+            <Window type="Gitgud/Icon" name="PaletteButtonIcon">
+                <Property name="Area" value="{{0.5,-10},{0,8},{0.5,10},{0,28}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconCommand"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="PaletteButtonLabel">
+                <Property name="Area" value="{{0,0},{0,31},{1,0},{1,-6}}"/>
+                <Property name="Text" value="Commands"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="NormalTextColour" value="FFB7AED6"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="ToolbarHairline">
+            <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="2EC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

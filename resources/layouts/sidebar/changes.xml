@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  changes.xml - the Changes tab: filter box, "include all" checkbox, the file
+  rows, the stash / undo info rows, and the commit box.
+
+  scripts/views/changes.lua fills ChangesList (one row per changed file).
+  Placeholder labels (the grey hint text inside empty editboxes) are
+  shown/hidden by scripts/ui/placeholder.lua.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="ChangesPanel">
+        <Property name="Area" value="{{0,0},{0,41},{1,0},{1,0}}"/>
+
+        <!-- ======================== filter ======================== -->
+        <Window type="Gitgud/Editbox" name="ChangesFilterEdit">
+            <Property name="Area" value="{{0,10},{0,9},{1,-10},{0,37}}"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Label" name="ChangesFilterPlaceholder">
+            <Property name="Area" value="{{0,20},{0,9},{1,-44},{0,37}}"/>
+            <Property name="Text" value="Filter changed files"/>
+            <Property name="NormalTextColour" value="FF766A9C"/>
+        </Window>
+        <Window type="Gitgud/Icon" name="ChangesFilterIcon">
+            <Property name="Area" value="{{1,-38},{0,13},{1,-18},{0,33}}"/>
+            <Property name="IconImage" value="Gitgud-Images/IconSearch"/>
+            <Property name="IconColour" value="FF766A9C"/>
+            <Property name="GlowColour" value="00000000"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+        </Window>
+
+        <Window type="Gitgud/Checkbox" name="IncludeAllCheck">
+            <Property name="Area" value="{{0,2},{0,42},{1,-10},{0,74}}"/>
+            <Property name="Text" value="0 changed files"/>
+            <Property name="TooltipText" value="Include or exclude every file"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="IncludeAllHairline">
+            <Property name="Area" value="{{0,0},{0,75},{1,0},{0,76}}"/>
+            <Property name="PanelColour" value="1FC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <!-- ======================= file rows =======================
+             One list row per changed file: include box, status letter,
+             name, dimmed folder. The box is an inline sprite; clicks in
+             its column toggle inclusion, clicks elsewhere select the file
+             (scripts/views/changes.lua). A plain list stays fast with
+             thousands of files. -->
+        <Window type="Gitgud/ListWidget" name="ChangesList">
+            <Property name="Area" value="{{0,0},{0,76},{1,0},{1,-212}}"/>
+            <Property name="BgColour" value="FF1F1738"/>
+            <Property name="BorderColour" value="FF1F1738"/>
+            <Property name="SelectionColour" value="FF291F47"/>
+            <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+        </Window>
+        <Window type="Gitgud/Label" name="ChangesEmptyLabel">
+            <Property name="Area" value="{{0,16},{0,84},{1,-16},{0,112}}"/>
+            <Property name="Text" value=""/>
+            <Property name="HorzFormatting" value="CentreAligned"/>
+            <Property name="NormalTextColour" value="FF766A9C"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+
+        <!-- ====== info rows (Lua stacks the visible ones) ======
+             StashRow: this branch has stashed changes; UndoRow: undo the
+             commit you just made. -->
+        <Window type="Gitgud/StaticText" name="StashRow">
+            <Property name="Area" value="{{0,0},{1,-248},{1,0},{1,-212}}"/>
+            <Property name="PanelColour" value="FF241B40"/>
+            <Property name="Visible" value="false"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Label" name="StashRowText">
+                <Property name="Area" value="{{0,14},{0,0},{1,-110},{1,0}}"/>
+                <Property name="Text" value="Stashed changes"/>
+            </Window>
+            <Window type="Gitgud/Button" name="StashRowButton">
+                <Property name="Area" value="{{1,-104},{0,5},{1,-10},{1,-5}}"/>
+                <Property name="Text" value="View"/>
+            </Window>
+        </Window>
+        <Window type="Gitgud/StaticText" name="UndoRow">
+            <Property name="Area" value="{{0,0},{1,-248},{1,0},{1,-212}}"/>
+            <Property name="PanelColour" value="FF241B40"/>
+            <Property name="Visible" value="false"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Label" name="UndoRowText">
+                <Property name="Area" value="{{0,14},{0,0},{1,-110},{1,0}}"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/Button" name="UndoRowButton">
+                <Property name="Area" value="{{1,-104},{0,5},{1,-10},{1,-5}}"/>
+                <Property name="Text" value="Undo"/>
+                <Property name="TooltipText" value="Undo the last commit, keeping its changes"/>
+            </Window>
+        </Window>
+
+        <!-- ======================= commit box ======================= -->
+        <Window type="DefaultWindow" name="CommitBox">
+            <Property name="Area" value="{{0,0},{1,-212},{1,0},{1,0}}"/>
+
+            <Window type="Gitgud/StaticText" name="CommitBoxHairline">
+                <Property name="Area" value="{{0,0},{0,0},{1,0},{0,1}}"/>
+                <Property name="PanelColour" value="2EC4B5FD"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+
+            <Window type="Gitgud/Editbox" name="SummaryEdit">
+                <Property name="Area" value="{{0,12},{0,12},{1,-12},{0,44}}"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/Label" name="SummaryPlaceholder">
+                <Property name="Area" value="{{0,22},{0,12},{1,-60},{0,44}}"/>
+                <Property name="Text" value="Summary (required)"/>
+                <Property name="NormalTextColour" value="FF766A9C"/>
+            </Window>
+            <!-- Characters left before GitHub-style 50-char summaries wrap in
+                 most tools; turns yellow then red as it runs out. -->
+            <Window type="Gitgud/Label" name="SummaryCount">
+                <Property name="Area" value="{{1,-58},{0,12},{1,-22},{0,44}}"/>
+                <Property name="Text" value=""/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="HorzFormatting" value="RightAligned"/>
+                <Property name="NormalTextColour" value="FF766A9C"/>
+            </Window>
+
+            <Window type="Gitgud/MultiLineEditbox" name="DescriptionEdit">
+                <Property name="Area" value="{{0,12},{0,50},{1,-12},{0,124}}"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/Label" name="DescriptionPlaceholder">
+                <Property name="Area" value="{{0,22},{0,54},{1,-24},{0,76}}"/>
+                <Property name="Text" value="Description"/>
+                <Property name="NormalTextColour" value="FF766A9C"/>
+            </Window>
+
+            <Window type="Gitgud/Checkbox" name="AmendCheck">
+                <Property name="Area" value="{{0,4},{0,128},{0.5,0},{0,158}}"/>
+                <Property name="Text" value="Amend last commit"/>
+                <Property name="TooltipText" value="Fold these changes into the previous commit"/>
+            </Window>
+            <Window type="Gitgud/Button" name="CoAuthorButton">
+                <Property name="Area" value="{{0.5,4},{0,130},{1,-12},{0,156}}"/>
+                <Property name="Text" value="+ Co-author"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="NormalFillColour" value="FF1F1738"/>
+                <Property name="HoverFillColour" value="FF291F47"/>
+                <Property name="NormalTextColour" value="FFB7AED6"/>
+                <Property name="TooltipText" value="Add a Co-authored-by trailer"/>
+            </Window>
+
+            <!-- Neon halo behind the primary CTA (design --glow-blue); Lua
+                 shows it only while the button is enabled. -->
+            <Window type="Gitgud/Glow" name="CommitGlow">
+                <Property name="Area" value="{{0,4},{0,158},{1,-4},{0,210}}"/>
+                <Property name="GlowColour" value="907C93FF"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Button" name="CommitButton">
+                <Property name="Area" value="{{0,12},{0,166},{1,-12},{0,202}}"/>
+                <Property name="Text" value="Commit to main"/>
+                <Property name="NormalFillColour" value="FF7C93FF"/>
+                <Property name="HoverFillColour" value="FF93A4FF"/>
+                <Property name="PushedFillColour" value="FF6F84E6"/>
+                <Property name="DisabledFillColour" value="FF291F47"/>
+                <Property name="NormalTextColour" value="FF0E0A1A"/>
+                <Property name="HoverTextColour" value="FF0E0A1A"/>
+                <Property name="PushedTextColour" value="FF0E0A1A"/>
+                <Property name="BorderColour" value="FF93A4FF"/>
+                <Property name="Font" value="Gitgud-UI-Bold"/>
+                <Property name="TooltipText" value="Commit the included changes  (Ctrl+Enter)"/>
+            </Window>
+        </Window>
+    </Window>
+</GUILayout>

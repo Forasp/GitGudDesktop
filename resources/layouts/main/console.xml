@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  console.xml - the console docked along the bottom (View > Console, Ctrl+J,
+  or the Console button on the toolbar). Type a command and press Enter: it
+  runs through the system shell in the repository folder and its output
+  streams into ConsoleList. Up/Down recall earlier commands; Stop cancels the
+  running one. scripts/views/console.lua drives it.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="ConsolePane">
+        <Property name="Area" value="{{0,0},{1,-230},{1,0},{1,0}}"/>
+        <Property name="PanelColour" value="FF0E0A1A"/>
+        <Property name="Visible" value="false"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/StaticText" name="ConsoleTopHairline">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,1}}"/>
+            <Property name="PanelColour" value="52C4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Label" name="ConsoleTitle">
+            <Property name="Area" value="{{0,14},{0,1},{0,100},{0,31}}"/>
+            <Property name="Font" value="Gitgud-UI-Bold"/>
+            <Property name="Text" value="Console"/>
+        </Window>
+        <Window type="Gitgud/Label" name="ConsoleCwdLabel">
+            <Property name="Area" value="{{0,100},{0,1},{1,-300},{0,31}}"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalTextColour" value="FF766A9C"/>
+        </Window>
+        <Window type="Gitgud/Button" name="ConsoleStopButton">
+            <Property name="Area" value="{{1,-286},{0,5},{1,-206},{0,27}}"/>
+            <Property name="Text" value="Stop"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="TooltipText" value="Cancel the running command"/>
+        </Window>
+        <Window type="Gitgud/Button" name="ConsoleClearButton">
+            <Property name="Area" value="{{1,-200},{0,5},{1,-120},{0,27}}"/>
+            <Property name="Text" value="Clear"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+        </Window>
+        <Window type="Gitgud/Button" name="ConsoleCloseButton">
+            <Property name="Area" value="{{1,-114},{0,5},{1,-12},{0,27}}"/>
+            <Property name="Text" value="Hide"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="TooltipText" value="Hide the console  (Ctrl+J)"/>
+        </Window>
+
+        <Window type="Gitgud/ListWidget" name="ConsoleList">
+            <Property name="Area" value="{{0,0},{0,32},{1,0},{1,-40}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="BgColour" value="FF0E0A1A"/>
+            <Property name="BorderColour" value="FF0E0A1A"/>
+            <Property name="SelectionColour" value="FF291F47"/>
+        </Window>
+
+        <Window type="Gitgud/Label" name="ConsolePrompt">
+            <Property name="Area" value="{{0,12},{1,-38},{0,28},{1,-6}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="Text" value="&gt;"/>
+            <Property name="NormalTextColour" value="FF7EF2D6"/>
+        </Window>
+        <Window type="Gitgud/Editbox" name="ConsoleInputEdit">
+            <Property name="Area" value="{{0,30},{1,-38},{1,-96},{1,-6}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Label" name="ConsoleInputPlaceholder">
+            <Property name="Area" value="{{0,40},{1,-38},{1,-130},{1,-6}}"/>
+            <Property name="Text" value="Type a command (git status, git lfs pull, …) and press Enter"/>
+            <Property name="NormalTextColour" value="FF4D4470"/>
+        </Window>
+        <Window type="Gitgud/Button" name="ConsoleRunButton">
+            <Property name="Area" value="{{1,-90},{1,-38},{1,-12},{1,-6}}"/>
+            <Property name="Text" value="Run"/>
+        </Window>
+    </Window>
+</GUILayout>

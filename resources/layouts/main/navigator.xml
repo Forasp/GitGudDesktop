@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  navigator.xml - the branch tree on the far left (GitKraken's left panel):
+  collapsible sections for local and remote branches, tags, stashes,
+  submodules, and worktrees, all in one list (NavList) filled by
+  scripts/views/navigator.lua. Click to select, double-click to check out,
+  right-click for actions, drag a branch onto another to merge or rebase.
+  View > Branch tree (Ctrl+Shift+L) shows or hides it.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="Navigator">
+        <Property name="Area" value="{{0,0},{0,0},{0,236},{1,0}}"/>
+        <Property name="PanelColour" value="FF1A1331"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/Editbox" name="NavFilterEdit">
+            <Property name="Area" value="{{0,8},{0,8},{1,-8},{0,36}}"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Label" name="NavFilterPlaceholder">
+            <Property name="Area" value="{{0,18},{0,8},{1,-40},{0,36}}"/>
+            <Property name="Text" value="Filter branches, tags, …"/>
+            <Property name="NormalTextColour" value="FF766A9C"/>
+        </Window>
+        <Window type="Gitgud/Icon" name="NavFilterIcon">
+            <Property name="Area" value="{{1,-34},{0,12},{1,-14},{0,32}}"/>
+            <Property name="IconImage" value="Gitgud-Images/IconSearch"/>
+            <Property name="IconColour" value="FF766A9C"/>
+            <Property name="GlowColour" value="00000000"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="NavHairline">
+            <Property name="Area" value="{{0,0},{0,44},{1,0},{0,45}}"/>
+            <Property name="PanelColour" value="1FC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <Window type="Gitgud/ListWidget" name="NavList">
+            <Property name="Area" value="{{0,0},{0,45},{1,-1},{1,0}}"/>
+            <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+            <Property name="BgColour" value="FF1A1331"/>
+            <Property name="BorderColour" value="FF1A1331"/>
+            <Property name="SelectionColour" value="FF291F47"/>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="NavigatorBorder">
+            <Property name="Area" value="{{1,-1},{0,0},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="2EC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

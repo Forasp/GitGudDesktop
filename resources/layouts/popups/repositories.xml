@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  repositories.xml - the "Current repository" dropdown: a filterable list of
+  repositories you've added, plus "Add" (clone / create / add existing).
+  Right-click a repository to reveal it, open a terminal, or remove it from
+  the list. scripts/views/repositories.lua drives it.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="RepoPopup">
+        <Property name="Area" value="{{0,0},{0,88},{0,380},{0,572}}"/>
+        <Property name="PanelColour" value="FF1F1738"/>
+        <Property name="FrameEnabled" value="true"/>
+        <Property name="AlwaysOnTop" value="true"/>
+        <Property name="Visible" value="false"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/Label" name="RepoPopupTitle">
+            <Property name="Area" value="{{0,16},{0,8},{1,-120},{0,36}}"/>
+            <Property name="Text" value="Repositories"/>
+            <Property name="Font" value="Gitgud-UI-Bold"/>
+        </Window>
+        <Window type="Gitgud/Button" name="AddRepoButton">
+            <Property name="Area" value="{{1,-110},{0,9},{1,-10},{0,35}}"/>
+            <Property name="Text" value="Add  [colour='FFB7AED6'][image-size='w:12 h:8'][image='Gitgud-Images/Chevron']"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="TooltipText" value="Clone, create, or add an existing repository"/>
+        </Window>
+
+        <Window type="Gitgud/Editbox" name="RepoFilterEdit">
+            <Property name="Area" value="{{0,10},{0,42},{1,-10},{0,70}}"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Label" name="RepoFilterPlaceholder">
+            <Property name="Area" value="{{0,20},{0,42},{1,-44},{0,70}}"/>
+            <Property name="Text" value="Filter repositories"/>
+            <Property name="NormalTextColour" value="FF766A9C"/>
+        </Window>
+        <Window type="Gitgud/Icon" name="RepoFilterIcon">
+            <Property name="Area" value="{{1,-38},{0,46},{1,-18},{0,66}}"/>
+            <Property name="IconImage" value="Gitgud-Images/IconSearch"/>
+            <Property name="IconColour" value="FF766A9C"/>
+            <Property name="GlowColour" value="00000000"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+        </Window>
+
+        <Window type="Gitgud/ListWidget" name="RepoList">
+            <Property name="Area" value="{{0,2},{0,78},{1,-2},{1,-2}}"/>
+            <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+            <Property name="BgColour" value="FF1F1738"/>
+            <Property name="BorderColour" value="FF1F1738"/>
+        </Window>
+    </Window>
+</GUILayout>

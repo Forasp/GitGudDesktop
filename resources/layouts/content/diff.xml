@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  diff.xml - the diff body. scripts/views/content.lua sets DiffBody's Area
+  (below the header, right of the commit file list in History); everything
+  here fills it:
+
+    Split view    DiffListOld | HunkGutter | DiffListNew, scrolled in step
+                  (gitgud.linkScroll). The gutter shows one toggle per hunk;
+                  clicking a changed line in either half toggles that line.
+    Unified view  DiffListUnified (old/new line numbers + one column).
+    Image diff    content/image-diff.xml
+    Empty states  content/empty-state.xml (no changes, binary, too large)
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="DiffBody">
+        <Property name="Area" value="{{0,0},{0,45},{1,0},{1,0}}"/>
+
+        <!-- Its vertical scrollbar is hidden: it scrolls with DiffListNew,
+             whose bar at the far right serves both halves. -->
+        <Window type="Gitgud/ListWidget" name="DiffListOld">
+            <Property name="Area" value="{{0,0},{0,0},{0.5,-22},{1,0}}"/>
+            <Property name="VertScrollbarDisplayMode" value="Hidden"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="BgColour" value="FF17102B"/>
+            <Property name="BorderColour" value="FF17102B"/>
+            <Property name="SelectionColour" value="00000000"/>
+        </Window>
+        <Window type="Gitgud/ListWidget" name="HunkGutter">
+            <Property name="Area" value="{{0.5,-22},{0,0},{0.5,22},{1,0}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="BgColour" value="FF1F1738"/>
+            <Property name="BorderColour" value="FF1F1738"/>
+            <Property name="SelectionColour" value="00000000"/>
+            <Property name="VertScrollbarDisplayMode" value="Hidden"/>
+            <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+            <Property name="TooltipText" value="Click a box to include or exclude a block of changes (the big box at a hunk header: the whole hunk)"/>
+        </Window>
+        <Window type="Gitgud/ListWidget" name="DiffListNew">
+            <Property name="Area" value="{{0.5,23},{0,0},{1,0},{1,0}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="BgColour" value="FF17102B"/>
+            <Property name="BorderColour" value="FF17102B"/>
+            <Property name="SelectionColour" value="00000000"/>
+        </Window>
+        <Window type="Gitgud/ListWidget" name="DiffListUnified">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="BgColour" value="FF17102B"/>
+            <Property name="BorderColour" value="FF17102B"/>
+            <Property name="SelectionColour" value="00000000"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+
+        <LayoutImport filename="content/image-diff.xml"/>
+        <LayoutImport filename="content/empty-state.xml"/>
+    </Window>
+</GUILayout>

@@ -1,0 +1,50 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "vcpkg-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
+    },
+    {
+      "name": "nogui",
+      "displayName": "No GUI (SDL2 + libgit2 + Lua, CEGUI off)",
+      "description": "Validate the toolchain without the CEGUI dependency.",
+      "inherits": "vcpkg-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "GITGUD_UI_CEGUI": "OFF"
+      }
+    },
+    {
+      "name": "full",
+      "displayName": "Full (with CEGUI)",
+      "description": "Debug build of the app. Needs third_party/cegui-install (Debug CEGUI).",
+      "inherits": "vcpkg-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "GITGUD_UI_CEGUI": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release (with CEGUI)",
+      "description": "Optimized build - what you should run day to day. Needs third_party/cegui-install-release.",
+      "inherits": "vcpkg-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "GITGUD_UI_CEGUI": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "nogui", "configurePreset": "nogui" },
+    { "name": "full", "configurePreset": "full" },
+    { "name": "release", "configurePreset": "release" }
+  ]
+}

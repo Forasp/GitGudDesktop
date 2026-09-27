@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Decorations.xml - neon glow and tintable icons.
+
+  Gitgud/Glow draws a 9-slice halo behind an element (placed 8px larger);
+  Gitgud/Icon draws a tintable glyph from the Gitgud atlas; Gitgud/Image
+  shows a picture (the image diff); Gitgud/Tooltip is the hover tooltip.
+
+  Part of the Gitgud skin: resources/schemes/Gitgud.xml lists every
+  looknfeel file. All colours are widget PROPERTIES, so layouts (or Lua via
+  gitgud.setProperty) can restyle a widget without touching this file.
+-->
+<Falagard version="7">
+
+    <!-- ============================= Glow ============================
+         A neon halo decoration (design --glow-*: focus rings, the active
+         tab underline, the primary CTA, status dots). Draws the 9-slice
+         glow falloff over its WHOLE area plus an optional solid core rect
+         inset 8px — so place it 8px larger on every side than the element
+         it haloes, BEHIND that element (earlier sibling), and tint with
+         GlowColour. CoreColour paints the inset core (e.g. the tab
+         underline strip itself); leave it transparent when the element on
+         top draws its own fill. Never intercepts the cursor. -->
+    <WidgetLook name="Gitgud/Glow">
+        <PropertyDefinition redrawOnWrite="true" initialValue="907C93FF" type="ColourRect" name="GlowColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="00000000" type="ColourRect" name="CoreColour"/>
+        <Property name="CursorPassThroughEnabled" value="true"/>
+        <ImagerySection name="glow">
+            <FrameComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="RightEdge"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" type="BottomEdge"/></Dim>
+                </Area>
+                <Image component="TopLeftCorner" name="Gitgud-Images/GlowTopLeft"/>
+                <Image component="TopEdge" name="Gitgud-Images/GlowTop"/>
+                <Image component="TopRightCorner" name="Gitgud-Images/GlowTopRight"/>
+                <Image component="LeftEdge" name="Gitgud-Images/GlowLeft"/>
+                <Image component="Background" name="Gitgud-Images/GlowCentre"/>
+                <Image component="RightEdge" name="Gitgud-Images/GlowRight"/>
+                <Image component="BottomLeftCorner" name="Gitgud-Images/GlowBottomLeft"/>
+                <Image component="BottomEdge" name="Gitgud-Images/GlowBottom"/>
+                <Image component="BottomRightCorner" name="Gitgud-Images/GlowBottomRight"/>
+            </FrameComponent>
+        </ImagerySection>
+        <ImagerySection name="core">
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="8"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="8"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="RightEdge" offset="-8"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" type="BottomEdge" offset="-8"/></Dim>
+                </Area>
+                <Image name="Vanilla-Images/GenericBrush"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+        </ImagerySection>
+        <StateImagery name="Enabled">
+            <Layer>
+                <Section section="glow"><ColourProperty name="GlowColour"/></Section>
+                <Section section="core"><ColourProperty name="CoreColour"/></Section>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="Disabled">
+            <Layer>
+                <Section section="glow"><ColourProperty name="GlowColour"/></Section>
+                <Section section="core"><ColourProperty name="CoreColour"/></Section>
+            </Layer>
+        </StateImagery>
+    </WidgetLook>
+
+    <!-- ============================= Icon ============================
+         A tintable line-art glyph (design ToolbarControl icon: neon-blue
+         with drop-shadow(0 0 3px rgba(blue,.6))). IconImage picks the
+         glyph from the Gitgud atlas; GlowBlob behind it fakes the
+         drop-shadow. Decoration only — never intercepts the cursor. -->
+    <WidgetLook name="Gitgud/Icon">
+        <PropertyDefinition redrawOnWrite="true" initialValue="" type="Image" name="IconImage"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF7C93FF" type="ColourRect" name="IconColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="997C93FF" type="ColourRect" name="GlowColour"/>
+        <Property name="CursorPassThroughEnabled" value="true"/>
+        <ImagerySection name="blob">
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="RightEdge"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" type="BottomEdge"/></Dim>
+                </Area>
+                <Image name="Gitgud-Images/GlowBlob"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+        </ImagerySection>
+        <ImagerySection name="icon">
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="RightEdge"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" type="BottomEdge"/></Dim>
+                </Area>
+                <ImageProperty name="IconImage"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+        </ImagerySection>
+        <StateImagery name="Enabled">
+            <Layer>
+                <Section section="blob"><ColourProperty name="GlowColour"/></Section>
+                <Section section="icon"><ColourProperty name="IconColour"/></Section>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="Disabled">
+            <Layer>
+                <Section section="icon">
+                    <Colours topLeft="FF4D4470" bottomLeft="FF4D4470" topRight="FF4D4470" bottomRight="FF4D4470"/>
+                </Section>
+            </Layer>
+        </StateImagery>
+    </WidgetLook>
+
+    <!-- ============================= Image ===========================
+         A picture scaled to fill the widget (Lua sizes the widget to keep
+         the aspect ratio). Used by the image diff: set "Image" to one of
+         the GitgudDiff/* images the C++ side publishes. -->
+    <WidgetLook name="Gitgud/Image">
+        <PropertyDefinition redrawOnWrite="true" initialValue="" type="Image" name="Image"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFFFFFFF" type="ColourRect" name="ImageColour"/>
+        <Property name="CursorPassThroughEnabled" value="true"/>
+        <ImagerySection name="picture">
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="RightEdge"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" type="BottomEdge"/></Dim>
+                </Area>
+                <ImageProperty name="Image"/>
+                <ColourProperty name="ImageColour"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+        </ImagerySection>
+        <StateImagery name="Enabled">
+            <Layer>
+                <Section section="picture"/>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="Disabled">
+            <Layer>
+                <Section section="picture"/>
+            </Layer>
+        </StateImagery>
+    </WidgetLook>
+
+    <!-- ============================ Tooltip ==========================
+         Elevated panel (--bg-3) with a strong hairline; appears after a
+         short hover on any widget with a TooltipText property. -->
+    <WidgetLook name="Gitgud/Tooltip">
+        <Property name="Size" value="{{0, 128}, {0, 30}}"/>
+        <NamedArea name="TextArea">
+            <Area>
+                <Dim type="LeftEdge"><AbsoluteDim value="10"/></Dim>
+                <Dim type="TopEdge"><AbsoluteDim value="6"/></Dim>
+                <Dim type="RightEdge"><UnifiedDim scale="1" offset="-10" type="RightEdge"/></Dim>
+                <Dim type="BottomEdge"><UnifiedDim scale="1" offset="-6" type="BottomEdge"/></Dim>
+            </Area>
+        </NamedArea>
+        <ImagerySection name="panel">
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="RightEdge"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" type="BottomEdge"/></Dim>
+                </Area>
+                <Image name="Vanilla-Images/GenericBrush"/>
+                <Colours topLeft="52C4B5FD" topRight="52C4B5FD" bottomLeft="52C4B5FD" bottomRight="52C4B5FD"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+            <ImageryComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="1"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="1"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" offset="-1" type="RightEdge"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" offset="-1" type="BottomEdge"/></Dim>
+                </Area>
+                <Image name="Vanilla-Images/GenericBrush"/>
+                <Colours topLeft="FF291F47" topRight="FF291F47" bottomLeft="FF291F47" bottomRight="FF291F47"/>
+                <VertFormat type="Stretched"/>
+                <HorzFormat type="Stretched"/>
+            </ImageryComponent>
+        </ImagerySection>
+        <ImagerySection name="label">
+            <TextComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="10"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="6"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" offset="-10" type="RightEdge"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" offset="-6" type="BottomEdge"/></Dim>
+                </Area>
+                <Colours topLeft="FFF3EEFC" topRight="FFF3EEFC" bottomLeft="FFF3EEFC" bottomRight="FFF3EEFC"/>
+                <VertFormat type="CentreAligned"/>
+                <HorzFormat type="LeftAligned"/>
+            </TextComponent>
+        </ImagerySection>
+        <StateImagery name="Enabled">
+            <Layer>
+                <Section section="panel"/>
+                <Section section="label"/>
+            </Layer>
+        </StateImagery>
+        <StateImagery name="Disabled">
+            <Layer>
+                <Section section="panel"/>
+                <Section section="label"/>
+            </Layer>
+        </StateImagery>
+    </WidgetLook>
+
+</Falagard>

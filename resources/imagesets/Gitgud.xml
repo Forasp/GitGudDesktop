@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Gitgud.xml (imageset) — the app's own texture atlas (Gitgud.png, generated art).
+
+  Everything is drawn WHITE on transparent so widget states can tint it to
+  any palette colour at draw time (the same trick the looknfeel plays with
+  Vanilla's GenericBrush).
+
+  Contents:
+    Glow*      9-slice pieces of a soft neon halo: an 8px quadratic alpha
+               falloff around an opaque core. Drawn on an area 8px larger
+               than the element it haloes (see Gitgud/Glow + the checkbox).
+    GlowBlob   radial gradient dot — drop-shadow behind icon glyphs.
+    Check      crisp square-style checkmark (design Checkbox mark).
+    IconRepo / IconBranch / IconSync / IconPush / IconPull
+               toolbar line icons (design placeholders ⌂ ⑂ ↻ as real art).
+    IconSearch / IconPlus / Chevron
+               filter-box magnifier, "new" glyph, dropdown chevron.
+    IconUndo / IconRedo / IconGraph / IconTerminal / IconCommand
+               the right-hand toolbar group.
+    Nav*       inline sprites for the branch tree (colours baked in).
+  Regenerate Gitgud.png with make-atlas.ps1 (the layout table lives there).
+-->
+<Imageset version="2" name="Gitgud-Images" imagefile="Gitgud.png"
+          resourceGroup="gitgud-imagesets" autoScaled="false"
+          nativeHorzRes="1280" nativeVertRes="720">
+    <Image name="GlowTopLeft"     xPos="0"   yPos="0"  width="12" height="12"/>
+    <Image name="GlowTop"        xPos="12"  yPos="0"  width="8"  height="12"/>
+    <Image name="GlowTopRight"   xPos="20"  yPos="0"  width="12" height="12"/>
+    <Image name="GlowLeft"        xPos="0"   yPos="12" width="12" height="8"/>
+    <Image name="GlowCentre"     xPos="12"  yPos="12" width="8"  height="8"/>
+    <Image name="GlowRight"      xPos="20"  yPos="12" width="12" height="8"/>
+    <Image name="GlowBottomLeft"  xPos="0"   yPos="20" width="12" height="12"/>
+    <Image name="GlowBottom"     xPos="12"  yPos="20" width="8"  height="12"/>
+    <Image name="GlowBottomRight" xPos="20"  yPos="20" width="12" height="12"/>
+    <Image name="Check"          xPos="32"  yPos="0"  width="24" height="24"/>
+    <Image name="GlowBlob"       xPos="56"  yPos="0"  width="24" height="24"/>
+    <Image name="IconRepo"       xPos="80"  yPos="0"  width="24" height="24"/>
+    <Image name="IconBranch"     xPos="104" yPos="0"  width="24" height="24"/>
+    <Image name="IconSync"        xPos="0"   yPos="32" width="24" height="24"/>
+    <!-- Inline-text sprites (list [image=...] tags — colours baked in). -->
+    <Image name="HunkOn"         xPos="32"  yPos="32" width="26" height="26"/>
+    <Image name="HunkOff"        xPos="64"  yPos="32" width="26" height="26"/>
+    <Image name="HunkPart"       xPos="96"  yPos="32" width="26" height="26"/>
+    <Image name="Spacer"         xPos="126" yPos="62" width="1"  height="1"/>
+    <Image name="IconSearch"     xPos="0"   yPos="64" width="24" height="24"/>
+    <Image name="IconPush"       xPos="24"  yPos="64" width="24" height="24"/>
+    <Image name="IconPull"       xPos="48"  yPos="64" width="24" height="24"/>
+    <Image name="IconPlus"       xPos="72"  yPos="64" width="24" height="24"/>
+    <Image name="Chevron"        xPos="96"  yPos="64" width="12" height="8"/>
+    <Image name="IconUndo"       xPos="0"   yPos="96" width="24" height="24"/>
+    <Image name="IconRedo"       xPos="24"  yPos="96" width="24" height="24"/>
+    <Image name="IconGraph"      xPos="48"  yPos="96" width="24" height="24"/>
+    <Image name="IconTerminal"   xPos="72"  yPos="96" width="24" height="24"/>
+    <Image name="IconCommand"    xPos="96"  yPos="96" width="24" height="24"/>
+    <!-- Branch-tree sprites (colours baked, used inline in list rows). -->
+    <Image name="NavBranch"      xPos="0"   yPos="128" width="16" height="16"/>
+    <Image name="NavRemote"      xPos="16"  yPos="128" width="16" height="16"/>
+    <Image name="NavTag"         xPos="32"  yPos="128" width="16" height="16"/>
+    <Image name="NavStash"       xPos="48"  yPos="128" width="16" height="16"/>
+    <Image name="NavSubmodule"   xPos="64"  yPos="128" width="16" height="16"/>
+    <Image name="NavWorktree"    xPos="80"  yPos="128" width="16" height="16"/>
+    <Image name="NavOpen"        xPos="96"  yPos="128" width="16" height="16"/>
+    <Image name="NavClosed"      xPos="112" yPos="128" width="16" height="16"/>
+    <!-- Compact stage toggles for each block of changes in a diff. -->
+    <Image name="BlockOn"        xPos="0"   yPos="144" width="16" height="16"/>
+    <Image name="BlockOff"       xPos="16"  yPos="144" width="16" height="16"/>
+    <Image name="BlockPart"      xPos="32"  yPos="144" width="16" height="16"/>
+</Imageset>

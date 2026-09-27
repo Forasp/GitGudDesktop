@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  titlebar.xml - custom window chrome. The OS frame is gone (borderless
+  window), so this strip is the draggable caption: the AppDrag user string
+  marks it (and everything non-interactive inside it) as a move-the-window
+  region for the platform hit test; buttons stay clickable.
+
+  MenuBar starts empty - scripts/ui/menu.lua builds the File / Edit / View /
+  Repository / Branch / Help buttons from Lua tables, so mods can add menus
+  and items without touching XML.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="TitleBar">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{0,32}}"/>
+        <Property name="PanelColour" value="FF0E0A1A"/>
+        <Property name="Text" value=""/>
+        <UserString name="AppDrag" value="true"/>
+
+        <!-- The Jera-rune mark at favicon scale (brand rule: title bar + app
+             icon only). Full-colour art, so no tint and no glow. -->
+        <Window type="Gitgud/Icon" name="AppTitleMark">
+            <Property name="Area" value="{{0,10},{0,7},{0,28},{0,25}}"/>
+            <Property name="IconImage" value="Gitgud-Logo/Mark"/>
+            <Property name="IconColour" value="FFFFFFFF"/>
+            <Property name="GlowColour" value="00000000"/>
+        </Window>
+
+        <Window type="DefaultWindow" name="MenuBar">
+            <Property name="Area" value="{{0,34},{0,0},{0,600},{1,-1}}"/>
+        </Window>
+
+        <Window type="Gitgud/Label" name="AppTitleLabel">
+            <Property name="Area" value="{{0.5,-220},{0,0},{0.5,220},{1,0}}"/>
+            <Property name="Text" value="GitGud Desktop"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="HorzFormatting" value="CentreAligned"/>
+            <Property name="NormalTextColour" value="FF766A9C"/>
+        </Window>
+
+        <Window type="Gitgud/Button" name="WindowMinButton">
+            <Property name="Area" value="{{1,-138},{0,0},{1,-92},{1,-1}}"/>
+            <Property name="Text" value="–"/>
+            <Property name="NormalFillColour" value="FF0E0A1A"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="PushedFillColour" value="FF17102B"/>
+            <Property name="TooltipText" value="Minimize"/>
+        </Window>
+        <Window type="Gitgud/Button" name="WindowMaxButton">
+            <Property name="Area" value="{{1,-92},{0,0},{1,-46},{1,-1}}"/>
+            <Property name="Text" value="□"/>
+            <Property name="NormalFillColour" value="FF0E0A1A"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="PushedFillColour" value="FF17102B"/>
+            <Property name="TooltipText" value="Maximize"/>
+        </Window>
+        <Window type="Gitgud/Button" name="WindowCloseButton">
+            <Property name="Area" value="{{1,-46},{0,0},{1,0},{1,-1}}"/>
+            <Property name="Text" value="×"/>
+            <Property name="NormalFillColour" value="FF0E0A1A"/>
+            <Property name="HoverFillColour" value="FFE81123"/>
+            <Property name="PushedFillColour" value="FFB20D1C"/>
+            <Property name="NormalTextColour" value="FFF3EEFC"/>
+            <Property name="TooltipText" value="Close"/>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="TitleBarHairline">
+            <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="1FC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

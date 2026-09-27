@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  statusbar.xml - the bottom status line. StatusLabel carries transient
+  messages (scripts/core/status.lua); StatusRight shows the repository
+  summary (branch, ahead/behind, change count).
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="StatusBar">
+        <Property name="Area" value="{{0,0},{1,-24},{1,0},{1,0}}"/>
+        <Property name="PanelColour" value="FF0E0A1A"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/StaticText" name="StatusHairline">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,1}}"/>
+            <Property name="PanelColour" value="1FC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Label" name="StatusLabel">
+            <Property name="Area" value="{{0,12},{0,1},{0.65,0},{1,0}}"/>
+            <Property name="Text" value="Ready."/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="NormalTextColour" value="FF766A9C"/>
+        </Window>
+        <Window type="Gitgud/Label" name="StatusRight">
+            <Property name="Area" value="{{0.65,0},{0,1},{1,-12},{1,0}}"/>
+            <Property name="Text" value=""/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="HorzFormatting" value="RightAligned"/>
+            <Property name="NormalTextColour" value="FF766A9C"/>
+        </Window>
+    </Window>
+</GUILayout>

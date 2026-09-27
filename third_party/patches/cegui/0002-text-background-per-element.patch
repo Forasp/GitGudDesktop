@@ -1,0 +1,13 @@
+diff --git a/cegui/src/text/RenderedTextParagraph.cpp b/cegui/src/text/RenderedTextParagraph.cpp
+index 47e267b6d..9132d0313 100644
+--- a/cegui/src/text/RenderedTextParagraph.cpp
++++ b/cegui/src/text/RenderedTextParagraph.cpp
+@@ -162,6 +162,8 @@ void RenderedTextParagraph::createRenderGeometry(std::vector<GeometryBuffer*>& o
+         Rectf rect(penPos.x, penPos.y, penPos.x, lineBottom);
+         for (auto i = line.glyphStartIdx; i < line.glyphEndIdx; /**/)
+         {
++            // Each element's background starts where the element starts.
++            rect.d_min.x = penPos.x;
+             const auto startElementIdx = d_glyphs[i].elementIndex;
+             do
+             {

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  diff-header.xml - the strip above the diff: what's being shown (path and
+  +/- counts, or a hint) and the "View" menu (split / unified, hide
+  whitespace, expand context) built by scripts/views/diff.lua.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="DiffHeader">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{0,44}}"/>
+        <Property name="PanelColour" value="00000000"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/Label" name="DiffTitle">
+            <Property name="Area" value="{{0,16},{0,0},{1,-130},{1,0}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Button" name="DiffViewButton">
+            <Property name="Area" value="{{1,-116},{0,8},{1,-12},{1,-8}}"/>
+            <Property name="Text" value="View  [colour='FFB7AED6'][image-size='w:12 h:8'][image='Gitgud-Images/Chevron']"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="NormalFillColour" value="FF1F1738"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="BorderColour" value="2EC4B5FD"/>
+            <Property name="TooltipText" value="Diff display options"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="DiffHeaderHairline">
+            <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="2EC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

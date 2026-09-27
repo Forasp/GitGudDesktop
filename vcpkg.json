@@ -1,0 +1,23 @@
+{
+  "name": "gitgud",
+  "version": "0.1.0",
+  "description": "A GitHub Desktop-style Git client with an XML+Lua GUI",
+  "dependencies": [
+    "sdl2",
+    {
+      "name": "libgit2",
+      "features": [
+        "ssh"
+      ]
+    },
+    "lua",
+    "catch2",
+    "glm",
+    "glew",
+    "pugixml",
+    "freetype",
+    "stb"
+  ],
+  "$comment": "CEGUI itself is not in vcpkg; we build it from source (third_party/cegui, see README) against these vcpkg-provided deps (glm/glew/pugixml/freetype) instead of its own bundled 'cegui-dependencies' pack.",
+  "builtin-baseline": "1f5e0348089e8a9b187f57d42866ebc871e815da"
+}

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  history.xml - the History tab: commit filter, branch comparison, and the
+  commit list. Selecting a commit shows its header, files, and diff in the
+  content pane (scripts/views/history.lua); right-click a commit for revert,
+  cherry-pick, tag, branch-from, reset, checkout, and copy actions.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="HistoryPanel">
+        <Property name="Area" value="{{0,0},{0,41},{1,0},{1,0}}"/>
+        <Property name="Visible" value="false"/>
+
+        <Window type="Gitgud/Editbox" name="HistoryFilterEdit">
+            <Property name="Area" value="{{0,10},{0,9},{1,-10},{0,37}}"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Label" name="HistoryFilterPlaceholder">
+            <Property name="Area" value="{{0,20},{0,9},{1,-44},{0,37}}"/>
+            <Property name="Text" value="Filter by message, author, or SHA"/>
+            <Property name="NormalTextColour" value="FF766A9C"/>
+        </Window>
+        <Window type="Gitgud/Icon" name="HistoryFilterIcon">
+            <Property name="Area" value="{{1,-38},{0,13},{1,-18},{0,33}}"/>
+            <Property name="IconImage" value="Gitgud-Images/IconSearch"/>
+            <Property name="IconColour" value="FF766A9C"/>
+            <Property name="GlowColour" value="00000000"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+        </Window>
+
+        <Window type="Gitgud/Button" name="CompareButton">
+            <Property name="Area" value="{{0,10},{0,43},{1,-10},{0,71}}"/>
+            <Property name="Text" value="Compare with a branch…"/>
+            <Property name="HorzFormatting" value="LeftAligned"/>
+            <Property name="NormalFillColour" value="FF1F1738"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="BorderColour" value="2EC4B5FD"/>
+            <Property name="NormalTextColour" value="FFB7AED6"/>
+        </Window>
+
+        <!-- Shown while comparing: the ahead/behind summary, a way to switch
+             between the two directions, and "merge into current". -->
+        <Window type="DefaultWindow" name="CompareBar">
+            <Property name="Area" value="{{0,0},{0,74},{1,0},{0,108}}"/>
+            <Property name="Visible" value="false"/>
+            <Window type="Gitgud/Button" name="CompareBehindTab">
+                <Property name="Area" value="{{0,10},{0,2},{0.5,-2},{1,-4}}"/>
+                <Property name="Text" value="Behind"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+            </Window>
+            <Window type="Gitgud/Button" name="CompareAheadTab">
+                <Property name="Area" value="{{0.5,2},{0,2},{1,-10},{1,-4}}"/>
+                <Property name="Text" value="Ahead"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+            </Window>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="HistoryHairline">
+            <Property name="Area" value="{{0,0},{0,76},{1,0},{0,77}}"/>
+            <Property name="PanelColour" value="1FC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <Window type="Gitgud/ListWidget" name="HistoryList">
+            <Property name="Area" value="{{0,0},{0,77},{1,0},{1,-44}}"/>
+            <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+            <Property name="BgColour" value="FF1F1738"/>
+            <Property name="BorderColour" value="FF1F1738"/>
+        </Window>
+
+        <!-- Comparing a branch that's behind: merge it into the current one. -->
+        <Window type="Gitgud/Button" name="CompareMergeButton">
+            <Property name="Area" value="{{0,12},{1,-40},{1,-12},{1,-8}}"/>
+            <Property name="Text" value="Merge into current branch"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Button" name="HistoryMoreButton">
+            <Property name="Area" value="{{0,12},{1,-40},{1,-12},{1,-8}}"/>
+            <Property name="Text" value="Load more commits"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="NormalFillColour" value="FF1F1738"/>
+            <Property name="HoverFillColour" value="FF291F47"/>
+            <Property name="BorderColour" value="2EC4B5FD"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+    </Window>
+</GUILayout>

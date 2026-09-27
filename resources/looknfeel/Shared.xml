@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Shared.xml - imagery sections other looks borrow.
+
+  Frame / background brush sections referenced from other looks via
+  <Section look="Gitgud/Shared" section="...">.
+
+  Palette reference (Synthwave tokens; design kit tokens/colors.css):
+    Palette reference (Synthwave tokens, resources copy of design tokens/colors.css):
+    bg-0 frame    FF0E0A1A      bg-1 canvas    FF17102B
+    bg-2 panel    FF1F1738      bg-3 elevated  FF291F47
+    bg-4 pressed  FF342A56
+    border hair   1FC4B5FD      border default 2EC4B5FD    border strong 52C4B5FD
+    text          FFF3EEFC      text secondary FFB7AED6    text tertiary FF766A9C
+    text disabled FF4D4470
+    neon cyan     FF7EF2D6      neon blue      FF7C93FF    neon purple FFB06BFF
+    neon pink     FFFF7EDB      neon yellow    FFFFCF6E
+    diff add      FF5EF2A6      diff delete    FFFF5EC4
+
+  Part of the Gitgud skin: resources/schemes/Gitgud.xml lists every
+  looknfeel file. All colours are widget PROPERTIES, so layouts (or Lua via
+  gitgud.setProperty) can restyle a widget without touching this file.
+-->
+<Falagard version="7">
+
+    <!-- ============================ Shared =========================== -->
+    <WidgetLook name="Gitgud/Shared">
+        <ImagerySection name="Frame">
+            <FrameComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="RightEdge"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" type="BottomEdge"/></Dim>
+                </Area>
+                <Image component="TopLeftCorner" name="Vanilla-Images/FrameTopLeft"/>
+                <Image component="TopRightCorner" name="Vanilla-Images/FrameTopRight"/>
+                <Image component="BottomLeftCorner" name="Vanilla-Images/FrameBottomLeft"/>
+                <Image component="BottomRightCorner" name="Vanilla-Images/FrameBottomRight"/>
+                <Image component="LeftEdge" name="Vanilla-Images/FrameLeft"/>
+                <Image component="TopEdge" name="Vanilla-Images/FrameTop"/>
+                <Image component="RightEdge" name="Vanilla-Images/FrameRight"/>
+                <Image component="BottomEdge" name="Vanilla-Images/FrameBottom"/>
+                <Image component="Background" name="Vanilla-Images/GenericBrush"/>
+            </FrameComponent>
+        </ImagerySection>
+        <ImagerySection name="FrameOnly">
+            <FrameComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="RightEdge"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" type="BottomEdge"/></Dim>
+                </Area>
+                <Image component="TopLeftCorner" name="Vanilla-Images/FrameTopLeft"/>
+                <Image component="TopRightCorner" name="Vanilla-Images/FrameTopRight"/>
+                <Image component="BottomLeftCorner" name="Vanilla-Images/FrameBottomLeft"/>
+                <Image component="BottomRightCorner" name="Vanilla-Images/FrameBottomRight"/>
+                <Image component="LeftEdge" name="Vanilla-Images/FrameLeft"/>
+                <Image component="TopEdge" name="Vanilla-Images/FrameTop"/>
+                <Image component="RightEdge" name="Vanilla-Images/FrameRight"/>
+                <Image component="BottomEdge" name="Vanilla-Images/FrameBottom"/>
+            </FrameComponent>
+        </ImagerySection>
+        <ImagerySection name="BackgroundOnly">
+            <FrameComponent>
+                <Area>
+                    <Dim type="LeftEdge"><ImageDim name="Vanilla-Images/FrameLeft" dimension="Width"/></Dim>
+                    <Dim type="TopEdge"><ImageDim name="Vanilla-Images/FrameTop" dimension="Height"/></Dim>
+                    <Dim type="RightEdge">
+                        <OperatorDim op="Subtract">
+                            <UnifiedDim scale="1" type="RightEdge"/>
+                            <ImageDim name="Vanilla-Images/FrameRight" dimension="Width"/>
+                        </OperatorDim>
+                    </Dim>
+                    <Dim type="BottomEdge">
+                        <OperatorDim op="Subtract">
+                            <UnifiedDim scale="1" type="BottomEdge"/>
+                            <ImageDim name="Vanilla-Images/FrameBottom" dimension="Height"/>
+                        </OperatorDim>
+                    </Dim>
+                </Area>
+                <Image component="Background" name="Vanilla-Images/GenericBrush"/>
+            </FrameComponent>
+        </ImagerySection>
+        <ImagerySection name="BackgroundOnlyFull">
+            <FrameComponent>
+                <Area>
+                    <Dim type="LeftEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="TopEdge"><AbsoluteDim value="0"/></Dim>
+                    <Dim type="RightEdge"><UnifiedDim scale="1" type="RightEdge"/></Dim>
+                    <Dim type="BottomEdge"><UnifiedDim scale="1" type="BottomEdge"/></Dim>
+                </Area>
+                <Image component="Background" name="Vanilla-Images/GenericBrush"/>
+            </FrameComponent>
+        </ImagerySection>
+    </WidgetLook>
+
+</Falagard>

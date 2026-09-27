@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  empty-state.xml - the centred message shown instead of a diff: "no local
+  changes" (with shortcuts to open the repo elsewhere or push), "select a
+  file", binary files, and the "this diff is large" gate. scripts/views/
+  content.lua sets the title, body, and up to three action buttons.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="EmptyState">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+        <Property name="Visible" value="false"/>
+
+        <Window type="Gitgud/Label" name="EmptyTitle">
+            <Property name="Area" value="{{0,40},{0.45,-116},{1,-40},{0.45,-80}}"/>
+            <Property name="Font" value="Gitgud-UI-Large"/>
+            <Property name="HorzFormatting" value="CentreAligned"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="EmptyBody">
+            <Property name="Area" value="{{0.5,-260},{0.45,-74},{0.5,260},{0.45,-18}}"/>
+            <Property name="PanelColour" value="00000000"/>
+            <Property name="HorzFormatting" value="WordWrapCentreAligned"/>
+            <Property name="VertFormatting" value="TopAligned"/>
+            <Property name="TextColours" value="FFB7AED6"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Button" name="EmptyAction1">
+            <Property name="Area" value="{{0.5,-150},{0.45,0},{0.5,150},{0.45,36}}"/>
+            <Property name="Text" value=""/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Button" name="EmptyAction2">
+            <Property name="Area" value="{{0.5,-150},{0.45,44},{0.5,150},{0.45,80}}"/>
+            <Property name="Text" value=""/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Button" name="EmptyAction3">
+            <Property name="Area" value="{{0.5,-150},{0.45,88},{0.5,150},{0.45,124}}"/>
+            <Property name="Text" value=""/>
+            <Property name="Visible" value="false"/>
+        </Window>
+    </Window>
+</GUILayout>

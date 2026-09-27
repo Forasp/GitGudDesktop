@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  content.xml - everything right of the sidebar. From top to bottom:
+    content/diff-header.xml    file path + diff stats + view options
+    content/commit-header.xml  (History) the selected commit + its file list
+    content/diff.xml           the diff body: split/unified text diffs, the
+                               image diff, and empty/large-diff states
+    content/inspector.xml      file history and blame (over everything)
+    content/merge-tool.xml     the 3-pane conflict resolver (over everything)
+  scripts/views/content.lua positions the body below whichever headers are
+  showing.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="ContentPane">
+        <Property name="Area" value="{{0,320},{0,0},{1,0},{1,0}}"/>
+        <LayoutImport filename="content/diff-header.xml"/>
+        <LayoutImport filename="content/commit-header.xml"/>
+        <LayoutImport filename="content/diff.xml"/>
+        <LayoutImport filename="content/inspector.xml"/>
+        <LayoutImport filename="content/merge-tool.xml"/>
+    </Window>
+</GUILayout>

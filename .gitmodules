@@ -1,0 +1,3 @@
+[submodule "third_party/cegui"]
+	path = third_party/cegui
+	url = https://github.com/cegui/cegui.git

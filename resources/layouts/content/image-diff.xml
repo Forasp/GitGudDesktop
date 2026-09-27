@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  image-diff.xml - before/after view for image files (png, jpg, gif, bmp,
+  tga, psd, ...). The C++ side decodes both versions and publishes the
+  images GitgudDiff/Before, /After, /Difference (changed pixels highlighted
+  over a dimmed copy), and /Onion (50/50 blend); scripts/views/imagediff.lua
+  shows them in one of three modes:
+    2-up        before and after side by side
+    Difference  one picture, changed pixels in neon pink
+    Onion skin  one picture, both versions blended
+  Each picture is sized by Lua to fit its frame at the right aspect ratio.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="ImageDiffPanel">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+        <Property name="PanelColour" value="FF17102B"/>
+        <Property name="Visible" value="false"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/Button" name="ImageModeTwoUp">
+            <Property name="Area" value="{{0.5,-171},{0,12},{0.5,-57},{0,40}}"/>
+            <Property name="Text" value="2-up"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+        </Window>
+        <Window type="Gitgud/Button" name="ImageModeDifference">
+            <Property name="Area" value="{{0.5,-57},{0,12},{0.5,57},{0,40}}"/>
+            <Property name="Text" value="Difference"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+        </Window>
+        <Window type="Gitgud/Button" name="ImageModeOnion">
+            <Property name="Area" value="{{0.5,57},{0,12},{0.5,171},{0,40}}"/>
+            <Property name="Text" value="Onion skin"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+        </Window>
+        <Window type="Gitgud/Label" name="ImageStatsLabel">
+            <Property name="Area" value="{{0,16},{0,46},{1,-16},{0,68}}"/>
+            <Property name="Text" value=""/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="HorzFormatting" value="CentreAligned"/>
+            <Property name="NormalTextColour" value="FFB7AED6"/>
+        </Window>
+
+        <Window type="Gitgud/Label" name="ImageBeforeCaption">
+            <Property name="Area" value="{{0,16},{0,72},{0.5,-8},{0,92}}"/>
+            <Property name="Text" value="Before"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="HorzFormatting" value="CentreAligned"/>
+            <Property name="NormalTextColour" value="FFFF5EC4"/>
+        </Window>
+        <Window type="Gitgud/Label" name="ImageAfterCaption">
+            <Property name="Area" value="{{0.5,8},{0,72},{1,-16},{0,92}}"/>
+            <Property name="Text" value="After"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="HorzFormatting" value="CentreAligned"/>
+            <Property name="NormalTextColour" value="FF5EF2A6"/>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="ImageBeforeFrame">
+            <Property name="Area" value="{{0,16},{0,96},{0.5,-8},{1,-16}}"/>
+            <Property name="PanelColour" value="FF0E0A1A"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Image" name="ImageBefore">
+                <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+            </Window>
+            <Window type="Gitgud/Label" name="ImageBeforeMissing">
+                <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+                <Property name="Text" value="(file didn't exist)"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="NormalTextColour" value="FF766A9C"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+        </Window>
+        <Window type="Gitgud/StaticText" name="ImageAfterFrame">
+            <Property name="Area" value="{{0.5,8},{0,96},{1,-16},{1,-16}}"/>
+            <Property name="PanelColour" value="FF0E0A1A"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Image" name="ImageAfter">
+                <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+            </Window>
+            <Window type="Gitgud/Label" name="ImageAfterMissing">
+                <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+                <Property name="Text" value="(file deleted)"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="NormalTextColour" value="FF766A9C"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+        </Window>
+        <Window type="Gitgud/StaticText" name="ImageSingleFrame">
+            <Property name="Area" value="{{0,16},{0,72},{1,-16},{1,-16}}"/>
+            <Property name="PanelColour" value="FF0E0A1A"/>
+            <Property name="Visible" value="false"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Image" name="ImageSingle">
+                <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+            </Window>
+        </Window>
+    </Window>
+</GUILayout>

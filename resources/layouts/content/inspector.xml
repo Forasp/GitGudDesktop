@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  inspector.xml - file history and blame, shown over the content pane
+  (right-click a file > "Show history" / "Blame", or the command palette).
+
+    History  InspectorCommitList: every commit that changed the file;
+             InspectorDiffList: that commit's change to the file.
+    Blame    BlameGutterList: who last changed each line and when (tinted by
+             age); BlameCodeList: the file, scrolled in step.
+
+  scripts/views/inspector.lua drives it; Escape or Close returns.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="InspectorPanel">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+        <Property name="PanelColour" value="FF17102B"/>
+        <Property name="Visible" value="false"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/StaticText" name="InspectorHeader">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,44}}"/>
+            <Property name="PanelColour" value="FF1A1331"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/Label" name="InspectorTitle">
+                <Property name="Area" value="{{0,16},{0,0},{1,-340},{1,0}}"/>
+                <Property name="Font" value="Gitgud-Mono"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/Button" name="InspectorHistoryTab">
+                <Property name="Area" value="{{1,-330},{0,8},{1,-240},{1,-8}}"/>
+                <Property name="Text" value="History"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+            </Window>
+            <Window type="Gitgud/Button" name="InspectorBlameTab">
+                <Property name="Area" value="{{1,-236},{0,8},{1,-146},{1,-8}}"/>
+                <Property name="Text" value="Blame"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+            </Window>
+            <Window type="Gitgud/Button" name="InspectorCloseButton">
+                <Property name="Area" value="{{1,-120},{0,8},{1,-12},{1,-8}}"/>
+                <Property name="Text" value="Close"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="TooltipText" value="Back  (Escape)"/>
+            </Window>
+            <Window type="Gitgud/StaticText" name="InspectorHairline">
+                <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+                <Property name="PanelColour" value="2EC4B5FD"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+        </Window>
+
+        <Window type="Gitgud/ListWidget" name="InspectorCommitList">
+            <Property name="Area" value="{{0,0},{0,44},{0,300},{1,0}}"/>
+            <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+            <Property name="BgColour" value="FF1A1331"/>
+            <Property name="BorderColour" value="FF1A1331"/>
+            <Property name="SelectionColour" value="FF291F47"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="InspectorSplit">
+            <Property name="Area" value="{{0,300},{0,44},{0,301},{1,0}}"/>
+            <Property name="PanelColour" value="2EC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/ListWidget" name="InspectorDiffList">
+            <Property name="Area" value="{{0,301},{0,44},{1,0},{1,0}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="BgColour" value="FF17102B"/>
+            <Property name="BorderColour" value="FF17102B"/>
+            <Property name="SelectionColour" value="00000000"/>
+        </Window>
+
+        <Window type="Gitgud/ListWidget" name="BlameGutterList">
+            <Property name="Area" value="{{0,0},{0,44},{0,300},{1,0}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+            <Property name="VertScrollbarDisplayMode" value="Hidden"/>
+            <Property name="BgColour" value="FF1A1331"/>
+            <Property name="BorderColour" value="FF1A1331"/>
+            <Property name="SelectionColour" value="FF291F47"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/ListWidget" name="BlameCodeList">
+            <Property name="Area" value="{{0,301},{0,44},{1,0},{1,0}}"/>
+            <Property name="Font" value="Gitgud-Mono"/>
+            <Property name="BgColour" value="FF17102B"/>
+            <Property name="BorderColour" value="FF17102B"/>
+            <Property name="SelectionColour" value="FF291F47"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+    </Window>
+</GUILayout>

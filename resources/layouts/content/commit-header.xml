@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  commit-header.xml - History tab only: the selected commit's summary, body,
+  and metadata, plus the list of files it touched (pick one to diff it).
+  CommitView is a click-through container (its children still take clicks);
+  scripts/views/history.lua fills it and toggles its visibility.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="CommitView">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+        <Property name="CursorPassThroughEnabled" value="true"/>
+        <Property name="Visible" value="false"/>
+
+        <Window type="Gitgud/StaticText" name="CommitHeader">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,96}}"/>
+            <Property name="PanelColour" value="FF1A1331"/>
+            <Property name="Text" value=""/>
+
+            <Window type="Gitgud/Label" name="CommitSummaryLabel">
+                <Property name="Area" value="{{0,18},{0,10},{1,-260},{0,36}}"/>
+                <Property name="Font" value="Gitgud-UI-Title"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/Label" name="CommitBodyLabel">
+                <Property name="Area" value="{{0,18},{0,38},{1,-18},{0,60}}"/>
+                <Property name="Text" value=""/>
+                <Property name="NormalTextColour" value="FFB7AED6"/>
+            </Window>
+            <Window type="Gitgud/Label" name="CommitMetaLabel">
+                <Property name="Area" value="{{0,18},{0,62},{1,-18},{0,86}}"/>
+                <Property name="Font" value="Gitgud-UI-Small"/>
+                <Property name="Text" value=""/>
+                <Property name="NormalTextColour" value="FF766A9C"/>
+            </Window>
+            <!-- Optional actions (e.g. Restore / Discard while viewing a stash). -->
+            <Window type="Gitgud/Button" name="CommitAction1">
+                <Property name="Area" value="{{1,-248},{0,12},{1,-134},{0,40}}"/>
+                <Property name="Text" value=""/>
+                <Property name="Visible" value="false"/>
+            </Window>
+            <Window type="Gitgud/Button" name="CommitAction2">
+                <Property name="Area" value="{{1,-128},{0,12},{1,-14},{0,40}}"/>
+                <Property name="Text" value=""/>
+                <Property name="Visible" value="false"/>
+            </Window>
+            <Window type="Gitgud/StaticText" name="CommitHeaderHairline">
+                <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+                <Property name="PanelColour" value="2EC4B5FD"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+        </Window>
+
+        <!-- Files changed by the selected commit (left of the diff). -->
+        <Window type="Gitgud/ListWidget" name="CommitFilesList">
+            <Property name="Area" value="{{0,0},{0,96},{0,260},{1,0}}"/>
+            <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+            <Property name="BgColour" value="FF1A1331"/>
+            <Property name="BorderColour" value="FF1A1331"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="CommitFilesBorder">
+            <Property name="Area" value="{{0,260},{0,96},{0,261},{1,0}}"/>
+            <Property name="PanelColour" value="2EC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

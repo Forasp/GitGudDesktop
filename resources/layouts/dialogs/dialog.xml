@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  dialog.xml - ONE general-purpose modal dialog, reused for every prompt in
+  the app (confirmations, new branch, clone, sign-in, options, ...).
+
+  It declares a title, a message, five labelled text fields (each with an
+  optional Browse… button), three checkboxes, an error line, and three
+  buttons. scripts/ui/dialog.lua shows only what a given prompt asks for and
+  stacks the visible rows top to bottom, so these Areas are just defaults:
+
+      dialog.prompt({ title = "New branch", fields = { { label = "Name" } },
+                      ok = "Create branch", onOk = function(values) ... end })
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="Dialog">
+        <Property name="Area" value="{{0.5,-250},{0.5,-160},{0.5,250},{0.5,160}}"/>
+        <Property name="PanelColour" value="FF1F1738"/>
+        <Property name="FrameEnabled" value="true"/>
+        <Property name="AlwaysOnTop" value="true"/>
+        <Property name="Visible" value="false"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/Label" name="DialogTitle">
+            <Property name="Area" value="{{0,22},{0,16},{1,-22},{0,44}}"/>
+            <Property name="Font" value="Gitgud-UI-Title"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="DialogMessage">
+            <Property name="Area" value="{{0,22},{0,50},{1,-22},{0,90}}"/>
+            <Property name="PanelColour" value="00000000"/>
+            <Property name="HorzFormatting" value="WordWrapLeftAligned"/>
+            <Property name="VertFormatting" value="TopAligned"/>
+            <Property name="TextColours" value="FFB7AED6"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <Window type="Gitgud/Label" name="DialogFieldLabel1">
+            <Property name="Area" value="{{0,22},{0,0},{1,-22},{0,20}}"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="NormalTextColour" value="FFB7AED6"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Editbox" name="DialogField1">
+            <Property name="Area" value="{{0,22},{0,0},{1,-22},{0,32}}"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Button" name="DialogBrowse1">
+            <Property name="Area" value="{{1,-112},{0,0},{1,-22},{0,32}}"/>
+            <Property name="Text" value="Browse…"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+
+        <Window type="Gitgud/Label" name="DialogFieldLabel2">
+            <Property name="Area" value="{{0,22},{0,0},{1,-22},{0,20}}"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="NormalTextColour" value="FFB7AED6"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Editbox" name="DialogField2">
+            <Property name="Area" value="{{0,22},{0,0},{1,-22},{0,32}}"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Button" name="DialogBrowse2">
+            <Property name="Area" value="{{1,-112},{0,0},{1,-22},{0,32}}"/>
+            <Property name="Text" value="Browse…"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+
+        <Window type="Gitgud/Label" name="DialogFieldLabel3">
+            <Property name="Area" value="{{0,22},{0,0},{1,-22},{0,20}}"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="NormalTextColour" value="FFB7AED6"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Editbox" name="DialogField3">
+            <Property name="Area" value="{{0,22},{0,0},{1,-22},{0,32}}"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Button" name="DialogBrowse3">
+            <Property name="Area" value="{{1,-112},{0,0},{1,-22},{0,32}}"/>
+            <Property name="Text" value="Browse…"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+
+        <Window type="Gitgud/Label" name="DialogFieldLabel4">
+            <Property name="Area" value="{{0,22},{0,0},{1,-22},{0,20}}"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="NormalTextColour" value="FFB7AED6"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Editbox" name="DialogField4">
+            <Property name="Area" value="{{0,22},{0,0},{1,-22},{0,32}}"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Button" name="DialogBrowse4">
+            <Property name="Area" value="{{1,-112},{0,0},{1,-22},{0,32}}"/>
+            <Property name="Text" value="Browse…"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+
+        <Window type="Gitgud/Label" name="DialogFieldLabel5">
+            <Property name="Area" value="{{0,22},{0,0},{1,-22},{0,20}}"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="NormalTextColour" value="FFB7AED6"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Editbox" name="DialogField5">
+            <Property name="Area" value="{{0,22},{0,0},{1,-22},{0,32}}"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Button" name="DialogBrowse5">
+            <Property name="Area" value="{{1,-112},{0,0},{1,-22},{0,32}}"/>
+            <Property name="Text" value="Browse…"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+
+        <Window type="Gitgud/Checkbox" name="DialogCheck1">
+            <Property name="Area" value="{{0,14},{0,0},{1,-22},{0,30}}"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Checkbox" name="DialogCheck2">
+            <Property name="Area" value="{{0,14},{0,0},{1,-22},{0,30}}"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Checkbox" name="DialogCheck3">
+            <Property name="Area" value="{{0,14},{0,0},{1,-22},{0,30}}"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+
+        <Window type="Gitgud/Label" name="DialogError">
+            <Property name="Area" value="{{0,22},{0,0},{1,-22},{0,22}}"/>
+            <Property name="NormalTextColour" value="FFFF5457"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="DialogButtonHairline">
+            <Property name="Area" value="{{0,0},{1,-61},{1,0},{1,-60}}"/>
+            <Property name="PanelColour" value="1FC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Button" name="DialogAltButton">
+            <Property name="Area" value="{{0,22},{1,-46},{0,152},{1,-14}}"/>
+            <Property name="Text" value=""/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Button" name="DialogCancelButton">
+            <Property name="Area" value="{{1,-262},{1,-46},{1,-146},{1,-14}}"/>
+            <Property name="Text" value="Cancel"/>
+        </Window>
+        <Window type="Gitgud/Glow" name="DialogOkGlow">
+            <Property name="Area" value="{{1,-146},{1,-54},{1,-14},{1,-6}}"/>
+            <Property name="GlowColour" value="907C93FF"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+        </Window>
+        <Window type="Gitgud/Button" name="DialogOkButton">
+            <Property name="Area" value="{{1,-138},{1,-46},{1,-22},{1,-14}}"/>
+            <Property name="Text" value="OK"/>
+            <Property name="NormalFillColour" value="FF7C93FF"/>
+            <Property name="HoverFillColour" value="FF93A4FF"/>
+            <Property name="PushedFillColour" value="FF6F84E6"/>
+            <Property name="NormalTextColour" value="FF0E0A1A"/>
+            <Property name="HoverTextColour" value="FF0E0A1A"/>
+            <Property name="PushedTextColour" value="FF0E0A1A"/>
+            <Property name="BorderColour" value="FF93A4FF"/>
+            <Property name="Font" value="Gitgud-UI-Bold"/>
+        </Window>
+    </Window>
+</GUILayout>

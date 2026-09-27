@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  main.xml - the window's entry layout. It only declares the root and the
+  app background, then pulls in every region from its own file with
+  <LayoutImport>. Order matters: later imports draw on top of earlier ones,
+  so popups and dialogs come last.
+
+  Regions (resources/layouts/...):
+    main/titlebar.xml     custom window chrome + menu bar (menus built in Lua)
+    main/toolbar.xml      repository | branch | fetch/push/pull | undo, redo,
+                          graph, console, command palette
+    main/tabs.xml         open repositories as tabs (shown with 2+ open)
+    main/notice.xml       banner for merges/rebases/conflicts in progress
+    main/navigator.xml    branch tree: branches, remotes, tags, stashes,
+                          submodules, worktrees
+    main/sidebar.xml      Changes / History tabs (imports sidebar/*.xml)
+    main/content.xml      diff header, commit header, diff body, merge tool,
+                          file history / blame (content/*.xml)
+    main/graph.xml        the commit graph (takes the sidebar's place)
+    main/console.xml      the console docked at the bottom
+    main/statusbar.xml    status line
+    popups/*.xml          click-away blocker, repository + branch dropdowns,
+                          command palette
+    dialogs/*.xml         modal shade, the generic dialog, repo settings,
+                          interactive rebase
+  scripts/views/frame.lua positions the regions inside MainArea.
+
+  Widget names are the IDs Lua uses (see resources/scripts and
+  docs/LUA_API.md) and form ONE namespace across all files - keep them
+  unique. Your own layouts can be attached at runtime from Lua with
+  gitgud.loadLayout("mods/thing.xml", "Root") - see docs/MODDING.md.
+  With the app running, saving any of these files hot-reloads the UI.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="Root">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+
+        <!-- App-wide vertical gradient (design --gradient-app). First child =
+             drawn first = behind everything. -->
+        <Window type="Gitgud/StaticText" name="AppBackground">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="tl:FF1C1433 tr:FF1C1433 bl:FF0E0A1A br:FF0E0A1A"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <LayoutImport filename="main/titlebar.xml"/>
+        <LayoutImport filename="main/toolbar.xml"/>
+        <LayoutImport filename="main/tabs.xml"/>
+        <LayoutImport filename="main/notice.xml"/>
+
+        <!-- Everything between the toolbar and the status bar. Lua moves its
+             top edge down while the notice banner is showing. -->
+        <Window type="DefaultWindow" name="MainArea">
+            <Property name="Area" value="{{0,0},{0,88},{1,0},{1,-24}}"/>
+            <LayoutImport filename="main/navigator.xml"/>
+            <LayoutImport filename="main/sidebar.xml"/>
+            <LayoutImport filename="main/content.xml"/>
+            <LayoutImport filename="main/graph.xml"/>
+            <LayoutImport filename="main/console.xml"/>
+        </Window>
+
+        <LayoutImport filename="main/statusbar.xml"/>
+
+        <LayoutImport filename="popups/blocker.xml"/>
+        <LayoutImport filename="popups/repositories.xml"/>
+        <LayoutImport filename="popups/branches.xml"/>
+        <LayoutImport filename="popups/palette.xml"/>
+
+        <LayoutImport filename="dialogs/shade.xml"/>
+        <LayoutImport filename="dialogs/dialog.xml"/>
+        <LayoutImport filename="dialogs/repository-settings.xml"/>
+        <LayoutImport filename="dialogs/rebase.xml"/>
+    </Window>
+</GUILayout>

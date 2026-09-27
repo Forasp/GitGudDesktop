@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  tabs.xml - the repository tab strip under the toolbar. Hidden until two or
+  more repositories are open; scripts/views/tabs.lua creates one button per
+  open repository (plus its close "x") inside TabStrip and moves the rest of
+  the window down through scripts/views/frame.lua.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="TabStrip">
+        <Property name="Area" value="{{0,0},{0,88},{1,0},{0,118}}"/>
+        <Property name="PanelColour" value="FF0E0A1A"/>
+        <Property name="Visible" value="false"/>
+        <Property name="Text" value=""/>
+        <Window type="Gitgud/StaticText" name="TabStripHairline">
+            <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="2EC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

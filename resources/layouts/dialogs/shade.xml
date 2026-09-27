@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  shade.xml - dims the window behind a modal dialog and swallows clicks so
+  nothing underneath can be used until the dialog closes.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/Button" name="ModalShade">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+        <Property name="Text" value=""/>
+        <Property name="NormalFillColour" value="A6050310"/>
+        <Property name="HoverFillColour" value="A6050310"/>
+        <Property name="PushedFillColour" value="A6050310"/>
+        <Property name="BorderColour" value="00000000"/>
+        <Property name="AlwaysOnTop" value="true"/>
+        <Property name="Visible" value="false"/>
+    </Window>
+</GUILayout>

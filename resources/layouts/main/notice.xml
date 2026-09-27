@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  notice.xml - the banner under the toolbar for operations in progress
+  (merge / rebase / cherry-pick / revert, conflicts, detached HEAD).
+  Hidden by default; scripts/views/notice.lua fills the text and up to three
+  action buttons, and moves MainArea down while it's showing.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="NoticeBar">
+        <Property name="Area" value="{{0,0},{0,88},{1,0},{0,124}}"/>
+        <Property name="PanelColour" value="FF2A2138"/>
+        <Property name="Visible" value="false"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/StaticText" name="NoticeAccent">
+            <Property name="Area" value="{{0,0},{0,0},{0,3},{1,0}}"/>
+            <Property name="PanelColour" value="FFFFCF6E"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Label" name="NoticeText">
+            <Property name="Area" value="{{0,16},{0,0},{1,-420},{1,0}}"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Button" name="NoticeButton1">
+            <Property name="Area" value="{{1,-402},{0,5},{1,-274},{1,-5}}"/>
+            <Property name="Text" value=""/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Button" name="NoticeButton2">
+            <Property name="Area" value="{{1,-268},{0,5},{1,-140},{1,-5}}"/>
+            <Property name="Text" value=""/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/Button" name="NoticeButton3">
+            <Property name="Area" value="{{1,-134},{0,5},{1,-8},{1,-5}}"/>
+            <Property name="Text" value=""/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="NoticeHairline">
+            <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="2EC4B5FD"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

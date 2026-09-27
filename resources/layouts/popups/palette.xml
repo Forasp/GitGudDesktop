@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  palette.xml - the command palette (Ctrl+K or F1): type to search every
+  menu command, branch, repository, and changed file; Up/Down to move,
+  Enter to run, Escape to close. scripts/ui/palette.lua fills PaletteList.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="PalettePopup">
+        <Property name="Area" value="{{0.5,-320},{0,60},{0.5,320},{0,500}}"/>
+        <Property name="PanelColour" value="FF1F1738"/>
+        <Property name="FrameEnabled" value="true"/>
+        <Property name="AlwaysOnTop" value="true"/>
+        <Property name="Visible" value="false"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/Editbox" name="PaletteEdit">
+            <Property name="Area" value="{{0,10},{0,10},{1,-10},{0,44}}"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Gitgud/Label" name="PalettePlaceholder">
+            <Property name="Area" value="{{0,22},{0,10},{1,-44},{0,44}}"/>
+            <Property name="Text" value="Search commands, branches, repositories, files…"/>
+            <Property name="NormalTextColour" value="FF766A9C"/>
+        </Window>
+        <Window type="Gitgud/ListWidget" name="PaletteList">
+            <Property name="Area" value="{{0,2},{0,52},{1,-2},{1,-28}}"/>
+            <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+            <Property name="BgColour" value="FF1F1738"/>
+            <Property name="BorderColour" value="FF1F1738"/>
+            <Property name="SelectionColour" value="FF342A56"/>
+        </Window>
+        <Window type="Gitgud/Label" name="PaletteHint">
+            <Property name="Area" value="{{0,14},{1,-26},{1,-14},{1,-4}}"/>
+            <Property name="Font" value="Gitgud-UI-Small"/>
+            <Property name="Text" value="↑↓ to move   ·   Enter to run   ·   Esc to close"/>
+            <Property name="NormalTextColour" value="FF766A9C"/>
+        </Window>
+    </Window>
+</GUILayout>

@@ -1,0 +1,17 @@
+diff --git a/cegui/src/views/ItemView.cpp b/cegui/src/views/ItemView.cpp
+index db3a81533..6b5a9973a 100644
+--- a/cegui/src/views/ItemView.cpp
++++ b/cegui/src/views/ItemView.cpp
+@@ -402,7 +402,11 @@ void ItemView::onSelectionChanged(ItemViewEventArgs& args)
+ //----------------------------------------------------------------------------//
+ bool ItemView::onScrollPositionChanged(const EventArgs&)
+ {
+-    invalidateView(false);
++    // Gitgud patch: scrolling moves the viewport, it doesn't change any item's
++    // size or text. invalidateView() marked the view dirty, which made
++    // ListView::prepareForRender() re-format EVERY item on every scroll step
++    // (O(items) text layout per wheel notch). A plain redraw is enough.
++    invalidate(false);
+     return true;
+ }
+ 
