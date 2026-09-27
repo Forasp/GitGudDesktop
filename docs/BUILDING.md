@@ -184,6 +184,8 @@ The workflow then publishes a release for the tag with
   Start-Process build\release\bin\gitgud.exe -ArgumentList C:\temp\gg-test
   ```
 
+  `GITGUD_PERF=<ms>` also logs every main-loop pass, live-resize step, and
+  Lua handler or timer slower than that, with the phase or source line.
   Grep the log for `[check]`, `[perf]`, and `failed`. Always point these at a
   throwaway repository — they stage, commit, branch, and push. They also save
   settings, open tabs, and recent repositories to `%APPDATA%\Gitgud`; set

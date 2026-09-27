@@ -138,9 +138,17 @@ local function columnSpans(state)
     return spans
 end
 
---- Position headers, dividers, and column lists.
+--- Position headers, dividers, and column lists. Only the grid's width and
+-- the column widths matter, so a pass that changes neither (a height-only
+-- resize, a splitter elsewhere, a grid on a hidden tab) is skipped.
 -- @param state  grid state
-local function layout(state)
+-- @param force  lay out even if the width is unchanged (column widths moved)
+local function layout(state, force)
+    local _, _, width = gitgud.getRect(state.name)
+    if not force and width and width == state.laidOutWidth then
+        return
+    end
+    state.laidOutWidth = width
     local spans = columnSpans(state)
     for i, span in ipairs(spans) do
         local header = state.name .. "H" .. i
@@ -399,7 +407,7 @@ function grid.create(name, parent, spec)
             end
             local spans = columnSpans(state)
             column.width = math.max(MIN_WIDTH, x - left - spans[c].x)
-            layout(state)
+            layout(state, true)
         end)
         gitgud.on(divider .. ".dragEnded", function()
             saveWidths(state)
@@ -526,7 +534,7 @@ end
 -- @param name  grid name
 function grid.layout(name)
     if grids[name] then
-        layout(grids[name])
+        layout(grids[name], true)
     end
 end
 

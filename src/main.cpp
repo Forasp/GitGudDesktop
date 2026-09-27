@@ -22,14 +22,19 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <SDL.h>
@@ -113,27 +118,40 @@ namespace
       public:
         void SetRoots(std::vector<std::string> _Roots)
         {
+            // The default UI's package root is the base root: scan it once.
+            std::sort(_Roots.begin(), _Roots.end());
+            _Roots.erase(std::unique(_Roots.begin(), _Roots.end()), _Roots.end());
             m_Roots = std::move(_Roots);
-            m_Snapshot = Scan();
+            m_uiSnapshot = Scan();
         }
 
         bool Changed()
         {
-            auto now = Scan();
-            if (now != m_Snapshot)
+            const std::uint64_t uinow = Scan();
+            if (uinow != m_uiSnapshot)
             {
-                m_Snapshot = std::move(now);
+                m_uiSnapshot = uinow;
                 return true;
             }
             return false;
         }
 
       private:
-        // A cheap fingerprint: every watched file's relative path + mtime,
-        // recursively (layouts and scripts live in sub-folders).
-        std::string Scan() const
+        // A cheap fingerprint: a hash of every watched file's path + mtime,
+        // recursively (layouts and scripts live in sub-folders). The times
+        // come from the directory listing itself, so there is no extra file
+        // system call per file, and nothing is allocated per file.
+        std::uint64_t Scan() const
         {
-            std::string sig;
+            std::uint64_t sig = 14695981039346656037ull; // FNV-1a
+            auto mix = [&sig](const void* _pData, std::size_t _uSize)
+            {
+                const auto* pbytes = static_cast<const unsigned char*>(_pData);
+                for (std::size_t ui = 0; ui < _uSize; ++ui)
+                {
+                    sig = (sig ^ pbytes[ui]) * 1099511628211ull;
+                }
+            };
             for (const std::string& root : m_Roots)
             {
                 for (const char* szsub : {"/layouts", "/scripts", "/looknfeel", "/schemes"})
@@ -151,13 +169,15 @@ namespace
                             break;
                         }
                         std::error_code tec;
-                        const auto t = fs::last_write_time(it->path(), tec);
+                        const auto t = it->last_write_time(tec);
                         if (tec)
                         {
                             continue;
                         }
-                        sig += it->path().u8string();
-                        sig += std::to_string(t.time_since_epoch().count());
+                        const auto& path = it->path().native();
+                        mix(path.data(), path.size() * sizeof(path[0]));
+                        const auto ticks = t.time_since_epoch().count();
+                        mix(&ticks, sizeof(ticks));
                     }
                 }
             }
@@ -165,8 +185,99 @@ namespace
         }
 
         std::vector<std::string> m_Roots;
-        std::string m_Snapshot;
+        std::uint64_t m_uiSnapshot = 0;
     };
+
+    // GITGUD_PERF=<ms>: log every main-loop pass that takes at least that
+    // long, split into its phases, so stalls can be traced to their source.
+    // Slow Lua handlers and timers are reported by the Lua engine itself.
+    class FrameProfiler
+    {
+      public:
+        explicit FrameProfiler(int _iThresholdMs) : m_iThresholdMs(_iThresholdMs)
+        {
+        }
+
+        bool Enabled() const
+        {
+            return m_iThresholdMs > 0;
+        }
+
+        void Begin()
+        {
+            if (Enabled())
+            {
+                m_Phases.clear();
+                m_Start = m_Last = Clock::now();
+            }
+        }
+
+        // Close the phase that ran since the previous mark.
+        void Mark(const char* _szPhase)
+        {
+            if (Enabled())
+            {
+                const auto now = Clock::now();
+                m_Phases.emplace_back(_szPhase, Ms(m_Last, now));
+                m_Last = now;
+            }
+        }
+
+        void End(const char* _szWhat = "frame")
+        {
+            if (!Enabled())
+            {
+                return;
+            }
+            // Time blocked in the buffer swap (vsync) isn't work: leave it
+            // out of the threshold test.
+            const double ftotal = Ms(m_Start, Clock::now());
+            double fswap = 0.0;
+            for (const auto& [szname, fms] : m_Phases)
+            {
+                fswap += std::strcmp(szname, "swap") == 0 ? fms : 0.0;
+            }
+            if (ftotal - fswap < m_iThresholdMs)
+            {
+                return;
+            }
+            std::string line;
+            for (const auto& [szname, fms] : m_Phases)
+            {
+                if (fms >= 1.0)
+                {
+                    char buf[64];
+                    std::snprintf(buf, sizeof(buf), "  %s %.1f", szname, fms);
+                    line += buf;
+                }
+            }
+            std::printf("[perf] %s %.1f ms:%s\n", _szWhat, ftotal, line.c_str());
+        }
+
+      private:
+        using Clock = std::chrono::steady_clock;
+
+        static double Ms(Clock::time_point _From, Clock::time_point _To)
+        {
+            return std::chrono::duration<double, std::milli>(_To - _From).count();
+        }
+
+        int m_iThresholdMs;
+        Clock::time_point m_Start;
+        Clock::time_point m_Last;
+        std::vector<std::pair<const char*, double>> m_Phases;
+    };
+
+    int PerfThresholdFromEnv()
+    {
+        const char* szvalue = std::getenv("GITGUD_PERF");
+        if (!szvalue || !*szvalue)
+        {
+            return 0;
+        }
+        const int ims = std::atoi(szvalue);
+        return ims > 0 ? ims : 25;
+    }
 
     // SDL hit test for the borderless window: it decides, per mouse position,
     // whether the point acts as a Resize border, a title-bar drag area, or plain
@@ -318,6 +429,9 @@ namespace
         {
             SDL_Window* m_pWindow = nullptr;
             bool m_bRedraw = true;
+            bool m_bResizePending = false;
+            int m_iWidth = 0; // the size the UI was last laid out for
+            int m_iHeight = 0;
         };
 
         AppShell(SDL_Window* _pMain, SDL_GLContext _Gl, gitgud::ui::IUiBackend* _pUi,
@@ -401,7 +515,7 @@ namespace
                 return false;
             }
 
-            m_PopOuts[_Spec.m_Id] = PopOut{pwindow, true};
+            m_PopOuts[_Spec.m_Id] = PopOut{pwindow, true, false, iw, ih};
             UpdateSwapInterval();
             return true;
         }
@@ -674,6 +788,27 @@ namespace
         return gitgud::imaging::WritePng(_Path, shot);
     }
 
+    // SDL event-watch trampoline: _pData is the std::function to call.
+    int SDLCALL CallEventWatch(void* _pData, SDL_Event* _pEv)
+    {
+        (*static_cast<std::function<void(const SDL_Event&)>*>(_pData))(*_pEv);
+        return 0;
+    }
+
+    // True for a mouse motion that the next queued event supersedes (another
+    // motion over the same window): only the latest position matters, so
+    // hover and drag handlers run once per frame instead of once per event.
+    bool IsSupersededMotion(const SDL_Event& _Ev)
+    {
+        if (_Ev.type != SDL_MOUSEMOTION)
+        {
+            return false;
+        }
+        SDL_Event next;
+        return SDL_PeepEvents(&next, 1, SDL_PEEKEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT) == 1 &&
+               next.type == SDL_MOUSEMOTION && next.motion.windowID == _Ev.motion.windowID;
+    }
+
     // The SDL window an event concerns (0 when it has none).
     Uint32 EventWindowId(const SDL_Event& _Ev)
     {
@@ -861,7 +996,9 @@ int main(int _iArgc, char* _aSzArgv[])
         }
     }
 
+    FrameProfiler profiler(PerfThresholdFromEnv());
     gitgud::lua::LuaEngine lua;
+    lua.SetSlowCallThreshold(PerfThresholdFromEnv());
     lua.Bind(repo ? &*repo : nullptr, &bus, ui.get(), &tasks, credentials.get());
     lua.SetAppHost(&shell);
 
@@ -1037,6 +1174,60 @@ int main(int _iArgc, char* _aSzArgv[])
     constexpr int ikActiveTickMs = 16;
     constexpr int ikIdleTickMs = 250;
     constexpr Uint32 kWatchIntervalMs = 1000;
+    // A focus loss and gain this close together is focus moving between
+    // our own windows.
+    constexpr Uint32 kOwnFocusSwitchMs = 250;
+    Uint32 lastFocusLostTick = 0;
+
+    // Lay the UI out at each window's current size, if that changed. Size
+    // events only flag the window: a border drag queues one per mouse move,
+    // and only the last size counts.
+    bool bmainResizePending = false;
+    int imainWidth = -1;
+    int imainHeight = -1;
+    auto applyResizes = [&]()
+    {
+        if (!ui)
+        {
+            return;
+        }
+        if (bmainResizePending)
+        {
+            bmainResizePending = false;
+            int iw = 0;
+            int ih = 0;
+            SDL_GetWindowSize(pwindow, &iw, &ih);
+            if (iw != imainWidth || ih != imainHeight)
+            {
+                imainWidth = iw;
+                imainHeight = ih;
+                ui->Resize(iw, ih);
+                bus.Publish({"window.resized", std::to_string(iw) + "x" + std::to_string(ih)});
+                bredraw = true;
+            }
+        }
+        for (auto& [id, popOut] : shell.PopOuts())
+        {
+            if (!popOut.m_bResizePending)
+            {
+                continue;
+            }
+            popOut.m_bResizePending = false;
+            int iw = 0;
+            int ih = 0;
+            SDL_GL_GetDrawableSize(popOut.m_pWindow, &iw, &ih);
+            if (iw == popOut.m_iWidth && ih == popOut.m_iHeight)
+            {
+                continue;
+            }
+            popOut.m_iWidth = iw;
+            popOut.m_iHeight = ih;
+            ui->ResizeSurface(id, iw, ih);
+            bus.Publish(
+                {"window.popOutResized", id + "|" + std::to_string(iw) + "x" + std::to_string(ih)});
+            popOut.m_bRedraw = true;
+        }
+    };
 
     auto handleEvent = [&](const SDL_Event& _Ev, bool& _bRunning)
     {
@@ -1080,22 +1271,16 @@ int main(int _iArgc, char* _aSzArgv[])
             {
                 bredraw = true;
             }
-            if (_Ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED && ui)
+            if (_Ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
             {
-                if (bmain)
+                // Laid out once for the whole batch (applyResizes).
+                if (ppopOut)
                 {
-                    ui->Resize(_Ev.window.data1, _Ev.window.data2);
-                    bus.Publish({"window.resized",
-                        std::to_string(_Ev.window.data1) + "x" + std::to_string(_Ev.window.data2)});
+                    ppopOut->m_bResizePending = true;
                 }
                 else
                 {
-                    int iw = 0;
-                    int ih = 0;
-                    SDL_GL_GetDrawableSize(ppopOut->m_pWindow, &iw, &ih);
-                    ui->ResizeSurface(target, iw, ih);
-                    bus.Publish({"window.popOutResized",
-                        target + "|" + std::to_string(iw) + "x" + std::to_string(ih)});
+                    bmainResizePending = true;
                 }
             }
             else if (_Ev.window.event == SDL_WINDOWEVENT_CLOSE)
@@ -1125,11 +1310,25 @@ int main(int _iArgc, char* _aSzArgv[])
             {
                 bus.Publish({"window.state", "restored"});
             }
+            else if (_Ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST)
+            {
+                lastFocusLostTick = SDL_GetTicks();
+            }
             else if (_Ev.window.event == SDL_WINDOWEVENT_FOCUS_GAINED)
             {
-                // Coming back from an editor/terminal: refresh.
+                // Coming back from an editor/terminal: refresh. Focus moving
+                // straight from one of our own windows (a pop-out) doesn't
+                // mean anything changed on disk, and a refresh isn't free.
                 // Pop-outs report which window came forward.
-                bus.Publish({bmain ? "app.focusGained" : "window.focused", target});
+                const bool bfromOwnWindow = SDL_GetTicks() - lastFocusLostTick < kOwnFocusSwitchMs;
+                if (!bmain)
+                {
+                    bus.Publish({"window.focused", target});
+                }
+                else if (!bfromOwnWindow)
+                {
+                    bus.Publish({"app.focusGained", target});
+                }
             }
             break;
 
@@ -1264,6 +1463,7 @@ int main(int _iArgc, char* _aSzArgv[])
         {
             return false;
         }
+        profiler.Mark("pre-draw");
         SDL_GL_MakeCurrent(_pWindow, gl);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         if (_Surface.empty())
@@ -1282,8 +1482,82 @@ int main(int _iArgc, char* _aSzArgv[])
             pendingScreenshot.clear();
             pendingScreenshotWindow.clear();
         }
+        profiler.Mark("draw");
         SDL_GL_SwapWindow(_pWindow);
+        profiler.Mark("swap");
         return true;
+    };
+
+    // Draw every window that needs it.
+    auto drawAll = [&]()
+    {
+        for (auto& [id, popOut] : shell.PopOuts())
+        {
+            if (drawWindow(popOut.m_pWindow, id, popOut.m_bRedraw))
+            {
+                popOut.m_bRedraw = false;
+            }
+        }
+        if (drawWindow(pwindow, "", bredraw))
+        {
+            bredraw = false;
+        }
+        SDL_GL_MakeCurrent(pwindow, gl);
+    };
+
+    // --- Live resize -----------------------------------------------------
+    // Dragging a window border on Windows runs a modal loop inside the OS:
+    // SDL_WaitEventTimeout doesn't return until the button is released, so
+    // the window would show stale, stretched content for the whole drag. SDL
+    // still hands every new size to event watchers as it happens; this one
+    // lays the window out and draws it right away. It only acts while the
+    // loop is parked in SDL's event functions (bpumping), never in the middle
+    // of a handler (a native file dialog pumps window messages too).
+    const SDL_threadID mainThread = SDL_ThreadID();
+    bool bpumping = false;
+    std::function<void(const SDL_Event&)> liveResize = [&](const SDL_Event& _Ev)
+    {
+        // Worker threads push events too: check the type before any state.
+        if (_Ev.type != SDL_WINDOWEVENT || _Ev.window.event != SDL_WINDOWEVENT_SIZE_CHANGED ||
+            SDL_ThreadID() != mainThread || !bpumping || !ui)
+        {
+            return;
+        }
+        bpumping = false; // no re-entry while Lua and the renderer run
+        profiler.Begin();
+        if (_Ev.window.windowID == SDL_GetWindowID(pwindow))
+        {
+            bmainResizePending = true;
+        }
+        else if (auto surface = shell.SurfaceOf(_Ev.window.windowID))
+        {
+            shell.PopOuts()[*surface].m_bResizePending = true;
+        }
+        applyResizes();
+        profiler.Mark("resize");
+        bus.Drain(); // scripts lay themselves out for the new size
+        profiler.Mark("events");
+        ui->Update(0.0f);
+        drawAll();
+        profiler.End("live resize");
+        bpumping = true;
+    };
+    SDL_AddEventWatch(CallEventWatch, &liveResize);
+
+    // SDL's event functions, flagged so the live-resize watcher may act.
+    auto waitEvent = [&](SDL_Event& _Ev, int _iTimeoutMs)
+    {
+        bpumping = true;
+        const bool bgot = SDL_WaitEventTimeout(&_Ev, _iTimeoutMs) != 0;
+        bpumping = false;
+        return bgot;
+    };
+    auto pollEvent = [&](SDL_Event& _Ev)
+    {
+        bpumping = true;
+        const bool bgot = SDL_PollEvent(&_Ev) != 0;
+        bpumping = false;
+        return bgot;
     };
 
     // --- Main loop -------------------------------------------------------
@@ -1312,14 +1586,20 @@ int main(int _iArgc, char* _aSzArgv[])
             sinceWatch >= kWatchIntervalMs ? 0 : static_cast<int>(kWatchIntervalMs - sinceWatch));
 
         SDL_Event ev;
-        if (SDL_WaitEventTimeout(&ev, itimeout))
+        const bool bgotEvent = waitEvent(ev, itimeout);
+        profiler.Begin();
+        if (bgotEvent)
         {
-            handleEvent(ev, brunning);
-            while (SDL_PollEvent(&ev))
+            do
             {
-                handleEvent(ev, brunning);
-            }
+                if (!IsSupersededMotion(ev))
+                {
+                    handleEvent(ev, brunning);
+                }
+            } while (pollEvent(ev));
         }
+        applyResizes();
+        profiler.Mark("input");
 
         // Deliver queued events (worker completions, Lua-raised intents, ...)
         // and due timers on this — the UI — thread.
@@ -1327,11 +1607,13 @@ int main(int _iArgc, char* _aSzArgv[])
         {
             bredraw = true;
         }
+        profiler.Mark("events");
         if (lua.Tick())
         {
             bus.Drain();
             bredraw = true;
         }
+        profiler.Mark("timers");
 
         // Window closes and UI switches scripts asked for, now that no widget
         // handler is running.
@@ -1347,7 +1629,9 @@ int main(int _iArgc, char* _aSzArgv[])
         if (afterTick - lastWatchTick >= kWatchIntervalMs)
         {
             lastWatchTick = afterTick;
-            if (watcher.Changed())
+            const bool bchanged = watcher.Changed();
+            profiler.Mark("watch");
+            if (bchanged)
             {
                 std::printf("[hot-reload] resources changed; reloading UI\n");
                 shell.CloseAllWindows();
@@ -1360,25 +1644,18 @@ int main(int _iArgc, char* _aSzArgv[])
 
         if (!ui)
         {
+            profiler.End();
             continue;
         }
+        profiler.Mark("other");
 
         // Advance CEGUI's clock (caret blink, tooltips, animations); it marks
         // itself dirty when that changes anything visible.
         ui->Update(static_cast<float>(afterTick - lastPulseTick) / 1000.0f);
         lastPulseTick = afterTick;
+        profiler.Mark("update");
 
-        for (auto& [id, popOut] : shell.PopOuts())
-        {
-            if (drawWindow(popOut.m_pWindow, id, popOut.m_bRedraw))
-            {
-                popOut.m_bRedraw = false;
-            }
-        }
-        if (drawWindow(pwindow, "", bredraw))
-        {
-            bredraw = false;
-        }
+        drawAll();
         // A screenshot of a window that no longer exists can't be taken.
         if (!pendingScreenshotWindow.empty() && shell.PopOuts().count(pendingScreenshotWindow) == 0)
         {
@@ -1386,10 +1663,12 @@ int main(int _iArgc, char* _aSzArgv[])
             pendingScreenshot.clear();
             pendingScreenshotWindow.clear();
         }
-        SDL_GL_MakeCurrent(pwindow, gl);
+        profiler.Mark("render");
+        profiler.End();
     }
 
     // --- Teardown (RAII handles the rest) --------------------------------
+    SDL_DelEventWatch(CallEventWatch, &liveResize);
     shell.CloseAllWindows();
     if (ui)
     {

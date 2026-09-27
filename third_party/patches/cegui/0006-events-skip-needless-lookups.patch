@@ -1,0 +1,51 @@
+diff --git a/cegui/src/EventSet.cpp b/cegui/src/EventSet.cpp
+index 6956fd815..4ba96f2c0 100644
+--- a/cegui/src/EventSet.cpp
++++ b/cegui/src/EventSet.cpp
+@@ -137,6 +137,11 @@ Event* EventSet::getEventObject(const String& name, bool autoAdd)
+ //----------------------------------------------------------------------------//
+ void EventSet::fireEvent_impl(const String& name, EventArgs& args)
+ {
++    // Gitgud patch: most windows have no subscribers for most events; skip
++    // hashing the UTF-32 name when there is nothing to find.
++    if (d_events.empty())
++        return;
++
+     if (!d_muted)
+         if (Event* ev = getEventObject(name))
+             (*ev)(args);
+diff --git a/cegui/src/GlobalEventSet.cpp b/cegui/src/GlobalEventSet.cpp
+index c0cb6115f..1f0908ca7 100644
+--- a/cegui/src/GlobalEventSet.cpp
++++ b/cegui/src/GlobalEventSet.cpp
+@@ -81,6 +81,30 @@ namespace CEGUI
+ 	*************************************************************************/
+ 	void GlobalEventSet::fireEvent(const String& name, EventArgs& args, const String& eventNamespace)
+ 	{
++        // Gitgud patch: every event any window fires comes through here, and
++        // building "Namespace/Name" to look it up costs an allocation and a
++        // UTF-32 hash per event, while the global set usually holds one or two
++        // subscriptions. Match those in place; keep the lookup for big sets.
++        if (d_muted || d_events.empty())
++            return;
++        if (d_events.size() <= 8)
++        {
++            const size_t nsLength = eventNamespace.length();
++            for (auto& entry : d_events)
++            {
++                const String& key = entry.first;
++                if (key.length() == nsLength + 1 + name.length() &&
++                    key[nsLength] == '/' &&
++                    key.compare(0, nsLength, eventNamespace) == 0 &&
++                    key.compare(nsLength + 1, name.length(), name) == 0)
++                {
++                    (*entry.second)(args);
++                    return;
++                }
++            }
++            return;
++        }
++
+         // here we are very explicit about how we construct the event string.
+         // Doing it 'longhand' like this saves significant time when compared
+         // to the obvious - and previous - implementation:

@@ -79,6 +79,7 @@ namespace gitgud::git::internal
     using DiffPtr = Handle<git_diff, git_diff_free>;
     using ReferencePtr = Handle<git_reference, git_reference_free>;
     using BranchIteratorPtr = Handle<git_branch_iterator, git_branch_iterator_free>;
+    using ReferenceIteratorPtr = Handle<git_reference_iterator, git_reference_iterator_free>;
     using RevwalkPtr = Handle<git_revwalk, git_revwalk_free>;
     using RemotePtr = Handle<git_remote, git_remote_free>;
     using AnnotatedCommitPtr = Handle<git_annotated_commit, git_annotated_commit_free>;

@@ -184,6 +184,11 @@ TEST_CASE("Line-level staging stages exactly the chosen lines", "[staging]")
 
     // A stale line count is refused instead of staging the wrong lines.
     REQUIRE_THROWS_AS(t.m_Repo.SetStagedLines("f.txt", {plus[0]}, 999), GitError);
+
+    // The whole file staged: every changed line reads as staged.
+    t.m_Repo.Stage("f.txt");
+    const auto all = t.m_Repo.StagedLines("f.txt");
+    REQUIRE(all == std::vector<std::size_t>{minus[0], plus[0], minus[1], plus[1]});
 }
 
 TEST_CASE("Line staging of a new file, and unstaging it back to untracked", "[staging]")

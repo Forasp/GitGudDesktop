@@ -1,0 +1,47 @@
+diff --git a/cegui/include/CEGUI/views/ListView.h b/cegui/include/CEGUI/views/ListView.h
+index b2826baef..9409d68f7 100644
+--- a/cegui/include/CEGUI/views/ListView.h
++++ b/cegui/include/CEGUI/views/ListView.h
+@@ -71,6 +71,11 @@ struct CEGUIEXPORT ListViewItemRenderingState final
+     String d_text;
+     ListView* d_attachedListView = nullptr;
+     bool d_isSelected = false;
++    // Gitgud patch: what d_renderedText was parsed from, so a re-layout that
++    // only changes the width (a resize) reuses the parse (see updateItem).
++    const Font* d_parsedFont = nullptr;
++    const TextParser* d_parsedWith = nullptr;
++    bool d_isParsed = false;
+ };
+ 
+ /*!
+diff --git a/cegui/src/views/ListView.cpp b/cegui/src/views/ListView.cpp
+index f8ad5ba1d..b11e42804 100644
+--- a/cegui/src/views/ListView.cpp
++++ b/cegui/src/views/ListView.cpp
+@@ -224,10 +224,23 @@ void ListView::resortView()
+ //----------------------------------------------------------------------------//
+ void ListView::updateItem(ListViewItemRenderingState &item, ModelIndex index, float& max_width, float& total_height)
+ {
+-    item.d_text = d_itemModel->getData(index);
+-
++    // Gitgud patch: parsing the markup into a RenderedText is most of the
++    // cost of an item, and it doesn't depend on the width. A view that went
++    // dirty because it was resized re-parsed every item; now an item is only
++    // re-parsed when its text, font or parser changed, and otherwise just
++    // re-formatted for the new width below.
++    String text = d_itemModel->getData(index);
+     TextParser* parser = getTextParser();
+-    item.d_renderedText.renderText(item.d_text, getTextParser(), getEffectiveFont(), DefaultParagraphDirection::LeftToRight);
++    Font* font = getEffectiveFont();
++    if (!item.d_isParsed || text != item.d_text || font != item.d_parsedFont ||
++        parser != item.d_parsedWith)
++    {
++        item.d_text = std::move(text);
++        item.d_renderedText.renderText(item.d_text, parser, font, DefaultParagraphDirection::LeftToRight);
++        item.d_parsedFont = font;
++        item.d_parsedWith = parser;
++        item.d_isParsed = true;
++    }
+ 
+     Sizef itemsAreaSize = getPixelSize();
+     const Scrollbar* const vertScrollbar = getVertScrollbar();

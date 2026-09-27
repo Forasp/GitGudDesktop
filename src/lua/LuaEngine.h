@@ -108,6 +108,14 @@ namespace gitgud::lua
         // Monotonic clock shared by timers and gitgud.now().
         static std::uint64_t NowMs();
 
+        // Log every handler or timer callback that takes at least this many
+        // milliseconds, with the function's source location (GITGUD_PERF).
+        // 0 (the default) turns the report off.
+        void SetSlowCallThreshold(int _iMs)
+        {
+            m_iSlowCallMs = _iMs;
+        }
+
         lua_State* State()
         {
             return m_pL;
@@ -151,6 +159,9 @@ namespace gitgud::lua
       private:
         void InstallBindings(); // registers the `gitgud` global table
         void ApplyScriptRoot();
+        // Call the function under _iArgs arguments on the stack, protected,
+        // and report it if it was slow (see SetSlowCallThreshold).
+        void CallTimed(int _iRef, int _iArgs, const char* _szContext, const std::string& _What);
 
         struct Timer
         {
@@ -175,6 +186,7 @@ namespace gitgud::lua
 
         std::vector<Timer> m_Timers;
         int m_iNextTimerId = 1;
+        int m_iSlowCallMs = 0;
     };
 
 } // namespace gitgud::lua

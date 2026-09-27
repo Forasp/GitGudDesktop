@@ -254,6 +254,68 @@ TEST_CASE("branch create/list/checkout/rename/delete", "[branches]")
     }
 }
 
+TEST_CASE("branch listing reports a local upstream and its ahead count", "[branches]")
+{
+    TempRepo t;
+    auto repo = t.Init();
+    t.write("a.txt", "one\n");
+    repo.Stage("a.txt");
+    t.Commit(repo, "c1");
+    const std::string base = repo.CurrentBranch();
+
+    // "feature" tracks the local base branch (remote ".") and is one ahead.
+    repo.CreateBranch("feature");
+    repo.Checkout("feature");
+    repo.SetConfig("branch.feature.remote", ".");
+    repo.SetConfig("branch.feature.merge", "refs/heads/" + base);
+    t.write("a.txt", "two\n");
+    repo.Stage("a.txt");
+    t.Commit(repo, "c2");
+
+    bool sawFeature = false;
+    for (const auto& b : repo.Branches())
+    {
+        if (b.m_Name == "feature")
+        {
+            sawFeature = true;
+            CHECK(b.m_bIsHead);
+            CHECK(b.m_Upstream == base);
+            CHECK(b.m_Ahead == 1);
+            CHECK(b.m_Behind == 0);
+        }
+        else if (b.m_Name == base)
+        {
+            CHECK_FALSE(b.m_bIsHead);
+            CHECK(b.m_Upstream.empty());
+        }
+    }
+    CHECK(sawFeature);
+}
+
+TEST_CASE("tags list lightweight and annotated tags with their commits", "[tags]")
+{
+    TempRepo t;
+    auto repo = t.Init();
+    t.write("a.txt", "one\n");
+    repo.Stage("a.txt");
+    const std::string first = t.Commit(repo, "c1");
+    t.write("a.txt", "two\n");
+    repo.Stage("a.txt");
+    const std::string second = t.Commit(repo, "c2");
+
+    repo.CreateTag("v2", second, "Release two");
+    repo.CreateTag("v1", first);
+
+    const auto tags = repo.Tags();
+    REQUIRE(tags.size() == 2);
+    CHECK(tags[0].m_Name == "v1"); // sorted by name
+    CHECK(tags[0].m_TargetOid == first);
+    CHECK(tags[0].m_Message.empty());
+    CHECK(tags[1].m_Name == "v2");
+    CHECK(tags[1].m_TargetOid == second); // peeled through the tag object
+    CHECK(tags[1].m_Message.find("Release two") != std::string::npos);
+}
+
 TEST_CASE("currentBranch works on an unborn HEAD", "[branches]")
 {
     TempRepo t;
