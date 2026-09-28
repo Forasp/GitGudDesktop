@@ -13,28 +13,35 @@ account required.
    to unzip anywhere and run `gitgud.exe` without installing. Other versions
    and release notes are on the
    [releases page](https://github.com/Forasp/GitGudDesktop/releases).
-2. Start GitGud. Next time it reopens the repository you had open.
-3. Pick an interface, then add a repository: clone one, create one, or open a
-   folder you already have.
+2. Start GitGud and pick an interface (you can switch any time).
+3. Add a repository: clone one, create one, or open a folder you already
+   have. Next time, GitGud reopens the repository you had open.
 
-Windows, 64-bit.
+Windows, 64-bit. The **[Getting Started](https://github.com/Forasp/GitGudDesktop/wiki/Getting-Started)** guide walks
+through each step with screenshots, including signing in to a server and
+updates.
 
 ## Two prebuilt interfaces, or build your own
 
-Default interfaces similar to other popular revision control software.
+GitGud ships two interfaces similar to other popular revision control
+software, and asks which one you'd like on first launch:
 
-![The default interface behind the Depot interface](.github/images/ui-interfaces.png)
+- **GitGud**: changes and history side by side, a commit graph,
+  a branch tree, undo, interactive rebase, and a merge tool.
+- **Depot**: pending changelists with shelving, submitted changelists, and
+  revision graph, time-lapse, and diff windows.
 
-See [Modding ▸ Your own interface](https://github.com/Forasp/GitGudDesktop/wiki/Modding#9-your-own-interface).
+![The GitGud interface behind the Depot interface](.github/images/ui-interfaces.png)
+
+Both work on the same repositories and settings. Or build your own: see
+[Modding](https://github.com/Forasp/GitGudDesktop/wiki/Modding).
 
 ## Documentation
 
-Everything lives in the **[wiki](https://github.com/Forasp/GitGudDesktop/wiki)**:
-[Modding](https://github.com/Forasp/GitGudDesktop/wiki/Modding) ·
-[Lua API](https://github.com/Forasp/GitGudDesktop/wiki/Lua-API) ·
-[Building](https://github.com/Forasp/GitGudDesktop/wiki/Building) ·
-[Using the Default UI](https://github.com/Forasp/GitGudDesktop/wiki/Using-the-Default-UI) ·
-[Using the Depot UI](https://github.com/Forasp/GitGudDesktop/wiki/Using-the-Depot-UI) ·
+Everything lives in the **[wiki](https://github.com/Forasp/GitGudDesktop/wiki)**.
+Start with **[Getting Started](https://github.com/Forasp/GitGudDesktop/wiki/Getting-Started)**; it leads on to the
+guide for the interface you pick. To change GitGud:
+[Modding](https://github.com/Forasp/GitGudDesktop/wiki/Modding) · [Lua API](https://github.com/Forasp/GitGudDesktop/wiki/Lua-API) · [Building](https://github.com/Forasp/GitGudDesktop/wiki/Building) ·
 [Principles](https://github.com/Forasp/GitGudDesktop/wiki/Principles)
 
 ## Build
