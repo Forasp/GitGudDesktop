@@ -12,6 +12,7 @@ extern "C"
 }
 
 #include "lua/LuaBindings.h"
+#include "p4/P4Workspace.h"
 
 namespace gitgud::lua
 {
@@ -68,6 +69,10 @@ namespace gitgud::lua
         m_pUi = _pUi;
         m_pTasks = _pTasks;
         m_pCredentials = _pCredentials;
+        // Perforce commands on the UI thread's workspace log in with the
+        // saved password (or ask for one) like network jobs do.
+        gitgud::p4::P4Workspace::SetDefaultPasswordProvider(gitgud::p4::P4Workspace::FromCredentialProvider(
+            bindings::MakeCredentialProvider(_pCredentials, _pBus)));
     }
 
     bool LuaEngine::Initialize()
@@ -142,6 +147,7 @@ namespace gitgud::lua
         bindings::AddFeatureBindings(functions);
         bindings::AddAppBindings(functions);
         bindings::AddUpdateBindings(functions);
+        bindings::AddP4Bindings(functions);
         functions.push_back({nullptr, nullptr});
 
         lua_newtable(m_pL);

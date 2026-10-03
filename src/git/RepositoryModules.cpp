@@ -78,6 +78,11 @@ namespace gitgud::git
 
     std::vector<SubmoduleInfo> Repository::Submodules() const
     {
+        if (m_pP4)
+        {
+            return m_pP4->Submodules();
+        }
+
         RequireOpen(m_pRepo, "submodules()");
 
         std::vector<SubmoduleInfo> out;
@@ -123,6 +128,12 @@ namespace gitgud::git
 
     void Repository::UpdateSubmodule(const std::string& _Name, bool _bInit)
     {
+        if (m_pP4)
+        {
+            m_pP4->UpdateSubmodule(_Name, _bInit);
+            return;
+        }
+
         RequireOpen(m_pRepo, "updateSubmodule()");
 
         SubmodulePtr sub;
@@ -147,6 +158,11 @@ namespace gitgud::git
 
     std::vector<WorktreeInfo> Repository::Worktrees() const
     {
+        if (m_pP4)
+        {
+            return m_pP4->Worktrees();
+        }
+
         RequireOpen(m_pRepo, "worktrees()");
 
         std::vector<WorktreeInfo> out;
@@ -212,6 +228,12 @@ namespace gitgud::git
     void Repository::AddWorktree(
         const std::string& _Name, const std::string& _Path, const std::string& _Branch)
     {
+        if (m_pP4)
+        {
+            m_pP4->AddWorktree(_Name, _Path, _Branch);
+            return;
+        }
+
         RequireOpen(m_pRepo, "addWorktree()");
 
         std::error_code ec;
@@ -247,6 +269,12 @@ namespace gitgud::git
 
     void Repository::RemoveWorktree(const std::string& _Name)
     {
+        if (m_pP4)
+        {
+            m_pP4->RemoveWorktree(_Name);
+            return;
+        }
+
         RequireOpen(m_pRepo, "removeWorktree()");
 
         WorktreePtr wt;

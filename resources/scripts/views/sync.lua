@@ -319,6 +319,12 @@ local function signIn(host, rejected)
         require("views.ssh").askPassphrase(host)
         return
     end
+    -- Perforce asks from any command (the status refresh too), not only
+    -- network operations: retry the last one if there was one.
+    if host:sub(1, 3) == "p4:" then
+        require("core.p4setup").signIn(host, rejected, busyOp and sync.retry or nil)
+        return
+    end
 
     local github = require("views.github")
     if github.handles(host) then

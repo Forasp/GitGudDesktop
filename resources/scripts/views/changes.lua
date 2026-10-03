@@ -743,7 +743,7 @@ function changes.refresh(state)
     renderIncludeAll(state)
     layoutInfoRows(state)
     updateCommitButton(state)
-    gitgud.setEnabled("AmendCheck", state.headOid ~= "")
+    gitgud.setEnabled("AmendCheck", state.headOid ~= "" and gitgud.supports("amend"))
     changes.showContent(false)
 end
 

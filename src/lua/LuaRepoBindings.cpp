@@ -997,9 +997,10 @@ namespace gitgud::lua::bindings
             return [_pStore, _pBus](const std::string& _Url, const std::string& _UserFromUrl,
                        bool _bRejected, std::string& _OutUser, std::string& _OutPass) -> bool
             {
-                // SSH key passphrases are stored under "ssh-key:<key path>".
-                const bool bsshKey = _Url.rfind("ssh-key:", 0) == 0;
-                const std::string host = bsshKey ? _Url : gitgud::platform::HostFromUrl(_Url);
+                // SSH key passphrases are stored under "ssh-key:<key path>",
+                // Perforce passwords under "p4:<P4PORT>".
+                const bool bkeyed = _Url.rfind("ssh-key:", 0) == 0 || _Url.rfind("p4:", 0) == 0;
+                const std::string host = bkeyed ? _Url : gitgud::platform::HostFromUrl(_Url);
                 if (_bRejected)
                 {
                     if (_pStore)
@@ -1405,6 +1406,12 @@ namespace gitgud::lua::bindings
             lua_rawseti(_pL, -2, ihunk++);
         }
         lua_setfield(_pL, -2, "hunks");
+    }
+
+    gitgud::git::CredentialProvider MakeCredentialProvider(
+        gitgud::platform::ICredentialStore* _pStore, gitgud::app::EventBus* _pBus)
+    {
+        return MakeProvider(_pStore, _pBus);
     }
 
     void AddRepoBindings(std::vector<luaL_Reg>& _Out)

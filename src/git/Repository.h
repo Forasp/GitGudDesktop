@@ -16,11 +16,17 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 struct git_repository; // fwd-decl; avoids leaking <git2.h> into the whole app
+
+namespace gitgud::p4
+{
+    class P4Workspace;
+}
 
 namespace gitgud::git
 {
@@ -400,7 +406,7 @@ namespace gitgud::git
     class Repository
     {
       public:
-        Repository() = default;
+        Repository();
         ~Repository();
 
         Repository(Repository&&) noexcept;
@@ -737,7 +743,29 @@ namespace gitgud::git
 
         bool IsOpen() const
         {
-            return m_pRepo != nullptr;
+            return m_pRepo != nullptr || m_pP4 != nullptr;
+        }
+
+        // ---- Backends ------------------------------------------------------------
+        // "git", or "p4" for a Perforce workspace (a folder whose .p4config
+        // names a workspace; Open() picks it up and forwards every call to
+        // p4/P4Workspace). See docs/P4.md.
+        std::string Backend() const
+        {
+            return m_pP4 ? "p4" : "git";
+        }
+
+        // Whether this backend can do `_Feature`, so the UI can hide what it
+        // can't: lineStaging, amend, undoCommit, reset, reflog,
+        // interactiveRebase, submodules, lfs, remotes (add/remove/rename),
+        // push, renameBranch, signing, changelists (server-side numbered
+        // changelists).
+        bool Supports(const std::string& _Feature) const;
+
+        // The Perforce backend, or null for a Git repository.
+        p4::P4Workspace* P4() const
+        {
+            return m_pP4.get();
         }
 
         const std::string& Path() const
@@ -751,6 +779,7 @@ namespace gitgud::git
 
       private:
         git_repository* m_pRepo = nullptr;
+        std::unique_ptr<p4::P4Workspace> m_pP4; // set for Perforce workspaces
         std::string m_Path;
         CredentialProvider m_CredProvider;
         HostKeyProvider m_HostKeyProvider;

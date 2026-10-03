@@ -61,6 +61,11 @@ namespace gitgud::git
     std::string Repository::Shelve(const std::string& _Branch,
         const std::vector<std::string>& _Paths, const std::string& _Message)
     {
+        if (m_pP4)
+        {
+            return m_pP4->Shelve(_Branch, _Paths, _Message);
+        }
+
         if (!m_pRepo)
         {
             throw GitError("shelve() on an unopened repository");
@@ -149,6 +154,10 @@ namespace gitgud::git
         const std::vector<std::string>& _Paths,
         const std::function<bool(const std::string&)>& _RemoveFile)
     {
+        if (m_pP4)
+        {
+            return m_pP4->Unshelve(_Revision, _Paths, _RemoveFile);
+        }
         if (!m_pRepo)
         {
             throw GitError("unshelve() on an unopened repository");

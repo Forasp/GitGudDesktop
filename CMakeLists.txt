@@ -110,6 +110,11 @@ add_library(gitgud_core STATIC
     src/git/CommitGraph.cpp
     src/git/CommitSigning.cpp
     src/git/LfsFilter.cpp
+    src/p4/P4Command.cpp
+    src/p4/P4Workspace.cpp
+    src/p4/P4WorkspaceHistory.cpp
+    src/p4/P4WorkspaceBranches.cpp
+    src/p4/P4WorkspaceChanges.cpp
     src/app/EventBus.cpp
     src/app/TaskRunner.cpp
     src/app/UiPackages.cpp
@@ -117,6 +122,7 @@ add_library(gitgud_core STATIC
     src/update/UpdateCore.cpp
     src/lua/LuaEngine.cpp
     src/lua/LuaUpdateBindings.cpp
+    src/lua/LuaP4Bindings.cpp
     src/lua/LuaRepoBindings.cpp
     src/lua/LuaUiBindings.cpp
     src/lua/LuaFeatureBindings.cpp

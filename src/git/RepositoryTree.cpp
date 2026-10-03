@@ -70,6 +70,11 @@ namespace gitgud::git
     std::vector<TreeEntry> Repository::ListTree(
         const std::string& _Revision, const std::string& _Dir) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->ListTree(_Revision, _Dir);
+        }
+
         if (!m_pRepo)
         {
             throw GitError("listTree() on an unopened repository");
@@ -148,6 +153,11 @@ namespace gitgud::git
         const std::string& _NewPath, const std::string& _NewRevision,
         const DiffOptions& _Options) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->DiffVersions(_OldPath, _OldRevision, _NewPath, _NewRevision, _Options);
+        }
+
         if (!m_pRepo)
         {
             throw GitError("diffVersions() on an unopened repository");
@@ -160,6 +170,11 @@ namespace gitgud::git
     std::vector<ChangedFile> Repository::ChangedFiles(const std::string& _OldRevision,
         const std::string& _NewRevision, const std::string& _Prefix) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->ChangedFiles(_OldRevision, _NewRevision, _Prefix);
+        }
+
         if (!m_pRepo)
         {
             throw GitError("changedFiles() on an unopened repository");

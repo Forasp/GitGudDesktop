@@ -389,6 +389,11 @@ namespace gitgud::git
 
     void Repository::SetCredentialProvider(CredentialProvider _Provider)
     {
+        if (m_pP4)
+        {
+            m_pP4->SetPasswordProvider(P4Passwords(_Provider));
+        }
+
         m_CredProvider = std::move(_Provider);
     }
 
@@ -399,6 +404,12 @@ namespace gitgud::git
 
     void Repository::Fetch(const std::string& _RemoteName)
     {
+        if (m_pP4)
+        {
+            m_pP4->Fetch(_RemoteName);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("fetch() on an unopened repository");
@@ -424,6 +435,11 @@ namespace gitgud::git
 
     std::vector<std::string> Repository::FetchAll()
     {
+        if (m_pP4)
+        {
+            return m_pP4->FetchAll();
+        }
+
         if (!m_pRepo)
         {
             throw GitError("fetchAll() on an unopened repository");
@@ -483,6 +499,12 @@ namespace gitgud::git
 
     void Repository::Push(const std::string& _RemoteName, bool _bForce, bool _bSetUpstream)
     {
+        if (m_pP4)
+        {
+            m_pP4->Push(_RemoteName, _bForce, _bSetUpstream);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("push() on an unopened repository");
@@ -528,6 +550,12 @@ namespace gitgud::git
 
     void Repository::PushTags(const std::string& _RemoteName)
     {
+        if (m_pP4)
+        {
+            m_pP4->PushTags(_RemoteName);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("pushTags() on an unopened repository");
@@ -555,6 +583,12 @@ namespace gitgud::git
     void Repository::PushBranch(const std::string& _RemoteName, const std::string& _Branch,
         const std::string& _RemoteBranch, bool _bForce)
     {
+        if (m_pP4)
+        {
+            m_pP4->PushBranch(_RemoteName, _Branch, _RemoteBranch, _bForce);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("pushBranch() on an unopened repository");
@@ -567,6 +601,12 @@ namespace gitgud::git
 
     void Repository::DeleteRemoteBranch(const std::string& _RemoteName, const std::string& _Branch)
     {
+        if (m_pP4)
+        {
+            m_pP4->DeleteRemoteBranch(_RemoteName, _Branch);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("deleteRemoteBranch() on an unopened repository");
@@ -587,6 +627,11 @@ namespace gitgud::git
 
     MergeResult Repository::Pull(const std::string& _RemoteName)
     {
+        if (m_pP4)
+        {
+            return m_pP4->Pull(_RemoteName);
+        }
+
         if (!m_pRepo)
         {
             throw GitError("pull() on an unopened repository");

@@ -199,6 +199,11 @@ namespace gitgud::git
 
     std::string Repository::WorkDir() const
     {
+        if (m_pP4)
+        {
+            return m_pP4->WorkDir();
+        }
+
         if (!m_pRepo)
         {
             return m_Path;
@@ -223,6 +228,11 @@ namespace gitgud::git
 
     std::string Repository::AmendCommit(const std::string& _Message)
     {
+        if (m_pP4)
+        {
+            return m_pP4->AmendCommit(_Message);
+        }
+
         RequireOpen(m_pRepo, "amendCommit()");
 
         CommitPtr head = ResolveCommit(m_pRepo, "HEAD");
@@ -263,6 +273,11 @@ namespace gitgud::git
 
     std::string Repository::UndoLastCommit()
     {
+        if (m_pP4)
+        {
+            return m_pP4->UndoLastCommit();
+        }
+
         RequireOpen(m_pRepo, "undoLastCommit()");
 
         CommitPtr head = ResolveCommit(m_pRepo, "HEAD");
@@ -306,6 +321,12 @@ namespace gitgud::git
 
     void Repository::CreateBranch(const std::string& _Name, const std::string& _StartPoint)
     {
+        if (m_pP4)
+        {
+            m_pP4->CreateBranch(_Name, _StartPoint);
+            return;
+        }
+
         RequireOpen(m_pRepo, "createBranch()");
 
         CommitPtr start = ResolveCommit(m_pRepo, _StartPoint);
@@ -318,6 +339,12 @@ namespace gitgud::git
 
     void Repository::CheckoutCommit(const std::string& _Oid)
     {
+        if (m_pP4)
+        {
+            m_pP4->CheckoutCommit(_Oid);
+            return;
+        }
+
         RequireOpen(m_pRepo, "checkoutCommit()");
 
         CommitPtr commit = ResolveCommit(m_pRepo, _Oid);
@@ -335,6 +362,11 @@ namespace gitgud::git
 
     std::vector<RefLabel> Repository::RefLabels() const
     {
+        if (m_pP4)
+        {
+            return m_pP4->RefLabels();
+        }
+
         RequireOpen(m_pRepo, "refLabels()");
 
         std::vector<RefLabel> out;
@@ -397,6 +429,11 @@ namespace gitgud::git
 
     AheadBehind Repository::CompareWith(const std::string& _Ref) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->CompareWith(_Ref);
+        }
+
         RequireOpen(m_pRepo, "compareWith()");
 
         AheadBehind out;
@@ -416,6 +453,11 @@ namespace gitgud::git
 
     std::string Repository::Revert(const std::string& _Oid)
     {
+        if (m_pP4)
+        {
+            return m_pP4->Revert(_Oid);
+        }
+
         RequireOpen(m_pRepo, "revert()");
         RequireCleanIndex(m_pRepo, "reverting");
 
@@ -444,6 +486,11 @@ namespace gitgud::git
 
     std::string Repository::CherryPick(const std::string& _Oid)
     {
+        if (m_pP4)
+        {
+            return m_pP4->CherryPick(_Oid);
+        }
+
         RequireOpen(m_pRepo, "cherryPick()");
         RequireCleanIndex(m_pRepo, "cherry-picking");
 
@@ -470,6 +517,12 @@ namespace gitgud::git
 
     void Repository::ResetTo(const std::string& _Oid, ResetMode _Mode)
     {
+        if (m_pP4)
+        {
+            m_pP4->ResetTo(_Oid, _Mode);
+            return;
+        }
+
         RequireOpen(m_pRepo, "resetTo()");
 
         CommitPtr commit = ResolveCommit(m_pRepo, _Oid);
@@ -492,6 +545,11 @@ namespace gitgud::git
 
     std::vector<TagInfo> Repository::Tags() const
     {
+        if (m_pP4)
+        {
+            return m_pP4->Tags();
+        }
+
         RequireOpen(m_pRepo, "tags()");
 
         // One pass over refs/tags/*: listing the names and then looking each
@@ -545,6 +603,12 @@ namespace gitgud::git
     void Repository::CreateTag(
         const std::string& _Name, const std::string& _Target, const std::string& _Message)
     {
+        if (m_pP4)
+        {
+            m_pP4->CreateTag(_Name, _Target, _Message);
+            return;
+        }
+
         RequireOpen(m_pRepo, "createTag()");
 
         CommitPtr target = ResolveCommit(m_pRepo, _Target.empty() ? "HEAD" : _Target);
@@ -570,6 +634,12 @@ namespace gitgud::git
 
     void Repository::DeleteTag(const std::string& _Name)
     {
+        if (m_pP4)
+        {
+            m_pP4->DeleteTag(_Name);
+            return;
+        }
+
         RequireOpen(m_pRepo, "deleteTag()");
         if (git_tag_delete(m_pRepo, _Name.c_str()) < 0)
         {
@@ -581,6 +651,11 @@ namespace gitgud::git
 
     RepoState Repository::State() const
     {
+        if (m_pP4)
+        {
+            return m_pP4->State();
+        }
+
         RequireOpen(m_pRepo, "state()");
         switch (git_repository_state(m_pRepo))
         {
@@ -606,6 +681,12 @@ namespace gitgud::git
 
     void Repository::ResolveConflict(const std::string& _Path, bool _bOurs)
     {
+        if (m_pP4)
+        {
+            m_pP4->ResolveConflict(_Path, _bOurs);
+            return;
+        }
+
         RequireOpen(m_pRepo, "resolveConflict()");
 
         IndexPtr index = OpenIndex(m_pRepo);
@@ -675,6 +756,12 @@ namespace gitgud::git
 
     void Repository::AbortOperation()
     {
+        if (m_pP4)
+        {
+            m_pP4->AbortOperation();
+            return;
+        }
+
         RequireOpen(m_pRepo, "abortOperation()");
 
         if (State() == RepoState::Rebase)
@@ -698,6 +785,11 @@ namespace gitgud::git
 
     MergeResult Repository::SquashMerge(const std::string& _BranchName)
     {
+        if (m_pP4)
+        {
+            return m_pP4->SquashMerge(_BranchName);
+        }
+
         RequireOpen(m_pRepo, "squashMerge()");
 
         CommitPtr theirs = ResolveCommit(m_pRepo, _BranchName);
@@ -763,6 +855,11 @@ namespace gitgud::git
 
     RebaseResult Repository::Rebase(const std::string& _Upstream)
     {
+        if (m_pP4)
+        {
+            return m_pP4->Rebase(_Upstream);
+        }
+
         RequireOpen(m_pRepo, "rebase()");
 
         ReferencePtr head;
@@ -804,6 +901,11 @@ namespace gitgud::git
 
     RebaseResult Repository::ContinueRebase()
     {
+        if (m_pP4)
+        {
+            return m_pP4->ContinueRebase();
+        }
+
         RequireOpen(m_pRepo, "continueRebase()");
 
         git_rebase_options ro = RebaseOptions(m_pRepo);
@@ -838,6 +940,11 @@ namespace gitgud::git
 
     std::vector<FileDiff> Repository::StashDiff(std::size_t _Index) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->StashDiff(_Index);
+        }
+
         RequireOpen(m_pRepo, "stashDiff()");
 
         const std::vector<StashInfo> stashes = StashList();
@@ -877,6 +984,11 @@ namespace gitgud::git
 
     std::string Repository::GetConfig(const std::string& _Key) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->GetConfig(_Key);
+        }
+
         RequireOpen(m_pRepo, "getConfig()");
         ConfigPtr cfg;
         if (git_repository_config(&cfg.m_pP, m_pRepo) < 0)
@@ -888,6 +1000,12 @@ namespace gitgud::git
 
     void Repository::SetConfig(const std::string& _Key, const std::string& _Value)
     {
+        if (m_pP4)
+        {
+            m_pP4->SetConfig(_Key, _Value);
+            return;
+        }
+
         RequireOpen(m_pRepo, "setConfig()");
         ConfigPtr cfg;
         if (git_repository_config(&cfg.m_pP, m_pRepo) < 0)
