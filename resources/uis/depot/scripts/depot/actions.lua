@@ -4,7 +4,7 @@
 --   Get Revision     put a file (or the whole workspace) at a revision
 --   Check Out        open files for edit in a changelist (no lock: Git has none)
 --   Mark for Add     open untracked files for add
---   Mark for Delete  delete files (to the Recycle Bin) and open the deletion
+--   Mark for Delete  delete files (to the trash) and open the deletion
 --   Rename/Move      move a file: the old path deleted, the new one added
 --   Revert           throw away a file's changes (an added file stays on disk)
 --   Revert Unchanged take unchanged files out of their changelists
@@ -198,7 +198,7 @@ function actions.markForAdd(paths, id)
     log.info(text.plural(#adds, "file") .. " opened for add.")
 end
 
---- Mark for Delete: delete files (Recycle Bin) and open the deletions.
+--- Mark for Delete: delete files (to the trash) and open the deletions.
 -- @param paths  files (default: the selection)
 -- @param id     changelist (default 0)
 function actions.markForDelete(paths, id)
@@ -208,7 +208,7 @@ function actions.markForDelete(paths, id)
         return
     end
     dialog.confirm("Mark for Delete",
-        "Delete " .. text.plural(#paths, "file") .. " from the workspace (they go to the Recycle Bin) and open "
+        "Delete " .. text.plural(#paths, "file") .. " from the workspace (they go to the " .. require("core.shell").names.trash .. ") and open "
             .. "the deletion" .. (#paths == 1 and "" or "s") .. " in " .. clName(id or 0) .. "?",
         "Delete",
         function()

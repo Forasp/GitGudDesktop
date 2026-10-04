@@ -48,8 +48,9 @@ find_path(STB_INCLUDE_DIRS "stb_image.h" REQUIRED)
 if(GITGUD_UI_CEGUI)
     # Two installs of the same CEGUI source: Debug (`_d` suffix) and Release
     # (no suffix). MSVC can't mix debug and release CRTs across DLLs, so the
-    # build type picks the matching one.
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    # build type picks the matching one. Elsewhere one Release CEGUI serves
+    # every build type.
+    if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL "Debug")
         set(_cegui_default_dir "${CMAKE_SOURCE_DIR}/third_party/cegui-install")
         set(_cegui_suffix "_d")
     else()
@@ -64,14 +65,16 @@ if(GITGUD_UI_CEGUI)
         PATH_SUFFIXES cegui-9999
         NO_DEFAULT_PATH)
 
+    # Elsewhere the modules CEGUI loads at run time (window renderers, XML
+    # parser, image codec) sit in lib/cegui-9999.0.
     set(CEGUI_LIB_DIR "${CEGUI_INSTALL_DIR}/lib")
     set(CEGUI_BIN_DIR "${CEGUI_INSTALL_DIR}/bin")
 
-    find_library(CEGUI_BASE_LIBRARY            NAMES CEGUIBase-9999${_cegui_suffix}             PATHS ${CEGUI_LIB_DIR} NO_DEFAULT_PATH)
-    find_library(CEGUI_CORE_WRS_LIBRARY        NAMES CEGUICoreWindowRendererSet${_cegui_suffix} PATHS ${CEGUI_LIB_DIR} NO_DEFAULT_PATH)
-    find_library(CEGUI_OPENGL_RENDERER_LIBRARY NAMES CEGUIOpenGLRenderer-9999${_cegui_suffix}   PATHS ${CEGUI_LIB_DIR} NO_DEFAULT_PATH)
-    find_library(CEGUI_PUGIXML_LIBRARY         NAMES CEGUIPugiXMLParser${_cegui_suffix}         PATHS ${CEGUI_LIB_DIR} NO_DEFAULT_PATH)
-    find_library(CEGUI_STB_LIBRARY             NAMES CEGUISTBImageCodec${_cegui_suffix}         PATHS ${CEGUI_LIB_DIR} NO_DEFAULT_PATH)
+    find_library(CEGUI_BASE_LIBRARY            NAMES CEGUIBase-9999${_cegui_suffix}             PATHS ${CEGUI_LIB_DIR} PATH_SUFFIXES cegui-9999.0 NO_DEFAULT_PATH)
+    find_library(CEGUI_CORE_WRS_LIBRARY        NAMES CEGUICoreWindowRendererSet${_cegui_suffix} PATHS ${CEGUI_LIB_DIR} PATH_SUFFIXES cegui-9999.0 NO_DEFAULT_PATH)
+    find_library(CEGUI_OPENGL_RENDERER_LIBRARY NAMES CEGUIOpenGLRenderer-9999${_cegui_suffix}   PATHS ${CEGUI_LIB_DIR} PATH_SUFFIXES cegui-9999.0 NO_DEFAULT_PATH)
+    find_library(CEGUI_PUGIXML_LIBRARY         NAMES CEGUIPugiXMLParser${_cegui_suffix}         PATHS ${CEGUI_LIB_DIR} PATH_SUFFIXES cegui-9999.0 NO_DEFAULT_PATH)
+    find_library(CEGUI_STB_LIBRARY             NAMES CEGUISTBImageCodec${_cegui_suffix}         PATHS ${CEGUI_LIB_DIR} PATH_SUFFIXES cegui-9999.0 NO_DEFAULT_PATH)
 
     if(CEGUI_INCLUDE_DIR AND CEGUI_BASE_LIBRARY AND CEGUI_CORE_WRS_LIBRARY AND
        CEGUI_OPENGL_RENDERER_LIBRARY AND CEGUI_PUGIXML_LIBRARY AND CEGUI_STB_LIBRARY)
@@ -143,6 +146,10 @@ if(WIN32)
     # the shell helpers (recycle bin, folder picker) need shell32/ole32;
     # downloads use winhttp, checksums bcrypt.
     target_link_libraries(gitgud_core PUBLIC advapi32 shell32 ole32 dbghelp winhttp bcrypt)
+else()
+    # The shell helpers use SDL's clipboard; the Linux credential store loads
+    # libsecret at run time.
+    target_link_libraries(gitgud_core PUBLIC SDL2::SDL2 ${CMAKE_DL_LIBS})
 endif()
 
 target_include_directories(gitgud_core PUBLIC
@@ -222,6 +229,15 @@ if(GITGUD_UI_CEGUI AND CEGUI_FOUND)
     target_compile_definitions(gitgud PRIVATE
         GITGUD_CEGUI_DATAFILES_REL="${_cegui_data_rel}")
 
+    # Elsewhere CEGUI's shared libraries stay in its install's lib folder and
+    # the build finds them through its RPATH.
+    if(NOT WIN32)
+        set_target_properties(gitgud PROPERTIES
+            BUILD_RPATH "${CEGUI_LIB_DIR};${CEGUI_LIB_DIR}/cegui-9999.0")
+    endif()
+endif()
+
+if(WIN32 AND GITGUD_UI_CEGUI AND CEGUI_FOUND)
     # CEGUI's own DLLs aren't a vcpkg package, so vcpkg's applocal step won't
     # copy them; do it ourselves alongside gitgud.exe.
     add_custom_command(TARGET gitgud POST_BUILD
@@ -286,6 +302,77 @@ if(GITGUD_UI_CEGUI AND CEGUI_FOUND)
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CEGUI_DATAFILES_DIR}/xml_schemas ${_cegui_data_out}/xml_schemas
         COMMENT "Copying the CEGUI data files GitGud uses")
+endif()
+
+# ---- Linux packages ------------------------------------------------------
+# `cpack -G "DEB;RPM"` in the build folder (package.sh does it all). The app
+# and everything it loads live in /usr/lib/gitgud, laid out like the build's
+# bin folder; /usr/bin/gitgud links to it. CEGUI's libraries go in lib/
+# (found through the RPATH) and its run-time modules in lib/cegui-9999.0
+# (CeguiBackend points CEGUI_MODULE_DIR there). GITGUD_GH_DIR names a folder
+# holding the GitHub CLI (gh and its LICENSE) to bundle as <app>/gh.
+if(UNIX AND NOT APPLE AND GITGUD_UI_CEGUI AND CEGUI_FOUND)
+    set(GITGUD_GH_DIR "" CACHE PATH "Folder with the gh binary to bundle in Linux packages")
+    set(_app_dir lib/gitgud)
+
+    set_target_properties(gitgud PROPERTIES
+        INSTALL_RPATH "$ORIGIN/lib;$ORIGIN/lib/cegui-9999.0")
+    install(TARGETS gitgud RUNTIME DESTINATION ${_app_dir})
+    install(DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/resources
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/docs
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/cegui-datafiles
+        DESTINATION ${_app_dir})
+    install(DIRECTORY ${CEGUI_LIB_DIR}/ DESTINATION ${_app_dir}/lib
+        FILES_MATCHING PATTERN "*.so*"
+        PATTERN "pkgconfig" EXCLUDE)
+    if(GITGUD_GH_DIR)
+        install(PROGRAMS ${GITGUD_GH_DIR}/gh DESTINATION ${_app_dir}/gh)
+        install(FILES ${GITGUD_GH_DIR}/LICENSE DESTINATION ${_app_dir}/gh)
+    endif()
+
+    install(CODE "file(MAKE_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin\")
+        file(CREATE_LINK ../${_app_dir}/gitgud
+            \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/gitgud\" SYMBOLIC)")
+    install(FILES installer/linux/gitgud.desktop DESTINATION share/applications)
+    # Folders other packages own too (the RPM must not claim them).
+    set(_shared_dirs /usr/share/applications /usr/share/icons /usr/share/icons/hicolor
+        /usr/share/doc)
+    foreach(_size 16 24 32 48 64 256)
+        install(FILES installer/linux/icons/${_size}x${_size}/gitgud.png
+            DESTINATION share/icons/hicolor/${_size}x${_size}/apps)
+        list(APPEND _shared_dirs /usr/share/icons/hicolor/${_size}x${_size}
+            /usr/share/icons/hicolor/${_size}x${_size}/apps)
+    endforeach()
+    install(FILES LICENSE THIRD_PARTY_NOTICES.txt DESTINATION share/doc/gitgud-desktop)
+
+    set(CPACK_PACKAGE_NAME gitgud-desktop)
+    set(CPACK_PACKAGE_VENDOR "Tim")
+    set(CPACK_PACKAGE_CONTACT "Tim <28170612+Forasp@users.noreply.github.com>")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
+    set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/Forasp/GitGudDesktop")
+    set(CPACK_PACKAGING_INSTALL_PREFIX /usr)
+    set(CPACK_STRIP_FILES ON)
+
+    set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+    set(CPACK_DEBIAN_PACKAGE_SECTION vcs)
+    set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+    set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS_PRIVATE_DIRS
+        "${CEGUI_LIB_DIR};${CEGUI_LIB_DIR}/cegui-9999.0")
+    # Used when present: git for the console and LFS, LFS, commit signing,
+    # opening files, saved passwords, the folder picker.
+    set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "git, git-lfs, gnupg, xdg-utils, libsecret-1-0, zenity")
+
+    set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
+    set(CPACK_RPM_PACKAGE_LICENSE "MIT")
+    set(CPACK_RPM_PACKAGE_GROUP "Development/Tools")
+    set(CPACK_RPM_PACKAGE_SUGGESTS "git, git-lfs, gnupg2, xdg-utils, libsecret, zenity")
+    # The bundled CEGUI libraries are private: neither provide nor require
+    # them from the system.
+    set(CPACK_RPM_SPEC_MORE_DEFINE
+        "%global __provides_exclude_from ^/usr/lib/gitgud/.*$
+%global __requires_exclude ^libCEGUI.*$")
+    set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION ${_shared_dirs})
+    include(CPack)
 endif()
 
 # ---- Tests ---------------------------------------------------------------

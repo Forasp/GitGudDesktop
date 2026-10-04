@@ -101,6 +101,25 @@ local function runSetup(t)
     end
 end
 
+local P4_DOWNLOAD = "https://www.perforce.com/downloads/helix-command-line-client-p4"
+
+--- What to do about a missing p4 command-line client, for dialogs.
+-- @return one or two sentences
+function p4setup.missingP4()
+    if gitgud.platform == "windows" then
+        return "Install the p4 command-line client first (" .. P4_DOWNLOAD .. "), or set "
+            .. "GITGUD_P4 to the full path of p4.exe."
+    end
+    return "Install the p4 command-line client first: download p4 from " .. P4_DOWNLOAD
+        .. " and put it on your PATH (for example ~/.local/bin), or install the helix-cli "
+        .. "package from Perforce's package repository. GITGUD_P4 can also name its full path."
+end
+
+--- Open the p4 download page in the browser.
+function p4setup.openP4Download()
+    gitgud.openExternal(P4_DOWNLOAD)
+end
+
 --- Backend selection: one tab for Git and one for Perforce. Each picks the
 -- folder for a workspace: an existing repository or workspace opens as it
 -- is; otherwise Git clones a URL into it (or starts a new repository), and
@@ -119,7 +138,7 @@ function p4setup.askDefaultBackend(onDone, opts)
         .. "already have there, or maps a stream (//depot/main) or depot folder into it. Tick Create "
         .. "to start a new stream on the server."
     if not gitgud.p4Available() then
-        p4Message = p4Message .. " Install the p4 command-line client (or set GITGUD_P4 to p4.exe) first."
+        p4Message = p4Message .. " " .. p4setup.missingP4()
     end
 
     local function folderOf(v)
@@ -170,6 +189,11 @@ function p4setup.askDefaultBackend(onDone, opts)
         },
         tab = required and 0 or (d.backend == "p4" and 2 or 1),
         ok = "Continue",
+        alt = not gitgud.p4Available() and {
+            label = "Get p4…",
+            stayOpen = true,
+            action = p4setup.openP4Download,
+        } or nil,
         -- Continue waits for a tab and what that tab needs.
         canSubmit = function(v)
             local folder = folderOf(v)
@@ -273,7 +297,7 @@ function p4setup.newWorkspace(opts)
         fields = {
             { label = "Server (P4PORT)", value = d.port },
             { label = "User", value = d.user },
-            { label = "Password (only if the server asks; saved in Windows Credential Manager)", value = "", secret = true },
+            { label = "Password (only if the server asks; saved in the " .. require("core.shell").names.keyring .. ")", value = "", secret = true },
             { label = opts.create and "New stream, e.g. //project/main" or "Stream or depot path", value = "" },
             { label = "Local folder (the workspace folder is created inside)", value = opts.folder or "", browse = true },
         },
@@ -326,7 +350,7 @@ function p4setup.newWorkspace(opts)
                 return false, "Choose a local folder."
             end
             if not gitgud.p4Available() then
-                return false, "The p4 command-line client isn't installed (or set GITGUD_P4 to p4.exe)."
+                return false, p4setup.missingP4()
             end
 
             local classic = v.checks[2]
@@ -371,7 +395,7 @@ function p4setup.signIn(host, rejected, retry)
     if user == "" then
         user = p4setup.defaults().user
     end
-    local message = "Saved in the Windows Credential Manager, never in plain text."
+    local message = "Saved in the " .. require("core.shell").names.keyring .. ", never in plain text."
     if rejected then
         message = port .. " didn't accept the saved password, so it was removed. " .. message
     end

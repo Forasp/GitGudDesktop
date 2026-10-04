@@ -1,7 +1,8 @@
 // -----------------------------------------------------------------------------
-// Credential store backends. Windows Credential Manager today; the factory
-// returns nullptr on other platforms until their backends land (Keychain,
-// libsecret) — callers treat "no store" as "always prompt".
+// Credential store backends: Windows Credential Manager, and the Secret
+// Service (libsecret, loaded at run time) on Linux. The factory returns
+// nullptr where there is none (macOS until its Keychain backend lands, Linux
+// without libsecret); callers treat "no store" as "always prompt".
 // -----------------------------------------------------------------------------
 
 #include "platform/ICredentialStore.h"
@@ -13,6 +14,8 @@
 #include <wincred.h>
 
 #include <vector>
+#elif defined(__linux__)
+#include <dlfcn.h>
 #endif
 
 namespace gitgud::platform
@@ -143,11 +146,121 @@ namespace gitgud::platform
         return std::make_unique<WindowsCredentialStore>();
     }
 
+#elif defined(__linux__)
+
+    namespace
+    {
+
+        // The parts of libsecret's ABI used here (libsecret/secret-schema.h).
+        // The library is loaded at run time, so the app builds without its
+        // headers and runs where no Secret Service exists.
+        struct SecretSchemaAttribute
+        {
+            const char* m_szName;
+            int m_iType; // SECRET_SCHEMA_ATTRIBUTE_STRING = 0
+        };
+
+        struct SecretSchema
+        {
+            const char* m_szName;
+            int m_iFlags; // SECRET_SCHEMA_NONE = 0
+            SecretSchemaAttribute m_Attributes[32];
+            int m_iReserved;
+            void* m_pReserved[7];
+        };
+
+        using StoreFn = int (*)(const SecretSchema*, const char*, const char*, const char*, void*,
+            void**, ...);
+        using LookupFn = char* (*)(const SecretSchema*, void*, void**, ...);
+        using ClearFn = int (*)(const SecretSchema*, void*, void**, ...);
+        using FreeFn = void (*)(char*);
+
+        const SecretSchema kSchema = {"io.github.forasp.Gitgud", 0, {{"host", 0}}, 0, {}};
+
+        // Secret Service backend (GNOME Keyring, KWallet, KeePassXC...) through
+        // libsecret. The secret is "<username>\n<password>".
+        class SecretServiceStore final : public ICredentialStore
+        {
+          public:
+            SecretServiceStore(void* _pLib, StoreFn _Store, LookupFn _Lookup, ClearFn _Clear,
+                FreeFn _Free)
+                : m_pLib(_pLib), m_Store(_Store), m_Lookup(_Lookup), m_Clear(_Clear), m_Free(_Free)
+            {
+            }
+
+            ~SecretServiceStore() override
+            {
+                dlclose(m_pLib);
+            }
+
+            bool Get(const std::string& _Host, Credential& _Out) const override
+            {
+                char* szsecret = m_Lookup(&kSchema, nullptr, nullptr, "host", _Host.c_str(),
+                    static_cast<char*>(nullptr));
+                if (!szsecret)
+                {
+                    return false;
+                }
+                const std::string secret = szsecret;
+                m_Free(szsecret);
+                const std::size_t nbreak = secret.find('\n');
+                if (nbreak == std::string::npos)
+                {
+                    return false;
+                }
+                _Out.m_Username = secret.substr(0, nbreak);
+                _Out.m_Password = secret.substr(nbreak + 1);
+                return true;
+            }
+
+            bool Set(const std::string& _Host, const Credential& _In) override
+            {
+                const std::string label = "GitGud: " + _Host;
+                const std::string secret = _In.m_Username + "\n" + _In.m_Password;
+                return m_Store(&kSchema, nullptr, label.c_str(), secret.c_str(), nullptr, nullptr,
+                           "host", _Host.c_str(), static_cast<char*>(nullptr)) != 0;
+            }
+
+            bool Erase(const std::string& _Host) override
+            {
+                return m_Clear(&kSchema, nullptr, nullptr, "host", _Host.c_str(),
+                           static_cast<char*>(nullptr)) != 0;
+            }
+
+          private:
+            void* m_pLib;
+            StoreFn m_Store;
+            LookupFn m_Lookup;
+            ClearFn m_Clear;
+            FreeFn m_Free;
+        };
+
+    } // namespace
+
+    std::unique_ptr<ICredentialStore> MakeCredentialStore()
+    {
+        void* plib = dlopen("libsecret-1.so.0", RTLD_NOW | RTLD_LOCAL);
+        if (!plib)
+        {
+            return nullptr;
+        }
+        auto store = reinterpret_cast<StoreFn>(dlsym(plib, "secret_password_store_sync"));
+        auto lookup = reinterpret_cast<LookupFn>(dlsym(plib, "secret_password_lookup_sync"));
+        auto clear = reinterpret_cast<ClearFn>(dlsym(plib, "secret_password_clear_sync"));
+        auto free = reinterpret_cast<FreeFn>(dlsym(plib, "secret_password_free"));
+        if (!store || !lookup || !clear || !free)
+        {
+            dlclose(plib);
+            return nullptr;
+        }
+        return std::make_unique<SecretServiceStore>(plib, store, lookup, clear, free);
+    }
+
 #else
 
     std::unique_ptr<ICredentialStore> MakeCredentialStore()
     {
-        return nullptr; // macOS Keychain / libsecret backends TBD
+        return nullptr; // macOS Keychain backend TBD
     }
 
 #endif

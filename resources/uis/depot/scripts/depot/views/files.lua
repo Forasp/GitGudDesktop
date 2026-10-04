@@ -162,7 +162,7 @@ function files.init()
                 { label = "Open in Editor", enabled = single ~= false and single ~= nil, action = function()
                     require("core.shell").openInEditor(repo.state().path .. "/" .. single)
                 end },
-                { label = "Show in Explorer", action = function()
+                { label = "Show in " .. require("core.shell").names.fileManager, action = function()
                     require("core.shell").showInFolder(repo.state().path .. "/" .. rows[1].data.path)
                 end },
             }, x, y)

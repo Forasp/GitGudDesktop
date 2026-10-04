@@ -279,7 +279,7 @@ end
 -- @param host      server host name
 -- @param rejected  true when the saved one was just refused
 local function askPassword(host, rejected)
-    local message = "Stored in the Windows Credential Manager, never in plain text. "
+    local message = "Stored in the " .. require("core.shell").names.keyring .. ", never in plain text. "
         .. "For hosted services use a personal access token as the password."
     if rejected then
         message = host .. " didn't accept the saved sign-in, so it was removed. " .. message

@@ -299,7 +299,7 @@ local function repositoryMenu()
             end,
         },
         {
-            label = "Show in Explorer",
+            label = "Show in " .. shell.names.fileManager,
             shortcut = "ctrl+shift+f",
             enabled = isOpen,
             action = function()

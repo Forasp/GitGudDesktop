@@ -3,6 +3,14 @@
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#else
+#include <cerrno>
+#include <csignal>
+#include <fcntl.h>
+#include <poll.h>
+#include <pthread.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #endif
 
 #include <algorithm>
@@ -488,31 +496,388 @@ namespace gitgud::platform
 
 #else
 
-    std::string FindProgram(const std::string&)
+    namespace
     {
+
+        // Owns a file descriptor.
+        struct ScopedFd
+        {
+            int m_iFd = -1;
+
+            ScopedFd() = default;
+
+            ScopedFd(const ScopedFd&) = delete;
+            ScopedFd& operator=(const ScopedFd&) = delete;
+
+            ~ScopedFd()
+            {
+                Close();
+            }
+
+            void Close()
+            {
+                if (m_iFd >= 0)
+                {
+                    close(m_iFd);
+                }
+                m_iFd = -1;
+            }
+        };
+
+        // A pipe whose ends are closed in the child once it execs; the child
+        // gets its own copies through dup2.
+        bool MakePipe(ScopedFd& _Read, ScopedFd& _Write)
+        {
+            int fds[2];
+#if defined(__linux__)
+            if (pipe2(fds, O_CLOEXEC) != 0)
+            {
+                return false;
+            }
+#else
+            if (pipe(fds) != 0)
+            {
+                return false;
+            }
+            fcntl(fds[0], F_SETFD, FD_CLOEXEC);
+            fcntl(fds[1], F_SETFD, FD_CLOEXEC);
+#endif
+            _Read.m_iFd = fds[0];
+            _Write.m_iFd = fds[1];
+            return true;
+        }
+
+        // Read a pipe until the writer closes it.
+        std::string DrainPipe(int _iFd)
+        {
+            std::string out;
+            char szbuf[4096];
+            for (;;)
+            {
+                const ssize_t nread = read(_iFd, szbuf, sizeof(szbuf));
+                if (nread > 0)
+                {
+                    out.append(szbuf, static_cast<std::size_t>(nread));
+                }
+                else if (nread < 0 && errno == EINTR)
+                {
+                    continue;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            return out;
+        }
+
+        // Wait for a child and turn its status into an exit code (128 + signal
+        // when it was killed, like a shell reports it).
+        int WaitExitCode(pid_t _Pid)
+        {
+            int istatus = 0;
+            while (waitpid(_Pid, &istatus, 0) < 0)
+            {
+                if (errno != EINTR)
+                {
+                    return -1;
+                }
+            }
+            if (WIFEXITED(istatus))
+            {
+                return WEXITSTATUS(istatus);
+            }
+            if (WIFSIGNALED(istatus))
+            {
+                return 128 + WTERMSIG(istatus);
+            }
+            return -1;
+        }
+
+        // argv for execv, pointing into `_Args` (which must outlive it).
+        std::vector<char*> MakeArgv(const std::string& _Program, const std::vector<std::string>& _Args)
+        {
+            std::vector<char*> argv;
+            argv.push_back(const_cast<char*>(_Program.c_str()));
+            for (std::size_t i = 1; i < _Args.size(); ++i)
+            {
+                argv.push_back(const_cast<char*>(_Args[i].c_str()));
+            }
+            argv.push_back(nullptr);
+            return argv;
+        }
+
+        bool IsExecutable(const fs::path& _Path)
+        {
+            std::error_code ec;
+            return fs::is_regular_file(_Path, ec) && access(_Path.c_str(), X_OK) == 0;
+        }
+
+        // Fork and exec `_Argv[0]` (a full path) in `_WorkingDir`. The child's
+        // stdin/stdout/stderr come from the given descriptors (-1: /dev/null).
+        // `_bNewGroup` puts it in its own process group so the whole tree can
+        // be killed. Only async-signal-safe calls happen after fork.
+        pid_t StartChild(const std::vector<char*>& _Argv, const std::string& _WorkingDir, int _iIn,
+            int _iOut, int _iErr, bool _bNewGroup)
+        {
+            const pid_t pid = fork();
+            if (pid != 0)
+            {
+                return pid; // parent, or -1
+            }
+
+            if (_bNewGroup)
+            {
+                setpgid(0, 0);
+            }
+            const int inull = open("/dev/null", O_RDWR);
+            dup2(_iIn >= 0 ? _iIn : inull, STDIN_FILENO);
+            dup2(_iOut >= 0 ? _iOut : inull, STDOUT_FILENO);
+            dup2(_iErr >= 0 ? _iErr : inull, STDERR_FILENO);
+            if (!_WorkingDir.empty() && chdir(_WorkingDir.c_str()) != 0)
+            {
+                _exit(127);
+            }
+            execv(_Argv[0], _Argv.data());
+            _exit(127);
+        }
+
+    } // namespace
+
+    std::string FindProgram(const std::string& _Name)
+    {
+        if (_Name.empty())
+        {
+            return {};
+        }
+
+        const fs::path direct = fs::u8path(_Name);
+        if (direct.has_parent_path())
+        {
+            return IsExecutable(direct) ? _Name : std::string();
+        }
+
+        std::vector<fs::path> dirs;
+        if (const char* szpath = std::getenv("PATH"))
+        {
+            const std::string path = szpath;
+            std::size_t nstart = 0;
+            while (nstart <= path.size())
+            {
+                const std::size_t nend = std::min(path.find(':', nstart), path.size());
+                if (nend > nstart)
+                {
+                    dirs.push_back(fs::u8path(path.substr(nstart, nend - nstart)));
+                }
+                nstart = nend + 1;
+            }
+        }
+        // Apps started from a desktop launcher can get a minimal PATH.
+        for (const char* szdir : {"/usr/local/bin", "/usr/bin", "/bin", "/opt/homebrew/bin"})
+        {
+            dirs.push_back(szdir);
+        }
+
+        for (const fs::path& dir : dirs)
+        {
+            const fs::path candidate = dir / direct;
+            if (IsExecutable(candidate))
+            {
+                return candidate.u8string();
+            }
+        }
         return {};
     }
 
-    ProcessResult RunProcess(
-        const std::vector<std::string>&, const std::string&, const std::string&)
+    ProcessResult RunProcess(const std::vector<std::string>& _Args, const std::string& _WorkingDir,
+        const std::string& _Input)
     {
         ProcessResult result;
-        result.m_StartError = "running programs is not implemented on this platform";
+        if (_Args.empty())
+        {
+            result.m_StartError = "no program given";
+            return result;
+        }
+
+        const std::string program = FindProgram(_Args[0]);
+        if (program.empty())
+        {
+            result.m_StartError = "'" + _Args[0] + "' was not found";
+            return result;
+        }
+
+        ScopedFd stdinRead;
+        ScopedFd stdinWrite;
+        ScopedFd stdoutRead;
+        ScopedFd stdoutWrite;
+        ScopedFd stderrRead;
+        ScopedFd stderrWrite;
+        if (!MakePipe(stdinRead, stdinWrite) || !MakePipe(stdoutRead, stdoutWrite) ||
+            !MakePipe(stderrRead, stderrWrite))
+        {
+            result.m_StartError = "could not create pipes";
+            return result;
+        }
+
+        const std::vector<char*> argv = MakeArgv(program, _Args);
+        const pid_t pid = StartChild(argv, _WorkingDir, stdinRead.m_iFd, stdoutWrite.m_iFd,
+            stderrWrite.m_iFd, false);
+        if (pid < 0)
+        {
+            result.m_StartError = "could not start '" + program + "'";
+            return result;
+        }
+        result.m_bStarted = true;
+
+        // The child owns these ends now; closing ours lets EOF arrive.
+        stdinRead.Close();
+        stdoutWrite.Close();
+        stderrWrite.Close();
+
+        // Write stdin and read stderr on helper threads so a chatty child can
+        // never deadlock against a full pipe. SIGPIPE is blocked on the writer
+        // so a child that exits early only makes write() fail.
+        const int istdinWrite = stdinWrite.m_iFd;
+        stdinWrite.m_iFd = -1; // the writer thread closes it
+        std::thread writer(
+            [istdinWrite, &_Input]()
+            {
+                sigset_t set;
+                sigemptyset(&set);
+                sigaddset(&set, SIGPIPE);
+                pthread_sigmask(SIG_BLOCK, &set, nullptr);
+                std::size_t noffset = 0;
+                while (noffset < _Input.size())
+                {
+                    const ssize_t nwritten =
+                        write(istdinWrite, _Input.data() + noffset, _Input.size() - noffset);
+                    if (nwritten < 0 && errno == EINTR)
+                    {
+                        continue;
+                    }
+                    if (nwritten <= 0)
+                    {
+                        break;
+                    }
+                    noffset += static_cast<std::size_t>(nwritten);
+                }
+                close(istdinWrite);
+            });
+
+        std::string errors;
+        const int istderr = stderrRead.m_iFd;
+        std::thread errorReader([istderr, &errors]() { errors = DrainPipe(istderr); });
+
+        result.m_Output = DrainPipe(stdoutRead.m_iFd);
+        writer.join();
+        errorReader.join();
+        result.m_Error = errors;
+        result.m_iExitCode = WaitExitCode(pid);
+        if (result.m_iExitCode == 127 && result.m_Output.empty() && result.m_Error.empty())
+        {
+            result.m_Error = "could not start '" + program + "'";
+        }
         return result;
     }
 
-    int RunShellStreaming(const std::string&, const std::string&,
-        const std::function<void(const std::string&)>& _OnOutput, std::atomic<bool>*)
+    // Start a program with no stdin, stream its merged stdout/stderr to
+    // `_OnOutput`, and kill its whole process group on cancel. Returns the
+    // exit code, or -1 when it couldn't start or was cancelled.
+    static int StreamProgram(const std::string& _Program, const std::vector<std::string>& _Args,
+        const std::string& _WorkingDir, const std::function<void(const std::string&)>& _OnOutput,
+        std::atomic<bool>* _pCancel, const std::string& _StartError)
     {
-        _OnOutput("the console is not implemented on this platform\n");
-        return -1;
+        ScopedFd outRead;
+        ScopedFd outWrite;
+        if (!MakePipe(outRead, outWrite))
+        {
+            _OnOutput("could not create a pipe\n");
+            return -1;
+        }
+
+        const std::vector<char*> argv = MakeArgv(_Program, _Args);
+        const pid_t pid = StartChild(argv, _WorkingDir, -1, outWrite.m_iFd, outWrite.m_iFd, true);
+        if (pid < 0)
+        {
+            _OnOutput(_StartError);
+            return -1;
+        }
+        outWrite.Close();
+
+        // Poll so cancellation is noticed even while the command is silent.
+        // Output is forwarded up to the last line break; a partial line waits
+        // for its end (or the end of the command).
+        std::string pending;
+        bool bcancelled = false;
+        char szbuf[4096];
+        for (;;)
+        {
+            if (_pCancel && _pCancel->load())
+            {
+                bcancelled = true;
+                kill(-pid, SIGKILL);
+                break;
+            }
+            pollfd pfd = {outRead.m_iFd, POLLIN, 0};
+            const int iready = poll(&pfd, 1, 15);
+            if (iready < 0 && errno != EINTR)
+            {
+                break;
+            }
+            if (iready <= 0)
+            {
+                continue;
+            }
+            const ssize_t nread = read(outRead.m_iFd, szbuf, sizeof(szbuf));
+            if (nread < 0 && errno == EINTR)
+            {
+                continue;
+            }
+            if (nread <= 0)
+            {
+                break; // writer closed: the command (and its children) are done
+            }
+            pending.append(szbuf, static_cast<std::size_t>(nread));
+            const std::size_t nlast = pending.find_last_of("\r\n");
+            if (nlast != std::string::npos)
+            {
+                _OnOutput(pending.substr(0, nlast + 1));
+                pending.erase(0, nlast + 1);
+            }
+            else if (pending.size() > 8192)
+            {
+                _OnOutput(pending);
+                pending.clear();
+            }
+        }
+        if (!pending.empty())
+        {
+            _OnOutput(pending);
+        }
+
+        const int iexit = WaitExitCode(pid);
+        return bcancelled ? -1 : iexit;
     }
 
-    int RunProcessStreaming(const std::vector<std::string>&, const std::string&,
-        const std::function<void(const std::string&)>& _OnOutput, std::atomic<bool>*)
+    int RunShellStreaming(const std::string& _CommandLine, const std::string& _WorkingDir,
+        const std::function<void(const std::string&)>& _OnOutput, std::atomic<bool>* _pCancel)
     {
-        _OnOutput("running programs is not implemented on this platform\n");
-        return -1;
+        return StreamProgram("/bin/sh", {"sh", "-c", _CommandLine}, _WorkingDir, _OnOutput,
+            _pCancel, "could not start the command shell\n");
+    }
+
+    int RunProcessStreaming(const std::vector<std::string>& _Args, const std::string& _WorkingDir,
+        const std::function<void(const std::string&)>& _OnOutput, std::atomic<bool>* _pCancel)
+    {
+        const std::string program = _Args.empty() ? std::string() : FindProgram(_Args[0]);
+        if (program.empty())
+        {
+            _OnOutput(_Args.empty() ? std::string("no program given\n")
+                                    : "'" + _Args[0] + "' was not found\n");
+            return -1;
+        }
+        return StreamProgram(
+            program, _Args, _WorkingDir, _OnOutput, _pCancel, "could not start '" + program + "'\n");
     }
 
 #endif

@@ -223,16 +223,7 @@ namespace gitgud::app::updater
 
     fs::path InstallDir()
     {
-#if defined(_WIN32)
-        wchar_t wszexe[MAX_PATH * 2] = {};
-        const DWORD dwlen =
-            GetModuleFileNameW(nullptr, wszexe, static_cast<DWORD>(std::size(wszexe)));
-        if (dwlen > 0 && dwlen < std::size(wszexe))
-        {
-            return fs::path(wszexe).parent_path();
-        }
-#endif
-        return fs::current_path();
+        return fs::u8path(gitgud::platform::ExecutableDirectory());
     }
 
     bool IsPackagedBuild()

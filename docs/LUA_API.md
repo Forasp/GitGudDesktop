@@ -217,7 +217,9 @@ dot above HEAD for uncommitted changes. Show a row's picture inline:
 | `installTool(name, {url, sha256, tool, version})` | download a .zip, check its SHA-256, unpack it into `<app data>/tools/<tool>/<version>` and remove older versions; `<name>.done` carries the folder |
 | `installedTools(tool)` | `{ {version, dir}, … }` installed by `installTool` |
 | `homeDir()` | the user's home folder |
+| `appDir()` | the folder the app runs from (holds `resources/`, `docs/`, and on Linux the bundled `gh/`) |
 | `version` | app version string |
+| `platform` | `"windows"`, `"macos"` or `"linux"` |
 
 ### App events
 

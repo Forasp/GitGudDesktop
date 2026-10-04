@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=GitGud Desktop
+GenericName=Git Client
+Comment=A moddable Git client
+Exec=gitgud %f
+Icon=gitgud
+Terminal=false
+Categories=Development;RevisionControl;
+Keywords=git;version control;repository;commit;branch;
+StartupWMClass=gitgud

@@ -30,14 +30,17 @@ function settingsView.options()
             { label = "Name (used for your commits)", value = gitgud.globalConfig("user.name") },
             { label = "Email", value = gitgud.globalConfig("user.email") },
             { label = "Default branch name for new repositories", value = gitgud.globalConfig("init.defaultBranch") },
-            { label = 'External editor command — e.g. code "%s" (blank: the default program)', value = settings.get("editorCommand", "") },
-            { label = 'Terminal command — e.g. wt.exe -d "%s" (blank: Command Prompt)', value = settings.get("shellCommand", "") },
+            { label = 'External editor command, e.g. code "%s" (blank: the default program)', value = settings.get("editorCommand", "") },
+            { label = "Terminal command, e.g. " .. require("core.shell").names.terminal, value = settings.get("shellCommand", "") },
         },
         checks = {
             { label = "Ask before discarding changes", value = settings.get("confirmDiscard", true) },
             { label = "Ask before force pushing", value = settings.get("confirmForcePush", true) },
             { label = "Fetch in the background every 15 minutes", value = settings.get("autoFetch", true) },
-            { label = "Check for updates automatically", value = settings.get("updateCheck", true) },
+            -- Only Windows updates itself; elsewhere the package manager does.
+            gitgud.platform == "windows"
+                and { label = "Check for updates automatically", value = settings.get("updateCheck", true) }
+                or nil,
         },
         ok = "Save",
         alt = { label = "Switch UI…", action = settingsView.switchInterface },
@@ -61,7 +64,9 @@ function settingsView.options()
             settings.set("confirmDiscard", v.checks[1])
             settings.set("confirmForcePush", v.checks[2])
             settings.set("autoFetch", v.checks[3])
-            settings.set("updateCheck", v.checks[4])
+            if gitgud.platform == "windows" then
+                settings.set("updateCheck", v.checks[4])
+            end
 
             require("views.sync").scheduleAutoFetch()
             status.ok("Options saved.")

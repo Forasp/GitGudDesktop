@@ -155,6 +155,14 @@ namespace gitgud::lua
         luaL_setfuncs(m_pL, functions.data(), 1);
         lua_pushliteral(m_pL, GITGUD_VERSION);
         lua_setfield(m_pL, -2, "version");
+#if defined(_WIN32)
+        lua_pushliteral(m_pL, "windows");
+#elif defined(__APPLE__)
+        lua_pushliteral(m_pL, "macos");
+#else
+        lua_pushliteral(m_pL, "linux");
+#endif
+        lua_setfield(m_pL, -2, "platform");
         lua_setglobal(m_pL, "gitgud");
     }
 

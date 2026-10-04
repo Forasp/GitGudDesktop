@@ -36,7 +36,7 @@ local newTabMode = false  -- the dropdown was opened by the tab strip's "+"
 -- @param path  a path
 -- @return comparison key
 local function key(path)
-    return (path:gsub("\\", "/"):gsub("/+$", ""):lower())
+    return require("core.shell").pathKey(path)
 end
 
 --- Load the persisted repository list.
@@ -329,7 +329,7 @@ local function repoMenu(path)
         },
         { separator = true },
         {
-            label = "Show in Explorer",
+            label = "Show in " .. shell.names.fileManager,
             action = function()
                 shell.showInFolder(path)
             end,

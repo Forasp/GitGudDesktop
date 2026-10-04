@@ -1,6 +1,7 @@
 --- views/console.lua — a console docked at the bottom of the window.
 --
--- Type a command, press Enter: it runs through the system shell (cmd.exe)
+-- Type a command, press Enter: it runs through the system shell (cmd.exe,
+-- or /bin/sh outside Windows)
 -- in the repository's folder, and everything it prints streams into the
 -- list above. Handy for the odd git command the app has no button for, and
 -- for tools like git-lfs. One command runs at a time; Stop cancels it (and

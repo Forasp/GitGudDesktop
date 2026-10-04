@@ -1,17 +1,17 @@
 --- views/ssh.lua — SSH: your keys, trusting new servers, key passphrases.
 --
 -- Remotes like git@host:owner/repo.git connect over SSH. The engine offers
--- your SSH agent first (Pageant or the Windows OpenSSH agent), then the
+-- your SSH agent first (Pageant, the OpenSSH agent, or SSH_AUTH_SOCK), then the
 -- usual key files in ~/.ssh (id_ed25519, id_ecdsa, id_rsa).
 --
 --   * File > SSH keys… lists your public keys, copies one to paste into
 --     your Git host, and generates a new ed25519 key (with ssh-keygen,
---     which ships with Windows).
+--     part of OpenSSH).
 --   * The first connection to a server asks whether to trust its host key
 --     (shown by fingerprint) and remembers it in ~/.ssh/known_hosts. A key
 --     that CHANGED is refused with a warning instead.
 --   * An encrypted key's passphrase is asked for once and kept in the
---     Windows Credential Manager.
+--     OS credential store.
 --
 -- Public API: ssh.keys(), ssh.generate(), ssh.onUnknownHost(detail),
 --             ssh.askPassphrase(credentialKey)
@@ -41,13 +41,14 @@ end
 --- Show the keys dialog.
 function ssh.keys()
     local keys = gitgud.sshKeys()
+    local sep = gitgud.platform == "windows" and "\\" or "/"
     local message = nil
     if #keys == 0 then
-        message = "You don't have an SSH key yet (none in " .. gitgud.homeDir() .. "\\.ssh).\n\n"
+        message = "You don't have an SSH key yet (none in " .. gitgud.homeDir() .. sep .. ".ssh).\n\n"
             .. "Generate one, then add its public key to your Git host (for example GitHub: "
             .. "Settings > SSH and GPG keys)."
     else
-        local lines = { "Public keys in " .. gitgud.homeDir() .. "\\.ssh:" }
+        local lines = { "Public keys in " .. gitgud.homeDir() .. sep .. ".ssh:" }
         for _, key in ipairs(keys) do
             local kind = key.publicKey:match("^(%S+)") or "?"
             local comment = key.publicKey:match("^%S+%s+%S+%s+(.+)$") or ""
@@ -79,9 +80,11 @@ end
 --- Generate a new ed25519 key with ssh-keygen.
 function ssh.generate()
     if not gitgud.findProgram("ssh-keygen") then
-        dialog.alert("ssh-keygen not found",
-            "Generating a key needs ssh-keygen, part of Windows' OpenSSH client (Settings > Apps > "
-                .. "Optional features > OpenSSH Client) or Git for Windows.")
+        dialog.alert("ssh-keygen not found", gitgud.platform == "windows"
+            and ("Generating a key needs ssh-keygen, part of Windows' OpenSSH client (Settings > "
+                .. "Apps > Optional features > OpenSSH Client) or Git for Windows.")
+            or ("Generating a key needs ssh-keygen. Install your system's OpenSSH client "
+                .. "(the openssh-client package on Debian and Ubuntu, openssh-clients on Fedora)."))
         return
     end
 
@@ -96,8 +99,8 @@ function ssh.generate()
     dialog.show({
         title = "Generate an SSH key",
         message = "Creates " .. target .. " (ed25519). A passphrase protects the key if someone "
-            .. "copies the file; GitGud will ask for it once and keep it in the Windows Credential "
-            .. "Manager. Leave it blank for no passphrase.",
+            .. "copies the file; GitGud will ask for it once and keep it in the "
+            .. shell.names.keyring .. ". Leave it blank for no passphrase.",
         fields = {
             { label = "Label (usually your email)", value = gitgud.globalConfig("user.email") },
             { label = "Passphrase (optional)", value = "", secret = true },
@@ -171,7 +174,7 @@ function ssh.askPassphrase(credentialKey)
     dialog.show({
         title = "Passphrase for " .. text.basename(path),
         message = "Your SSH key " .. path .. " is protected by a passphrase. It's stored in the "
-            .. "Windows Credential Manager, never in plain text.",
+            .. shell.names.keyring .. ", never in plain text.",
         fields = { { label = "Passphrase", value = "", secret = true } },
         ok = "Save and retry",
         onOk = function(v)

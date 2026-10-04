@@ -189,7 +189,7 @@ namespace gitgud::ui
         std::string m_InputSurface; // "" = the main window
         std::string m_ResourceRoot;
         std::string m_SkinOverride; // package whose looknfeel is applied over the base skin
-        // OS clipboard bridge (Windows today); CEGUI does not take ownership.
+        // OS clipboard bridge; CEGUI does not take ownership.
         std::unique_ptr<CEGUI::NativeClipboardProvider> m_ClipboardProvider;
         // Created before CEGUI's System so its log lands in platform::LogDirectory().
         CEGUI::Logger* m_pLogger = nullptr;

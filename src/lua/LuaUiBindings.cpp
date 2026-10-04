@@ -627,14 +627,16 @@ namespace gitgud::lua::bindings
 
         fs::path ExeDir()
         {
-#if defined(_WIN32)
-            wchar_t wszbuf[MAX_PATH] = {};
-            if (GetModuleFileNameW(nullptr, wszbuf, MAX_PATH) > 0)
-            {
-                return fs::path(wszbuf).parent_path();
-            }
-#endif
-            return fs::current_path();
+            return fs::u8path(gitgud::platform::ExecutableDirectory());
+        }
+
+        // gitgud.appDir() -> the folder the app runs from (resources/, docs/, and
+        // on Linux the bundled gh live there).
+        int LAppDir(lua_State* _pL)
+        {
+            const std::string dir = ExeDir().u8string();
+            lua_pushlstring(_pL, dir.data(), dir.size());
+            return 1;
         }
 
         // Per-user settings directory (recent repos, UI prefs, ...). Scripts read and
@@ -927,6 +929,7 @@ namespace gitgud::lua::bindings
             {"screenshot", LScreenshot},
             // platform
             {"docs", LDocs},
+            {"appDir", LAppDir},
             {"openExternal", ShellCall<&gitgud::platform::OpenExternal>},
             {"showInFolder", ShellCall<&gitgud::platform::ShowInFolder>},
             {"spawn", LSpawn},

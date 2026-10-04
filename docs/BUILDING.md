@@ -1,6 +1,7 @@
 # Building GitGud Desktop
 
-Windows + Visual Studio is the tested setup.
+Windows + Visual Studio is the tested setup. Linux builds too (see
+[Linux](#linux)); it's newer and less tested.
 
 ## Quick start: `setup.cmd`
 
@@ -22,6 +23,57 @@ it only redoes what changed.
 
 vcpkg installs SDL2, libgit2, Lua, stb, Catch2, and CEGUI's dependencies
 (glm, glew, pugixml, freetype) automatically on first configure.
+
+## Linux
+
+`setup.sh` does what `setup.cmd` does. It needs a compiler, CMake, Ninja,
+a vcpkg checkout in `VCPKG_ROOT`, and the development packages SDL2 builds
+against (without them SDL2 silently drops X11 or Wayland support). On
+Ubuntu 24.04:
+
+```bash
+sudo apt install build-essential cmake ninja-build pkg-config zip unzip \
+    autoconf autoconf-archive automake libtool bison flex python3-venv \
+    libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+    libxinerama-dev libxss-dev libxxf86vm-dev libxkbcommon-dev \
+    libwayland-dev wayland-protocols libdecor-0-dev libegl1-mesa-dev \
+    libgl1-mesa-dev libglu1-mesa-dev libdbus-1-dev libibus-1.0-dev
+git clone https://github.com/microsoft/vcpkg ~/vcpkg && ~/vcpkg/bootstrap-vcpkg.sh
+export VCPKG_ROOT=~/vcpkg
+./setup.sh                      # release build (CEGUI too, the first time)
+./setup.sh --preset full --test # debug build, then run the engine tests
+```
+
+One Release CEGUI (`third_party/cegui-install-release`) serves every
+preset, and the app finds its libraries through its RPATH. Settings live in
+`$XDG_CONFIG_HOME/gitgud` (`~/.config/gitgud`). Optional desktop tools the
+app uses when present: `xdg-open`, `gio` (trash), `zenity` or `kdialog`
+(folder picker), and libsecret (saved passwords).
+
+Under WSL, build inside the Linux file system (not `/mnt/c`), and drop the
+Windows folders WSL appends to `PATH` (or set `appendWindowsPath = false`
+in `/etc/wsl.conf`): CMake's package searches otherwise crawl over them.
+
+### Linux packages: `package.sh`
+
+```bash
+sudo apt install rpm          # rpmbuild, for the .rpm (the .deb needs nothing extra)
+./package.sh                  # or --skip-build after ./setup.sh
+```
+
+It builds the release preset, downloads the GitHub CLI release named by
+`GH_VERSION` (checked against its published SHA-256) to bundle with the
+app, and runs CPack: `build/dist/gitgud-desktop_<version>_amd64.deb` and
+`gitgud-desktop-<version>-1.x86_64.rpm`. Both install the app to
+`/usr/lib/gitgud` (CEGUI's libraries and modules in its `lib/`, gh in
+`gh/`), link `/usr/bin/gitgud`, and add a menu entry and icons. Library
+dependencies are worked out from the binaries; git, git-lfs, gnupg,
+xdg-utils, libsecret and zenity are recommended (used when present).
+
+The packages need at least the glibc they were built against, so build
+them on the oldest distribution you support (Ubuntu 22.04 covers Debian 12,
+Ubuntu 22.04+, and Fedora 36+). Linux builds don't update themselves: the
+package manager does, and Help > Check for Updates says so.
 
 ## What setup does, by hand
 

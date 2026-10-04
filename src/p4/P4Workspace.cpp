@@ -17,6 +17,10 @@
 #include <set>
 #include <sstream>
 
+#if !defined(_WIN32)
+#include <unistd.h>
+#endif
+
 namespace gitgud::p4
 {
 
@@ -32,6 +36,15 @@ namespace gitgud::p4
 
         const char* const g_szConfigFile = ".p4config";
 
+        void SetEnv(const char* _szName, const char* _szValue)
+        {
+#if defined(_WIN32)
+            _putenv_s(_szName, _szValue);
+#else
+            setenv(_szName, _szValue, 1);
+#endif
+        }
+
         // P4IGNORE names the ignore file p4 reconcile/status honor. Commands
         // inherit our environment, so set it once when the user hasn't.
         void EnsureIgnoreSetting()
@@ -42,21 +55,30 @@ namespace gitgud::p4
                 {
                     if (!std::getenv("P4IGNORE"))
                     {
-                        _putenv_s("P4IGNORE", ".p4ignore");
+                        SetEnv("P4IGNORE", ".p4ignore");
                     }
                     // Naming our settings file as P4CONFIG also makes p4
                     // refuse to add it (P4_SYSTEMIGNORE).
                     if (!std::getenv("P4CONFIG"))
                     {
-                        _putenv_s("P4CONFIG", ".p4config");
+                        SetEnv("P4CONFIG", ".p4config");
                     }
                 });
         }
 
         std::string HostName()
         {
+#if defined(_WIN32)
             const char* sz = std::getenv("COMPUTERNAME");
             return sz ? std::string(sz) : std::string("host");
+#else
+            char szname[256] = {};
+            if (gethostname(szname, sizeof(szname) - 1) == 0 && szname[0])
+            {
+                return szname;
+            }
+            return "host";
+#endif
         }
 
         // "C:\Work\Proj\" -> "C:/Work/Proj".

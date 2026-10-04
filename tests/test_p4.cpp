@@ -18,6 +18,26 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+
+namespace
+{
+    // Set an environment variable; "" removes it.
+    void SetEnv(const char* _szName, const char* _szValue)
+    {
+#if defined(_WIN32)
+        _putenv_s(_szName, _szValue);
+#else
+        if (*_szValue)
+        {
+            setenv(_szName, _szValue, 1);
+        }
+        else
+        {
+            unsetenv(_szName);
+        }
+#endif
+    }
+} // namespace
 #include <sstream>
 #include <string>
 
@@ -52,11 +72,11 @@ namespace
         for (const char* szvar :
             {"P4PORT", "P4USER", "P4CLIENT", "P4CONFIG", "P4PASSWD", "P4CHARSET"})
         {
-            _putenv_s(szvar, "");
+            SetEnv(szvar, "");
         }
-        _putenv_s("P4TICKETS", (_Dir / "p4tickets.txt").string().c_str());
-        _putenv_s("P4TRUST", (_Dir / "p4trust.txt").string().c_str());
-        _putenv_s("P4ENVIRO", (_Dir / "p4enviro.txt").string().c_str());
+        SetEnv("P4TICKETS", (_Dir / "p4tickets.txt").string().c_str());
+        SetEnv("P4TRUST", (_Dir / "p4trust.txt").string().c_str());
+        SetEnv("P4ENVIRO", (_Dir / "p4enviro.txt").string().c_str());
     }
 
     bool HaveServer()

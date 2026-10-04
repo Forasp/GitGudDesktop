@@ -205,7 +205,7 @@ local function discard(paths)
 
     local what = #paths == 1 and ("'" .. paths[1] .. "'") or text.plural(#paths, "file")
     dialog.confirm("Discard changes?",
-        "Your changes to " .. what .. " will be thrown away. New files go to the Recycle Bin; "
+        "Your changes to " .. what .. " will be thrown away. New files go to the " .. shell.names.trash .. "; "
             .. "edits to tracked files can't be recovered.",
         "Discard changes", run, true)
 end
@@ -311,7 +311,7 @@ local function fileMenu(file)
     }
     items[#items + 1] = { separator = true }
     items[#items + 1] = {
-        label = "Show in Explorer",
+        label = "Show in " .. shell.names.fileManager,
         action = function()
             shell.showInFolder(absolute(path))
         end,
@@ -534,7 +534,7 @@ function changes.showContent(force)
             end,
         }
         actions[#actions + 1] = {
-            label = "Show in Explorer",
+            label = "Show in " .. shell.names.fileManager,
             action = function()
                 shell.showInFolder(state.path)
             end,
