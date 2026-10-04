@@ -118,6 +118,11 @@ namespace gitgud::git
 
     std::vector<BranchInfo> Repository::Branches() const
     {
+        if (m_pP4)
+        {
+            return m_pP4->Branches();
+        }
+
         if (!m_pRepo)
         {
             throw GitError("branches() on an unopened repository");
@@ -200,6 +205,11 @@ namespace gitgud::git
 
     std::string Repository::CurrentBranch() const
     {
+        if (m_pP4)
+        {
+            return m_pP4->CurrentBranch();
+        }
+
         if (!m_pRepo)
         {
             throw GitError("currentBranch() on an unopened repository");
@@ -241,6 +251,12 @@ namespace gitgud::git
 
     void Repository::CreateBranch(const std::string& _Name)
     {
+        if (m_pP4)
+        {
+            m_pP4->CreateBranch(_Name, "");
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("createBranch() on an unopened repository");
@@ -266,6 +282,12 @@ namespace gitgud::git
 
     void Repository::Checkout(const std::string& _Name)
     {
+        if (m_pP4)
+        {
+            m_pP4->Checkout(_Name);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("checkout() on an unopened repository");
@@ -325,6 +347,12 @@ namespace gitgud::git
 
     void Repository::DeleteBranch(const std::string& _Name)
     {
+        if (m_pP4)
+        {
+            m_pP4->DeleteBranch(_Name);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("deleteBranch() on an unopened repository");
@@ -343,6 +371,12 @@ namespace gitgud::git
 
     void Repository::RenameBranch(const std::string& _OldName, const std::string& _NewName)
     {
+        if (m_pP4)
+        {
+            m_pP4->RenameBranch(_OldName, _NewName);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("renameBranch() on an unopened repository");
@@ -371,6 +405,11 @@ namespace gitgud::git
 
     std::vector<CommitInfo> Repository::Log(const LogQuery& _Query) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->Log(_Query);
+        }
+
         if (!m_pRepo)
         {
             throw GitError("log() on an unopened repository");
@@ -576,6 +615,11 @@ namespace gitgud::git
     std::vector<FileDiff> Repository::DiffCommit(
         const std::string& _Oid, const DiffOptions& _Options) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->DiffCommit(_Oid, _Options);
+        }
+
         if (!m_pRepo)
         {
             throw GitError("diffCommit() on an unopened repository");
@@ -629,6 +673,11 @@ namespace gitgud::git
 
     std::vector<RemoteInfo> Repository::Remotes() const
     {
+        if (m_pP4)
+        {
+            return m_pP4->Remotes();
+        }
+
         if (!m_pRepo)
         {
             throw GitError("remotes() on an unopened repository");
@@ -659,6 +708,12 @@ namespace gitgud::git
 
     void Repository::AddRemote(const std::string& _Name, const std::string& _Url)
     {
+        if (m_pP4)
+        {
+            m_pP4->AddRemote(_Name, _Url);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("addRemote() on an unopened repository");
@@ -672,6 +727,12 @@ namespace gitgud::git
 
     void Repository::RemoveRemote(const std::string& _Name)
     {
+        if (m_pP4)
+        {
+            m_pP4->RemoveRemote(_Name);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("removeRemote() on an unopened repository");
@@ -684,6 +745,12 @@ namespace gitgud::git
 
     void Repository::SetRemoteUrl(const std::string& _Name, const std::string& _Url)
     {
+        if (m_pP4)
+        {
+            m_pP4->SetRemoteUrl(_Name, _Url);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("setRemoteUrl() on an unopened repository");
@@ -701,6 +768,12 @@ namespace gitgud::git
 
     void Repository::RenameRemote(const std::string& _Name, const std::string& _NewName)
     {
+        if (m_pP4)
+        {
+            m_pP4->RenameRemote(_Name, _NewName);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("renameRemote() on an unopened repository");
@@ -716,6 +789,12 @@ namespace gitgud::git
 
     void Repository::SetUpstream(const std::string& _Branch, const std::string& _Upstream)
     {
+        if (m_pP4)
+        {
+            m_pP4->SetUpstream(_Branch, _Upstream);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("setUpstream() on an unopened repository");
@@ -736,6 +815,11 @@ namespace gitgud::git
 
     std::vector<StashInfo> Repository::StashList() const
     {
+        if (m_pP4)
+        {
+            return m_pP4->StashList();
+        }
+
         if (!m_pRepo)
         {
             throw GitError("stashList() on an unopened repository");
@@ -764,6 +848,12 @@ namespace gitgud::git
 
     void Repository::StashSave(const std::string& _Message)
     {
+        if (m_pP4)
+        {
+            m_pP4->StashSave(_Message);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("stashSave() on an unopened repository");
@@ -781,6 +871,12 @@ namespace gitgud::git
 
     void Repository::StashApply(std::size_t _Index)
     {
+        if (m_pP4)
+        {
+            m_pP4->StashApply(_Index);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("stashApply() on an unopened repository");
@@ -794,6 +890,12 @@ namespace gitgud::git
 
     void Repository::StashPop(std::size_t _Index)
     {
+        if (m_pP4)
+        {
+            m_pP4->StashPop(_Index);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("stashPop() on an unopened repository");
@@ -807,6 +909,12 @@ namespace gitgud::git
 
     void Repository::StashDrop(std::size_t _Index)
     {
+        if (m_pP4)
+        {
+            m_pP4->StashDrop(_Index);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("stashDrop() on an unopened repository");
@@ -821,6 +929,11 @@ namespace gitgud::git
 
     std::vector<std::string> Repository::ConflictedPaths() const
     {
+        if (m_pP4)
+        {
+            return m_pP4->ConflictedPaths();
+        }
+
         if (!m_pRepo)
         {
             throw GitError("conflictedPaths() on an unopened repository");
@@ -857,6 +970,11 @@ namespace gitgud::git
 
     MergeResult Repository::Merge(const std::string& _BranchName)
     {
+        if (m_pP4)
+        {
+            return m_pP4->Merge(_BranchName);
+        }
+
         if (!m_pRepo)
         {
             throw GitError("merge() on an unopened repository");
@@ -990,6 +1108,12 @@ namespace gitgud::git
 
     void Repository::AbortMerge()
     {
+        if (m_pP4)
+        {
+            m_pP4->AbortMerge();
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("abortMerge() on an unopened repository");
@@ -1016,6 +1140,11 @@ namespace gitgud::git
 
     AheadBehind Repository::GetAheadBehind() const
     {
+        if (m_pP4)
+        {
+            return m_pP4->GetAheadBehind();
+        }
+
         if (!m_pRepo)
         {
             throw GitError("aheadBehind() on an unopened repository");

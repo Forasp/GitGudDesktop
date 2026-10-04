@@ -16,6 +16,9 @@
 --   depot/actions.lua      Check Out, Add, Delete, Revert, Submit, Shelve, …
 --   depot/commands.lua     branches, labels, integrate, resolve, connection
 --   depot/changelists.lua  pending changelists (kept locally)
+--   depot/p4actions.lua, depot/p4changelists.lua
+--                          the same two on a Perforce workspace: real p4
+--                          commands and the server's changelists
 
 local app = require("core.app")
 local changelists = require("depot.changelists")
@@ -36,6 +39,7 @@ menu.init()
 commands.init()
 require("depot.changedialog").init()
 require("depot.windows").init()
+require("depot.p4actions").init()
 
 -- Shared services from the default UI (no widgets of their own here).
 app.use(require("views.repositories"))

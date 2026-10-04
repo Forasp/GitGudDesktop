@@ -271,9 +271,9 @@ function content.showWorkingFile(path, force)
     end
 
     -- Line staging needs byte-exact line numbering, which whitespace
-    -- filtering and conflict markers break.
+    -- filtering and conflict markers break. Perforce opens whole files only.
     local staging = nil
-    local canStage = not diff.ignoreWhitespace() and entry.code ~= "U"
+    local canStage = not diff.ignoreWhitespace() and entry.code ~= "U" and gitgud.supports("lineStaging")
     if canStage then
         local staged = {}
         for _, idx in ipairs(gitgud.stagedLines(path)) do

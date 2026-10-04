@@ -49,7 +49,7 @@ end
 
 local BUTTONS = {
     { icon = "Refresh", label = "Refresh", tip = "Refresh the workspace state (F5)", action = app.requestRefresh },
-    { icon = "GetLatest", label = "Get Latest", tip = "Get the latest revision: pull from the upstream", enabled = open, action = actions.getLatest },
+    { icon = "GetLatest", label = "Get Latest", tip = "Get the latest revision: pull from the upstream", enabled = open, action = function() actions.getLatest() end },
     { icon = "Submit", label = "Submit", tip = "Submit a pending changelist", enabled = submittable, action = function()
         actions.submit()
     end },
@@ -96,7 +96,7 @@ local BUTTONS = {
         return open() and repo.primaryRemote() ~= nil
     end, action = commands.fetch },
     { icon = "Push", label = "Push", tip = "Push the current branch", enabled = function()
-        return open() and repo.primaryRemote() ~= nil
+        return open() and repo.primaryRemote() ~= nil and gitgud.supports("push")
     end, action = commands.push },
 }
 

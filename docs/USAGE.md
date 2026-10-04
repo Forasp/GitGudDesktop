@@ -32,6 +32,12 @@ your editor, or remove it from the list (the folder isn't touched).
 *Repository settings…* edits the `origin` URL, a per-repository name/email,
 and `.gitignore`.
 
+**Perforce.** *Add ▸ Set up Perforce workspace…* and *Create new Perforce
+stream…* make a Perforce workspace, which then works like any repository
+here: staging opens files, committing submits, pulling gets latest, and
+branches are streams. Commands Perforce has no counterpart for are greyed
+out. See [Perforce workspaces](P4.md).
+
 ## The command palette
 
 **Ctrl+K** (or F1, or the *Commands* button) opens one search box over

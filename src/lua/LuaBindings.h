@@ -18,6 +18,7 @@ extern "C"
 #include <lua.h>
 }
 
+#include "git/Repository.h"
 #include "lua/LuaEngine.h"
 
 namespace gitgud::git
@@ -85,5 +86,11 @@ namespace gitgud::lua::bindings
     void AddFeatureBindings(std::vector<luaL_Reg>& _Out);
     void AddAppBindings(std::vector<luaL_Reg>& _Out);
     void AddUpdateBindings(std::vector<luaL_Reg>& _Out);
+    void AddP4Bindings(std::vector<luaL_Reg>& _Out);
+
+    // The credential provider worker jobs use (credential store, then a
+    // "credential.missing" event). LuaRepoBindings.cpp.
+    gitgud::git::CredentialProvider MakeCredentialProvider(
+        gitgud::platform::ICredentialStore* _pStore, gitgud::app::EventBus* _pBus);
 
 } // namespace gitgud::lua::bindings

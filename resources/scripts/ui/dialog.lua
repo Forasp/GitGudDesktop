@@ -27,6 +27,16 @@
 -- A secret field shows each character as "*", with the one just typed
 -- readable for a moment; its text can't be copied out.
 --
+-- Tabs: give `tabs = { {label, message?, fields, checks?}, … }` (and
+-- optionally `tab = n`, the one to start on) instead of `fields`. A row of
+-- tab buttons sits under the title; the active tab's fields show, what you
+-- typed on another tab is kept, and onOk gets `values.tab` with the active
+-- tab's fields. `tab = 0` starts with no tab chosen.
+--
+-- `canSubmit = function(values) return bool end` keeps OK disabled until it
+-- returns true; a field's `enabled = function(values)` greys it out the
+-- same way. Both are asked again whenever a field, check, or tab changes.
+--
 -- dialog.close(spec) dismisses that dialog from code (no callback runs).
 -- Shortcuts: dialog.confirm, dialog.alert, dialog.prompt. Other full-screen
 -- modals (repository settings) reuse dialog.showModal / hideModal for the
@@ -48,6 +58,8 @@ local REVEAL_SECONDS = "1" -- how long a typed secret character stays readable
 local spec = nil          -- the dialog being shown
 local escapeToken = nil
 local modalStack = {}     -- names of open modal windows, topmost last
+local tabsBuilt = 0       -- DialogTab<n> buttons created so far
+local layout              -- function(spec): place the rows (defined below)
 
 --- Show the dimmed backdrop and a modal window above it.
 -- @param name      the modal window
@@ -120,7 +132,7 @@ end
 --- Collect the current field and checkbox values.
 -- @return { fields = {...}, checks = {...} }
 local function values()
-    local out = { fields = {}, checks = {} }
+    local out = { fields = {}, checks = {}, tab = spec.tab }
 
     for i, _ in ipairs(spec.fields or {}) do
         out.fields[i] = gitgud.getText("DialogField" .. i)
@@ -150,9 +162,33 @@ local function showError(message)
     gitgud.setVisible("DialogError", true)
 end
 
+--- Enable OK only when the spec's canSubmit(values) agrees (always
+-- without one).
+local function refreshOk()
+    local current = spec and values() or nil
+    -- Fields with an `enabled(values)` rule grey out (with their Browse) as
+    -- the other values change.
+    for i, field in ipairs(spec and spec.fields or {}) do
+        if type(field.enabled) == "function" then
+            local on = field.enabled(current) == true
+            gitgud.setEnabled("DialogField" .. i, on)
+            gitgud.setEnabled("DialogBrowse" .. i, on)
+        else
+            gitgud.setEnabled("DialogField" .. i, true)
+            gitgud.setEnabled("DialogBrowse" .. i, true)
+        end
+    end
+    local enabled = not (spec and spec.canSubmit) or spec.canSubmit(current) == true
+    gitgud.setEnabled("DialogOkButton", enabled)
+    gitgud.setVisible("DialogOkGlow", enabled)
+end
+
 --- OK / Enter: run onOk; close unless it returned false.
 local function submit()
     if not spec then
+        return
+    end
+    if spec.canSubmit and spec.canSubmit(values()) ~= true then
         return
     end
 
@@ -186,14 +222,34 @@ local function cancel()
     end
 end
 
---- Show the dialog described by `s` (see the header).
--- @param s  dialog spec
-function dialog.show(s)
-    if spec then
-        close()
+--- Make sure tab button i exists (created on first use, so no layout
+-- needs to declare them).
+-- @param i  tab index
+local function ensureTab(i)
+    while tabsBuilt < i do
+        tabsBuilt = tabsBuilt + 1
+        local index = tabsBuilt
+        local name = "DialogTab" .. index
+        gitgud.createWindow("Gitgud/Button", name, "Dialog")
+        gitgud.on(name .. ".clicked", function()
+            if spec and spec.tabs and spec.tab ~= index and spec.tabs[index] then
+                -- Keep what was typed on the tab being left.
+                for j, field in ipairs(spec.fields or {}) do
+                    field.value = gitgud.getText("DialogField" .. j)
+                end
+                spec.tab = index
+                layout(spec)
+                if spec.fields and spec.fields[1] then
+                    gitgud.focus("DialogField1")
+                end
+            end
+        end)
     end
-    spec = s
+end
 
+--- Place every row of the dialog described by `s`.
+-- @param s  dialog spec (the one showing)
+layout = function(s)
     local width = s.width or DEFAULT_WIDTH
     local inner = width - 44
     local y = 16
@@ -201,10 +257,59 @@ function dialog.show(s)
     gitgud.setText("DialogTitle", text.escape(s.title or ""))
     y = y + 34
 
-    local msgHeight = messageHeight(s.message, inner)
+    -- Tabs: a row of buttons; the active tab supplies the fields, checks,
+    -- and (when it has one) the message.
+    local message = s.message
+    local tabCount = s.tabs and #s.tabs or 0
+    if tabCount > 0 then
+        -- tab = 0: none chosen yet (only the dialog's own message shows).
+        s.tab = s.tab or 1
+        local active = s.tabs[s.tab]
+        s.fields = active and active.fields or {}
+        s.checks = active and active.checks or nil
+        message = active and active.message or s.message
+        ensureTab(tabCount)
+        local tabWidth = math.floor((width - 44 - (tabCount - 1) * 6) / tabCount)
+        for i = 1, tabCount do
+            local name = "DialogTab" .. i
+            local x = 22 + (i - 1) * (tabWidth + 6)
+            local on = i == s.tab
+            gitgud.setText(name, text.escape(s.tabs[i].label or ""))
+            gitgud.setProperty(name, "Area", geometry.area(0, x, 0, y, 0, x + tabWidth, 0, y + 32))
+            gitgud.setProperty(name, "NormalFillColour", on and C.blue or C.bg1)
+            gitgud.setProperty(name, "HoverFillColour", on and "FF93A4FF" or C.bg0)
+            gitgud.setProperty(name, "BorderColour", on and "FF93A4FF" or C.border)
+            gitgud.setProperty(name, "NormalTextColour", on and C.bg0 or C.text2)
+            gitgud.setProperty(name, "HoverTextColour", on and C.bg0 or C.text)
+            gitgud.setProperty(name, "PushedTextColour", on and C.bg0 or C.text)
+            gitgud.setVisible(name, true)
+        end
+        y = y + 44
+    end
+    for i = tabCount + 1, tabsBuilt do
+        gitgud.setVisible("DialogTab" .. i, false)
+    end
+
+    -- Size tabbed dialogs for their tallest tab, so switching doesn't move
+    -- the title and buttons.
+    local tabPad = 0
+    if tabCount > 0 then
+        local function contentHeight(msg, fieldList, checkList)
+            local h = messageHeight(msg, inner)
+            h = h + (h > 0 and 8 or 0) + #(fieldList or {}) * 64 + #(checkList or {}) * 32
+            return h
+        end
+        local tallest = contentHeight(s.message, nil, nil)
+        for _, t in ipairs(s.tabs) do
+            tallest = math.max(tallest, contentHeight(t.message or s.message, t.fields, t.checks))
+        end
+        tabPad = tallest - contentHeight(message, s.fields, s.checks)
+    end
+
+    local msgHeight = messageHeight(message, inner)
     gitgud.setVisible("DialogMessage", msgHeight > 0)
     if msgHeight > 0 then
-        gitgud.setText("DialogMessage", text.escape(s.message))
+        gitgud.setText("DialogMessage", text.escape(message))
         gitgud.setProperty("DialogMessage", "Area", geometry.band(y, msgHeight, 22))
         y = y + msgHeight + 8
     end
@@ -249,6 +354,7 @@ function dialog.show(s)
         end
     end
 
+    y = y + tabPad
     gitgud.setVisible("DialogError", false)
     gitgud.setProperty("DialogError", "Area", geometry.band(y, 22, 22))
     y = y + 26
@@ -283,10 +389,21 @@ function dialog.show(s)
     local height = y + 60
     gitgud.setProperty("Dialog", "Area",
         geometry.area(0.5, -width / 2, 0.5, -height / 2, 0.5, width / 2, 0.5, height / 2))
+    refreshOk()
+end
 
+--- Show the dialog described by `s` (see the header).
+-- @param s  dialog spec
+function dialog.show(s)
+    if spec then
+        close()
+    end
+    spec = s
+
+    layout(s)
     escapeToken = dialog.showModal("Dialog", cancel)
 
-    if fields[1] then
+    if s.fields and s.fields[1] then
         gitgud.focus("DialogField1")
     end
 end
@@ -361,14 +478,19 @@ function dialog.init()
         end
     end)
 
+    for i = 1, MAX_CHECKS do
+        gitgud.on("DialogCheck" .. i .. ".toggled", refreshOk)
+    end
     for i = 1, MAX_FIELDS do
         gitgud.on("DialogField" .. i .. ".accepted", submit)
+        gitgud.on("DialogField" .. i .. ".changed", refreshOk)
 
         gitgud.on("DialogBrowse" .. i .. ".clicked", function()
             local field = spec and spec.fields and spec.fields[i]
             local chosen = gitgud.pickFolder(field and field.label or "Choose a folder")
             if chosen then
                 gitgud.setText("DialogField" .. i, chosen)
+                refreshOk()
             end
         end)
     end

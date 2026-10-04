@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "git/Repository.h"
+#include "p4/P4Workspace.h"
 
 namespace gitgud::git::internal
 {
@@ -326,6 +327,25 @@ namespace gitgud::git::internal
     // Diff two file versions as a FileDiff. RepositoryStaging.cpp.
     FileDiff DiffFileVersions(const std::string& _OldPath, const FileVersion& _Old,
         const std::string& _NewPath, const FileVersion& _New, const DiffOptions& _Options);
+
+    // Split a diff3-style merged text (conflict markers) into the chunks the
+    // 3-pane merge tool shows. RepositoryRewrite.cpp.
+    void ChunkMergedText(const std::string& _Text, ConflictFile& _Out);
+
+    // A conflict built from plain buffers (no repository): the base may be
+    // missing (both sides added), and a missing side means it was deleted.
+    // Used by the Perforce backend. RepositoryRewrite.cpp.
+    ConflictFile ConflictFromBuffers(const std::string& _Path, const std::string* _pBase,
+        const std::string* _pOurs, const std::string* _pTheirs);
+
+    // Three-way merge of plain buffers. Returns true when it merged cleanly;
+    // `_OutMerged` holds the result, with conflict markers when it didn't.
+    bool MergeBuffers(const std::string& _Path, const std::string* _pBase, const std::string& _Ours,
+        const std::string& _Theirs, std::string& _OutMerged);
+
+    // A Repository credential provider asked for Perforce passwords: the
+    // credential key is "p4:<P4PORT>". Repository.cpp.
+    p4::PasswordProvider P4Passwords(const CredentialProvider& _Provider);
 
     // Translate DiffOptions onto libgit2's struct.
     inline void ApplyDiffOptions(git_diff_options& _Opts, const DiffOptions& _Options)

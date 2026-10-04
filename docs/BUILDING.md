@@ -203,7 +203,7 @@ through the last two. The latest one is always at
 
 ## Tests
 
-- **Engine (C++)**: Catch2, 76 cases: `build\release\bin\gitgud_tests.exe`
+- **Engine (C++)**: Catch2, 97 cases: `build\release\bin\gitgud_tests.exe`
   (or `ctest --test-dir build/release`). The signing and LFS cases need
   `ssh-keygen` and `git-lfs` (Git for Windows ships both) and skip without.
 - **UI (Lua, scripted)**: `tests/ui/*.lua` drive the real UI without
@@ -224,6 +224,13 @@ through the last two. The latest one is always at
   throwaway repository — they stage, commit, branch, and push. They also save
   settings, open tabs, and recent repositories to `%APPDATA%\Gitgud`; set
   `$env:APPDATA` to a scratch folder first to keep your own untouched.
+- **Perforce**: the `[p4][server]` engine cases and the `p4.lua` /
+  `depot-p4.lua` UI scripts need `p4.exe` and `p4d.exe` from Perforce's
+  downloads. Point `GITGUD_P4` and `GITGUD_TEST_P4D` at them, or the server
+  cases skip. For the UI scripts, `tests\ui\make-p4workspace.ps1 -Dir
+  C:\temp\gg-p4` makes a throwaway server and workspace and prints the
+  environment to launch `gitgud.exe C:\temp\gg-p4\ws` with. See
+  [Perforce workspaces ▸ Testing](P4.md#testing).
 
 ## Documentation
 

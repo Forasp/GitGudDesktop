@@ -614,6 +614,12 @@ namespace gitgud::git
 
     void Repository::Stage(const std::vector<std::string>& _Paths)
     {
+        if (m_pP4)
+        {
+            m_pP4->Stage(_Paths);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("stage() on an unopened repository");
@@ -636,6 +642,12 @@ namespace gitgud::git
 
     void Repository::Unstage(const std::vector<std::string>& _Paths)
     {
+        if (m_pP4)
+        {
+            m_pP4->Unstage(_Paths);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("unstage() on an unopened repository");
@@ -674,6 +686,11 @@ namespace gitgud::git
 
     std::vector<std::size_t> Repository::StagedLines(const std::string& _Path) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->StagedLines(_Path);
+        }
+
         if (!m_pRepo)
         {
             throw GitError("stagedLines() on an unopened repository");
@@ -726,6 +743,12 @@ namespace gitgud::git
     void Repository::SetStagedLines(const std::string& _Path,
         const std::vector<std::size_t>& _Lines, std::size_t _ExpectedLineCount)
     {
+        if (m_pP4)
+        {
+            m_pP4->SetStagedLines(_Path, _Lines, _ExpectedLineCount);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("setStagedLines() on an unopened repository");
@@ -778,6 +801,11 @@ namespace gitgud::git
     void Repository::DiscardLines(const std::string& _Path, const std::vector<std::size_t>& _Lines,
         std::size_t _ExpectedLineCount, const std::function<bool(const std::string&)>& _RemoveFile)
     {
+        if (m_pP4)
+        {
+            m_pP4->DiscardLines(_Path, _Lines, _ExpectedLineCount, _RemoveFile);
+            return;
+        }
         if (!m_pRepo)
         {
             throw GitError("discardLines() on an unopened repository");
@@ -849,6 +877,11 @@ namespace gitgud::git
     void Repository::DiscardChanges(const std::vector<std::string>& _Paths,
         const std::function<bool(const std::string&)>& _RemoveFile)
     {
+        if (m_pP4)
+        {
+            m_pP4->DiscardChanges(_Paths, _RemoveFile);
+            return;
+        }
         if (!m_pRepo)
         {
             throw GitError("discardChanges() on an unopened repository");
@@ -898,6 +931,12 @@ namespace gitgud::git
 
     void Repository::AddToGitignore(const std::string& _Pattern)
     {
+        if (m_pP4)
+        {
+            m_pP4->AddToGitignore(_Pattern);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("addToGitignore() on an unopened repository");
@@ -924,6 +963,11 @@ namespace gitgud::git
     bool Repository::ReadFileVersion(
         const std::string& _Path, const std::string& _Revision, std::string& _Out) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->ReadFileVersion(_Path, _Revision, _Out);
+        }
+
         if (!m_pRepo)
         {
             throw GitError("readFileVersion() on an unopened repository");

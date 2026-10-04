@@ -285,8 +285,18 @@ function depot.refresh(state)
     outdated = {}
     local ab = state.aheadBehind or {}
     if state.open and ab.hasUpstream and (ab.behind or 0) > 0 then
-        for _, file in ipairs(gitgud.changedFiles("HEAD", ab.upstream) or {}) do
-            outdated[file.path] = true
+        if gitgud.backend() == "p4" then
+            -- Perforce: files whose head revision is newer than the one you have.
+            for _, file in ipairs(gitgud.p4FileStates("", true) or {}) do
+                local deleted = file.headAction == "delete" or file.headAction == "move/delete"
+                if file.haveRev < file.headRev and not (deleted and file.haveRev == 0) then
+                    outdated[file.path] = true
+                end
+            end
+        else
+            for _, file in ipairs(gitgud.changedFiles("HEAD", ab.upstream) or {}) do
+                outdated[file.path] = true
+            end
         end
     end
 

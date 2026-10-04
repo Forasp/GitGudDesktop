@@ -131,6 +131,11 @@ namespace gitgud::git
     RevisionGraph Repository::FileRevisionGraph(
         const std::string& _Path, const RevisionGraphQuery& _Query) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->FileRevisionGraph(_Path, _Query);
+        }
+
         if (!m_pRepo)
         {
             throw GitError("fileRevisionGraph() on an unopened repository");

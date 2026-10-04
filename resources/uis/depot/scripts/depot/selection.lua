@@ -126,11 +126,21 @@ function selection.coveringPath(list)
     return selection.depotPath(table.concat(common, "/")) .. "/..."
 end
 
---- "//<repo>/<path>".
+--- The depot path of the workspace root, without the leading "//":
+-- "<repo>" for Git, the stream or mapped folder ("proj/main") for Perforce.
+local function rootName()
+    if gitgud.backend() == "p4" then
+        return (gitgud.config("p4.depotRoot") or ""):gsub("^//", "")
+    end
+
+    return repo.state().name ~= "" and repo.state().name or "depot"
+end
+
+--- "//<repo>/<path>" (Perforce: the real depot path).
 -- @param path  repository-relative path
 -- @return depot path
 function selection.depotPath(path)
-    local name = repo.state().name ~= "" and repo.state().name or "depot"
+    local name = rootName()
     if not path or path == "" then
         return "//" .. name
     end
@@ -144,7 +154,7 @@ end
 -- @return relative path or nil
 function selection.fromDepotPath(typed)
     local path = typed:gsub("\\", "/"):gsub("^%s+", ""):gsub("%s+$", "")
-    local name = repo.state().name
+    local name = gitgud.backend() == "p4" and rootName() or repo.state().name
     local prefix = "//" .. name
     if path:sub(1, 2) == "//" then
         if path:lower() == prefix:lower() then

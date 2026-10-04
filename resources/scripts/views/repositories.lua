@@ -177,9 +177,22 @@ function repositories.addExisting()
     })
 end
 
---- Clone a repository (runs on a worker; clone.done opens it).
-function repositories.clone()
+--- Set up a Perforce workspace (the Perforce "clone").
+-- @param create  true for a new stream (the Perforce "create")
+function repositories.p4Workspace(create)
     popup.close()
+    require("core.p4setup").newWorkspace({ create = create, folder = text.dirname(repo.state().path) })
+end
+
+--- Clone a repository (runs on a worker; clone.done opens it). With
+-- Perforce as the default backend this sets up a workspace instead.
+-- @param useGit  true to clone with Git whatever the default
+function repositories.clone(useGit)
+    popup.close()
+    if useGit ~= true and require("core.p4setup").defaults().backend == "p4" then
+        repositories.p4Workspace(false)
+        return
+    end
     local parent = text.dirname(repo.state().path)
 
     dialog.show({
@@ -228,8 +241,14 @@ local function gitignoreTemplate(template)
 end
 
 --- Create a new repository (optionally with a README and .gitignore).
-function repositories.create()
+-- With Perforce as the default backend this creates a new stream instead.
+-- @param useGit  true to create a Git repository whatever the default
+function repositories.create(useGit)
     popup.close()
+    if useGit ~= true and require("core.p4setup").defaults().backend == "p4" then
+        repositories.p4Workspace(true)
+        return
+    end
 
     dialog.show({
         title = "Create a new repository",
@@ -346,17 +365,31 @@ end
 --- The "Add ▾" menu.
 -- @return item list
 local function addMenu()
-    return {
-        { label = "Clone repository…", shortcut = "ctrl+shift+o", action = repositories.clone },
-        { label = "Create new repository…", shortcut = "ctrl+n", action = repositories.create },
-        { label = "Add existing repository…", shortcut = "ctrl+o", action = repositories.addExisting },
+    local p4 = require("core.p4setup").defaults().backend == "p4"
+    local items = {
+        { label = p4 and "Set up Perforce workspace…" or "Clone repository…", shortcut = "ctrl+shift+o",
+          action = function() repositories.clone() end },
+        { label = p4 and "Create new Perforce stream…" or "Create new repository…", shortcut = "ctrl+n",
+          action = function() repositories.create() end },
+        { label = "Add existing repository or workspace…", shortcut = "ctrl+o", action = repositories.addExisting },
+        { separator = true },
     }
+    if p4 then
+        items[#items + 1] = { label = "Clone a Git repository…", action = function() repositories.clone(true) end }
+        items[#items + 1] = { label = "Create a Git repository…", action = function() repositories.create(true) end }
+    else
+        items[#items + 1] = { label = "Set up Perforce workspace…", action = function() repositories.p4Workspace(false) end }
+        items[#items + 1] = { label = "Create new Perforce stream…", action = function() repositories.p4Workspace(true) end }
+    end
+
+    return items
 end
 
 --- Wire the popup and repository lifecycle events.
 function repositories.init()
     load()
     placeholder.bind("RepoFilterEdit", "RepoFilterPlaceholder")
+    require("core.p4setup").init(repositories.open)
 
     gitgud.on("RepoButton.clicked", function()
         if popup.isOpen("RepoPopup") then

@@ -25,13 +25,15 @@ namespace gitgud::git
     }
 
     // ---- Repository lifecycle ------------------------------------------------
+    Repository::Repository() = default;
+
     Repository::~Repository()
     {
         Close();
     }
 
     Repository::Repository(Repository&& _Other) noexcept
-        : m_pRepo(_Other.m_pRepo), m_Path(std::move(_Other.m_Path)),
+        : m_pRepo(_Other.m_pRepo), m_pP4(std::move(_Other.m_pP4)), m_Path(std::move(_Other.m_Path)),
           m_CredProvider(std::move(_Other.m_CredProvider)),
           m_HostKeyProvider(std::move(_Other.m_HostKeyProvider))
     {
@@ -44,6 +46,7 @@ namespace gitgud::git
         {
             Close();
             m_pRepo = _Other.m_pRepo;
+            m_pP4 = std::move(_Other.m_pP4);
             m_Path = std::move(_Other.m_Path);
             m_CredProvider = std::move(_Other.m_CredProvider);
             m_HostKeyProvider = std::move(_Other.m_HostKeyProvider);
@@ -59,11 +62,22 @@ namespace gitgud::git
             git_repository_free(m_pRepo);
             m_pRepo = nullptr;
         }
+        m_pP4.reset();
     }
 
     Repository Repository::Open(const std::string& _Path)
     {
         Repository r;
+        // A Perforce workspace: its root has a .p4config naming the
+        // workspace and no .git of its own.
+        std::error_code ec;
+        if (!std::filesystem::exists(std::filesystem::u8path(_Path) / ".git", ec) &&
+            p4::P4Workspace::IsWorkspace(_Path))
+        {
+            r.m_pP4 = p4::P4Workspace::Open(_Path);
+            r.m_Path = _Path;
+            return r;
+        }
         if (git_repository_open(&r.m_pRepo, _Path.c_str()) < 0)
         {
             RaiseLastError("Failed to open repository at '" + _Path + "'");
@@ -71,6 +85,34 @@ namespace gitgud::git
         r.m_Path = _Path;
         return r;
     }
+
+    bool Repository::Supports(const std::string& _Feature) const
+    {
+        if (!m_pP4)
+        {
+            return _Feature != "changelists";
+        }
+        static const char* const s_aszP4[] = {"changelists", "stash", "tags", "worktrees", "merge",
+            "rebase", "revert", "cherryPick", "blame", "fileHistory", "revisionGraph", "shelves"};
+        for (const char* sz : s_aszP4)
+        {
+            if (_Feature == sz)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    namespace internal
+    {
+
+        p4::PasswordProvider P4Passwords(const CredentialProvider& _Provider)
+        {
+            return p4::P4Workspace::FromCredentialProvider(_Provider);
+        }
+
+    } // namespace internal
 
     Repository Repository::Init(const std::string& _Path)
     {
@@ -97,6 +139,11 @@ namespace gitgud::git
     // ---- Status --------------------------------------------------------------
     std::vector<StatusEntry> Repository::Status() const
     {
+        if (m_pP4)
+        {
+            return m_pP4->Status();
+        }
+
         if (!m_pRepo)
         {
             throw GitError("status() called on an unopened repository");
@@ -176,6 +223,12 @@ namespace gitgud::git
     // ---- Stage / unstage -----------------------------------------------------
     void Repository::Stage(const std::string& _Path)
     {
+        if (m_pP4)
+        {
+            m_pP4->Stage({_Path});
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("stage() on an unopened repository");
@@ -208,6 +261,12 @@ namespace gitgud::git
 
     void Repository::Unstage(const std::string& _Path)
     {
+        if (m_pP4)
+        {
+            m_pP4->Unstage({_Path});
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("unstage() on an unopened repository");
@@ -416,6 +475,11 @@ namespace gitgud::git
 
     std::string Repository::Commit(const std::string& _Message)
     {
+        if (m_pP4)
+        {
+            return m_pP4->Commit(_Message);
+        }
+
         if (!m_pRepo)
         {
             throw GitError("commit() on an unopened repository");
@@ -431,6 +495,11 @@ namespace gitgud::git
     std::string Repository::Commit(const std::string& _Message, const std::string& _AuthorName,
         const std::string& _AuthorEmail)
     {
+        if (m_pP4)
+        {
+            return m_pP4->Commit(_Message);
+        }
+
         if (!m_pRepo)
         {
             throw GitError("commit() on an unopened repository");
@@ -447,6 +516,11 @@ namespace gitgud::git
     FileDiff Repository::DiffFile(
         const std::string& _Path, DiffTarget _Target, const DiffOptions& _Options) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->DiffFile(_Path, _Target, _Options);
+        }
+
         if (!m_pRepo)
         {
             throw GitError("diffFile() on an unopened repository");
@@ -644,6 +718,12 @@ namespace gitgud::git
 
     void Repository::StageHunk(const std::string& _Path, std::size_t _HunkIndex)
     {
+        if (m_pP4)
+        {
+            m_pP4->StageHunk(_Path, _HunkIndex);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("stageHunk() on an unopened repository");
@@ -653,6 +733,12 @@ namespace gitgud::git
 
     void Repository::UnstageHunk(const std::string& _Path, std::size_t _HunkIndex)
     {
+        if (m_pP4)
+        {
+            m_pP4->UnstageHunk(_Path, _HunkIndex);
+            return;
+        }
+
         if (!m_pRepo)
         {
             throw GitError("unstageHunk() on an unopened repository");

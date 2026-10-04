@@ -74,6 +74,11 @@ namespace gitgud::git
 
     std::vector<CommitInfo> Repository::GraphLog(const GraphQuery& _Query) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->GraphLog(_Query);
+        }
+
         RequireOpen(m_pRepo, "graphLog()");
 
         RevwalkPtr walk;
@@ -113,6 +118,11 @@ namespace gitgud::git
 
     std::string Repository::HeadOid() const
     {
+        if (m_pP4)
+        {
+            return m_pP4->HeadOid();
+        }
+
         RequireOpen(m_pRepo, "headOid()");
         git_oid oid;
         if (git_reference_name_to_id(&oid, m_pRepo, "HEAD") != 0)
@@ -125,6 +135,11 @@ namespace gitgud::git
     std::vector<ReflogEntry> Repository::Reflog(
         const std::string& _Ref, std::size_t _MaxCount) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->Reflog(_Ref, _MaxCount);
+        }
+
         RequireOpen(m_pRepo, "reflog()");
 
         ReflogPtr log;
@@ -161,6 +176,12 @@ namespace gitgud::git
 
     void Repository::SetBranchTarget(const std::string& _Name, const std::string& _Oid)
     {
+        if (m_pP4)
+        {
+            m_pP4->SetBranchTarget(_Name, _Oid);
+            return;
+        }
+
         RequireOpen(m_pRepo, "setBranchTarget()");
 
         CommitPtr target = ResolveCommit(m_pRepo, _Oid);
@@ -197,6 +218,11 @@ namespace gitgud::git
     std::vector<CommitInfo> Repository::FileLog(
         const std::string& _Path, std::size_t _MaxCount) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->FileLog(_Path, _MaxCount);
+        }
+
         RequireOpen(m_pRepo, "fileLog()");
 
         RevwalkPtr walk;
@@ -261,6 +287,11 @@ namespace gitgud::git
 
     BlameResult Repository::Blame(const std::string& _Path, const std::string& _Revision) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->Blame(_Path, _Revision);
+        }
+
         RequireOpen(m_pRepo, "blame()");
 
         const bool bworkdir = _Revision.empty() || _Revision == "workdir";

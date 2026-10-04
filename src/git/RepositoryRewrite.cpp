@@ -156,6 +156,11 @@ namespace gitgud::git
 
     ConflictFile Repository::ReadConflict(const std::string& _Path) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->ReadConflict(_Path);
+        }
+
         RequireOpen(m_pRepo, "readConflict()");
 
         IndexPtr index;
@@ -199,86 +204,191 @@ namespace gitgud::git
         const std::string text = merged.ptr ? std::string(merged.ptr, merged.len) : std::string();
         git_merge_file_result_free(&merged);
 
-        out.m_bTrailingNewline = !text.empty() && text.back() == '\n';
-
-        enum class Section
-        {
-            Common,
-            Ours,
-            Base,
-            Theirs
-        };
-        Section section = Section::Common;
-        ConflictChunk chunk;
-
-        const auto flush = [&]()
-        {
-            if (chunk.m_bConflict || !chunk.m_Lines.empty())
-            {
-                out.m_Chunks.push_back(std::move(chunk));
-            }
-            chunk = ConflictChunk();
-        };
-
-        std::size_t nstart = 0;
-        while (nstart < text.size())
-        {
-            std::size_t nend = text.find('\n', nstart);
-            if (nend == std::string::npos)
-            {
-                nend = text.size();
-            }
-            const std::string line = text.substr(nstart, nend - nstart);
-            nstart = nend + 1;
-
-            if (section == Section::Common && IsMarker(line, '<'))
-            {
-                flush();
-                chunk.m_bConflict = true;
-                section = Section::Ours;
-                continue;
-            }
-            if (section == Section::Ours && IsMarker(line, '|'))
-            {
-                section = Section::Base;
-                continue;
-            }
-            if ((section == Section::Ours || section == Section::Base) && IsMarker(line, '='))
-            {
-                section = Section::Theirs;
-                continue;
-            }
-            if (section == Section::Theirs && IsMarker(line, '>'))
-            {
-                flush();
-                section = Section::Common;
-                continue;
-            }
-
-            switch (section)
-            {
-            case Section::Common:
-                chunk.m_Lines.push_back(line);
-                break;
-            case Section::Ours:
-                chunk.m_Ours.push_back(line);
-                break;
-            case Section::Base:
-                chunk.m_Base.push_back(line);
-                break;
-            case Section::Theirs:
-                chunk.m_Theirs.push_back(line);
-                break;
-            }
-        }
-        flush();
+        ChunkMergedText(text, out);
         return out;
     }
+
+    namespace internal
+    {
+
+        ConflictFile ConflictFromBuffers(const std::string& _Path, const std::string* _pBase,
+            const std::string* _pOurs, const std::string* _pTheirs)
+        {
+            ConflictFile out;
+            out.m_Path = _Path;
+            out.m_bOursDeleted = _pOurs == nullptr;
+            out.m_bTheirsDeleted = _pTheirs == nullptr;
+            if (!_pOurs || !_pTheirs)
+            {
+                return out;
+            }
+            const auto isBinary = [](const std::string* _pText)
+            {
+                return _pText && _pText->find('\0') != std::string::npos;
+            };
+            if (isBinary(_pBase) || isBinary(_pOurs) || isBinary(_pTheirs))
+            {
+                out.m_bBinary = true;
+                return out;
+            }
+            const auto input = [](const std::string* _pText, const char* _szPath)
+            {
+                git_merge_file_input in = GIT_MERGE_FILE_INPUT_INIT;
+                if (_pText)
+                {
+                    in.ptr = _pText->data();
+                    in.size = _pText->size();
+                    in.path = _szPath;
+                    in.mode = GIT_FILEMODE_BLOB;
+                }
+                return in;
+            };
+            const git_merge_file_input base = input(_pBase, _Path.c_str());
+            const git_merge_file_input ours = input(_pOurs, _Path.c_str());
+            const git_merge_file_input theirs = input(_pTheirs, _Path.c_str());
+            git_merge_file_options mo = GIT_MERGE_FILE_OPTIONS_INIT;
+            mo.flags = GIT_MERGE_FILE_STYLE_DIFF3;
+            mo.ancestor_label = "base";
+            mo.our_label = "ours";
+            mo.their_label = "theirs";
+            git_merge_file_result merged = {};
+            if (git_merge_file(&merged, _pBase ? &base : nullptr, &ours, &theirs, &mo) < 0)
+            {
+                RaiseLastError("Merging '" + _Path + "' failed");
+            }
+            const std::string text =
+                merged.ptr ? std::string(merged.ptr, merged.len) : std::string();
+            git_merge_file_result_free(&merged);
+            ChunkMergedText(text, out);
+            return out;
+        }
+
+        bool MergeBuffers(const std::string& _Path, const std::string* _pBase,
+            const std::string& _Ours, const std::string& _Theirs, std::string& _OutMerged)
+        {
+            git_merge_file_input base = GIT_MERGE_FILE_INPUT_INIT;
+            if (_pBase)
+            {
+                base.ptr = _pBase->data();
+                base.size = _pBase->size();
+                base.path = _Path.c_str();
+                base.mode = GIT_FILEMODE_BLOB;
+            }
+            git_merge_file_input ours = GIT_MERGE_FILE_INPUT_INIT;
+            ours.ptr = _Ours.data();
+            ours.size = _Ours.size();
+            ours.path = _Path.c_str();
+            ours.mode = GIT_FILEMODE_BLOB;
+            git_merge_file_input theirs = GIT_MERGE_FILE_INPUT_INIT;
+            theirs.ptr = _Theirs.data();
+            theirs.size = _Theirs.size();
+            theirs.path = _Path.c_str();
+            theirs.mode = GIT_FILEMODE_BLOB;
+            git_merge_file_options mo = GIT_MERGE_FILE_OPTIONS_INIT;
+            mo.ancestor_label = "base";
+            mo.our_label = "local";
+            mo.their_label = "shelved";
+            git_merge_file_result merged = {};
+            if (git_merge_file(&merged, _pBase ? &base : nullptr, &ours, &theirs, &mo) < 0)
+            {
+                RaiseLastError("Merging '" + _Path + "' failed");
+            }
+            _OutMerged = merged.ptr ? std::string(merged.ptr, merged.len) : std::string();
+            const bool bclean = merged.automergeable != 0;
+            git_merge_file_result_free(&merged);
+            return bclean;
+        }
+
+        void ChunkMergedText(const std::string& _Text, ConflictFile& _Out)
+        {
+            const std::string& text = _Text;
+            ConflictFile& out = _Out;
+            out.m_bTrailingNewline = !text.empty() && text.back() == '\n';
+
+            enum class Section
+            {
+                Common,
+                Ours,
+                Base,
+                Theirs
+            };
+            Section section = Section::Common;
+            ConflictChunk chunk;
+
+            const auto flush = [&]()
+            {
+                if (chunk.m_bConflict || !chunk.m_Lines.empty())
+                {
+                    out.m_Chunks.push_back(std::move(chunk));
+                }
+                chunk = ConflictChunk();
+            };
+
+            std::size_t nstart = 0;
+            while (nstart < text.size())
+            {
+                std::size_t nend = text.find('\n', nstart);
+                if (nend == std::string::npos)
+                {
+                    nend = text.size();
+                }
+                const std::string line = text.substr(nstart, nend - nstart);
+                nstart = nend + 1;
+
+                if (section == Section::Common && IsMarker(line, '<'))
+                {
+                    flush();
+                    chunk.m_bConflict = true;
+                    section = Section::Ours;
+                    continue;
+                }
+                if (section == Section::Ours && IsMarker(line, '|'))
+                {
+                    section = Section::Base;
+                    continue;
+                }
+                if ((section == Section::Ours || section == Section::Base) && IsMarker(line, '='))
+                {
+                    section = Section::Theirs;
+                    continue;
+                }
+                if (section == Section::Theirs && IsMarker(line, '>'))
+                {
+                    flush();
+                    section = Section::Common;
+                    continue;
+                }
+
+                switch (section)
+                {
+                case Section::Common:
+                    chunk.m_Lines.push_back(line);
+                    break;
+                case Section::Ours:
+                    chunk.m_Ours.push_back(line);
+                    break;
+                case Section::Base:
+                    chunk.m_Base.push_back(line);
+                    break;
+                case Section::Theirs:
+                    chunk.m_Theirs.push_back(line);
+                    break;
+                }
+            }
+            flush();
+        }
+
+    } // namespace internal
 
     // ---- Interactive rebase ------------------------------------------------------
 
     std::vector<CommitInfo> Repository::RebaseTodo(const std::string& _Base) const
     {
+        if (m_pP4)
+        {
+            return m_pP4->RebaseTodo(_Base);
+        }
+
         RequireOpen(m_pRepo, "rebaseTodo()");
 
         CommitPtr base = ResolveCommit(m_pRepo, _Base);
@@ -336,6 +446,11 @@ namespace gitgud::git
     RebaseResult Repository::InteractiveRebase(
         const std::string& _Base, const std::vector<RebaseStep>& _Steps)
     {
+        if (m_pP4)
+        {
+            return m_pP4->InteractiveRebase(_Base, _Steps);
+        }
+
         RequireOpen(m_pRepo, "interactiveRebase()");
         using Action = RebaseStep::Action;
 

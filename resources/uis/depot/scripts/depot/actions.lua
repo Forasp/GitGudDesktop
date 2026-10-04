@@ -836,4 +836,17 @@ function actions.remoteShelves()
     return out
 end
 
-return actions
+-- A Perforce workspace runs these as p4 commands (depot/p4actions.lua).
+-- Actions it doesn't define (new / edit / delete changelist, move to
+-- changelist) are the ones above, which work through depot/changelists.lua.
+return setmetatable({}, {
+    __index = function(_, key)
+        if gitgud.backend() == "p4" then
+            local p4action = require("depot.p4actions")[key]
+            if p4action ~= nil then
+                return p4action
+            end
+        end
+        return actions[key]
+    end,
+})

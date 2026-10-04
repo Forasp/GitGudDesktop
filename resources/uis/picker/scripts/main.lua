@@ -39,10 +39,20 @@ local firstLaunch = gitgud.firstLaunch()
 --- Switch to a UI, remembering the choice; report a failure in a dialog.
 -- @param spec  package id or "path:<folder>"
 local function choose(spec)
-    local ok, err = gitgud.switchUi(spec, true)
-    if not ok then
-        dialog.alert("That interface can't be used", err or "Unknown error.")
+    local function switch()
+        local ok, err = gitgud.switchUi(spec, true)
+        if not ok then
+            dialog.alert("That interface can't be used", err or "Unknown error.")
+        end
     end
+
+    -- First launch: also ask whether new repositories should use Git or
+    -- Perforce (core/p4setup.lua; changeable later from the File menu).
+    if firstLaunch then
+        require("core.p4setup").askDefaultBackend(switch, { firstLaunch = true })
+        return
+    end
+    switch()
 end
 
 --- Back to the UI that opened the picker (not on first launch).

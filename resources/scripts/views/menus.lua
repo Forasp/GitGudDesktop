@@ -60,6 +60,17 @@ local function hasRemote()
     return isOpen() and repo.primaryRemote() ~= nil
 end
 
+--- An `enabled` test that also needs the backend to support `feature`
+-- (Perforce has no push, amend, LFS, ...; see gitgud.supports).
+-- @param feature  feature name
+-- @param base     the item's own test (optional)
+-- @return function() -> boolean
+local function can(feature, base)
+    return function()
+        return gitgud.supports(feature) and (base == nil or base())
+    end
+end
+
 --- Define File.
 local function fileMenu()
     menu.addMenu("file", "File")
@@ -67,8 +78,15 @@ local function fileMenu()
         { label = "New repository…", shortcut = "ctrl+n", action = repositories.create },
         { label = "Add local repository…", shortcut = "ctrl+o", action = repositories.addExisting },
         { label = "Clone repository…", shortcut = "ctrl+shift+o", action = repositories.clone },
+        { label = "Set up Perforce workspace…", action = function() repositories.p4Workspace(false) end },
         { separator = true },
         { label = "Options…", shortcut = "ctrl+,", action = settingsView.options },
+        {
+            label = "Backend selection…",
+            action = function()
+                require("core.p4setup").askDefaultBackend(nil)
+            end,
+        },
         { label = "Switch user interface…", action = settingsView.switchInterface },
         { label = "SSH keys…", action = ssh.keys },
         { label = "Commit signing…", action = settingsView.signing },
@@ -118,7 +136,7 @@ local function editMenu()
             end,
         },
         { separator = true },
-        { label = "Undo last commit", enabled = onBranch, action = changes.undoLastCommit },
+        { label = "Undo last commit", enabled = can("undoCommit", onBranch), action = changes.undoLastCommit },
         {
             label = "Discard all changes…",
             shortcut = "ctrl+shift+backspace",
@@ -225,13 +243,13 @@ end
 local function repositoryMenu()
     menu.addMenu("repository", "Repository")
     menu.addItems("repository", {
-        { label = "Push", shortcut = "ctrl+p", enabled = hasRemote, action = sync.push },
+        { label = "Push", shortcut = "ctrl+p", enabled = can("push", hasRemote), action = sync.push },
         { label = "Pull", shortcut = "ctrl+shift+p", enabled = hasRemote, action = sync.pull },
         { label = "Fetch all", shortcut = "ctrl+shift+t", enabled = hasRemote, action = sync.fetch },
         {
             label = "Push to…",
             enabled = function()
-                return hasRemote() and onBranch()
+                return gitgud.supports("push") and hasRemote() and onBranch()
             end,
             action = sync.choosePushRemote,
         },
@@ -242,16 +260,16 @@ local function repositoryMenu()
             end,
             action = sync.choosePullRemote,
         },
-        { label = "Force push…", enabled = hasRemote, action = sync.forcePush },
+        { label = "Force push…", enabled = can("push", hasRemote), action = sync.forcePush },
         {
             label = "Push tags",
-            enabled = hasRemote,
+            enabled = can("push", hasRemote),
             action = function()
                 sync.pushTags()
             end,
         },
         { separator = true },
-        { label = "Add remote…", enabled = isOpen, action = require("views.remotes").add },
+        { label = "Add remote…", enabled = can("remotes", isOpen), action = require("views.remotes").add },
         { separator = true },
         { label = "Stash all changes", shortcut = "ctrl+shift+s", enabled = hasChanges, action = stash.stashAll },
         {
@@ -307,15 +325,15 @@ local function repositoryMenu()
             end,
         },
         { separator = true },
-        { label = "Git LFS: track files…", enabled = isOpen, action = lfs.trackPrompt },
-        { label = "Git LFS: pull files", enabled = isOpen, action = lfs.pull },
-        { label = "Git LFS: status", enabled = isOpen, action = lfs.status },
+        { label = "Git LFS: track files…", enabled = can("lfs", isOpen), action = lfs.trackPrompt },
+        { label = "Git LFS: pull files", enabled = can("lfs", isOpen), action = lfs.pull },
+        { label = "Git LFS: status", enabled = can("lfs", isOpen), action = lfs.status },
         { separator = true },
-        { label = "Add worktree…", enabled = onBranch, action = navigator.addWorktree },
+        { label = "Add worktree…", enabled = can("worktrees", onBranch), action = navigator.addWorktree },
         {
             label = "Update submodules",
             enabled = function()
-                return isOpen() and #(gitgud.submodules() or {}) > 0
+                return isOpen() and gitgud.supports("submodules") and #(gitgud.submodules() or {}) > 0
             end,
             action = function()
                 for _, sub in ipairs(gitgud.submodules() or {}) do
@@ -349,7 +367,7 @@ local function branchMenu()
         {
             label = "Rename…",
             shortcut = "ctrl+shift+r",
-            enabled = onBranch,
+            enabled = can("renameBranch", onBranch),
             action = function()
                 branches.rename()
             end,
@@ -399,7 +417,7 @@ local function branchMenu()
         {
             label = "Interactive rebase…",
             shortcut = "ctrl+alt+i",
-            enabled = onBranch,
+            enabled = can("interactiveRebase", onBranch),
             action = rebase.openRecent,
         },
     })
