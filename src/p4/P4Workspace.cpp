@@ -424,11 +424,6 @@ namespace gitgud::p4
         {
             throw GitError("A Perforce workspace needs a server, a user, and a folder");
         }
-        if (_Setup.m_Stream.empty() && _Setup.m_DepotPath.empty())
-        {
-            throw GitError("Choose a stream (//depot/main) or a depot path to map");
-        }
-
         std::error_code ec;
         fs::create_directories(fs::u8path(_Setup.m_Root), ec);
         const std::string root = NormalizeRoot(_Setup.m_Root);
@@ -452,6 +447,55 @@ namespace gitgud::p4
         {
             std::lock_guard<std::mutex> lock(g_DefaultMutex);
             passwords = g_DefaultPasswords;
+        }
+
+        // No stream or path: connect to the workspace the server already
+        // has for this folder (one made by another client has no .p4config).
+        if (_Setup.m_Stream.empty() && _Setup.m_DepotPath.empty())
+        {
+            std::string found = _Setup.m_Client;
+            if (found.empty())
+            {
+                for (const WorkspaceInfo& w : ListWorkspaces(conn, passwords))
+                {
+                    const bool bhostOk =
+                        w.m_Host.empty() || internal::StartsWithNoCase(w.m_Host, HostName());
+                    if (bhostOk && !w.m_Root.empty() &&
+                        internal::StartsWithNoCase(NormalizeRoot(w.m_Root), root) &&
+                        NormalizeRoot(w.m_Root).size() == root.size())
+                    {
+                        found = w.m_Name;
+                        break;
+                    }
+                }
+            }
+            if (found.empty())
+            {
+                throw GitError(
+                    "No workspace of " + _Setup.m_User + " on " + _Setup.m_Port +
+                    " uses this folder. Enter the stream (//depot/main) or depot path to map.");
+            }
+            std::map<std::string, std::string> config;
+            config["P4PORT"] = conn.m_Port;
+            config["P4USER"] = conn.m_User;
+            config["P4CLIENT"] = found;
+            config["P4CHARSET"] = conn.m_Charset;
+            WriteConfigFile(root, config);
+            auto existing = Open(root);
+            existing->m_Passwords = _Passwords;
+            if (!existing->UsesStreams() && existing->m_BranchRoot.empty())
+            {
+                // Classic view: its folder's siblings are the branches.
+                const std::string depotRoot = existing->GetConfig("p4.depotRoot");
+                const std::size_t nslash = depotRoot.rfind('/');
+                if (nslash != std::string::npos && nslash > 2)
+                {
+                    existing->m_BranchRoot = depotRoot.substr(0, nslash);
+                    existing->m_Config["GITGUD_BRANCHROOT"] = existing->m_BranchRoot;
+                    existing->SaveConfig();
+                }
+            }
+            return existing;
         }
 
         std::string client = _Setup.m_Client;

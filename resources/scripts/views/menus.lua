@@ -82,7 +82,7 @@ local function fileMenu()
         { separator = true },
         { label = "Options…", shortcut = "ctrl+,", action = settingsView.options },
         {
-            label = "Git or Perforce by default…",
+            label = "Backend selection…",
             action = function()
                 require("core.p4setup").askDefaultBackend(nil)
             end,

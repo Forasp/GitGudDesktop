@@ -539,6 +539,36 @@ TEST_CASE("p4 classic depot: folders as branches", "[p4][server]")
     CHECK(ReadFile(repo, "a.txt") == "feature\n");
 }
 
+TEST_CASE("p4 connects to an existing workspace that has no .p4config", "[p4][server]")
+{
+    if (!HaveServer())
+    {
+        SKIP("set GITGUD_TEST_P4D (and GITGUD_P4) to run Perforce server tests");
+    }
+    TestServer server;
+    {
+        git::Repository first = server.Workspace("made-elsewhere", "//proj/main", true);
+        CommitFile(first, "a.txt", "a\n", "first");
+    }
+    // Another client made it: no .p4config in the folder.
+    fs::remove(fs::u8path(server.Folder("made-elsewhere")) / ".p4config");
+    CHECK_FALSE(P4Workspace::IsWorkspace(server.Folder("made-elsewhere")));
+
+    WorkspaceSetup setup;
+    setup.m_Port = server.m_Conn.m_Port;
+    setup.m_User = "tim";
+    setup.m_Root = server.Folder("made-elsewhere");
+    auto ws = P4Workspace::Create(setup);
+    CHECK(ws->Conn().m_Client == "made-elsewhere");
+    CHECK(P4Workspace::IsWorkspace(server.Folder("made-elsewhere")));
+    git::Repository repo = git::Repository::Open(server.Folder("made-elsewhere"));
+    CHECK(repo.Log(5).size() == 1);
+
+    // A folder no workspace uses: a clear error, not a new workspace.
+    setup.m_Root = server.Folder("unknown");
+    CHECK_THROWS_AS(P4Workspace::Create(setup), git::GitError);
+}
+
 TEST_CASE("p4 asks for a password when the ticket is missing", "[p4][server]")
 {
     if (!HaveServer())

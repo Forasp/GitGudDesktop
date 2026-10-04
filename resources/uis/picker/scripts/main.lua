@@ -49,7 +49,7 @@ local function choose(spec)
     -- First launch: also ask whether new repositories should use Git or
     -- Perforce (core/p4setup.lua; changeable later from the File menu).
     if firstLaunch then
-        require("core.p4setup").askDefaultBackend(switch)
+        require("core.p4setup").askDefaultBackend(switch, { firstLaunch = true })
         return
     end
     switch()

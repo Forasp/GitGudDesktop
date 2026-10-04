@@ -357,7 +357,7 @@ local function connectionMenu()
         { label = "New Perforce Stream…", action = function()
             require("views.repositories").p4Workspace(true)
         end },
-        { label = "Git or Perforce by Default…", action = function()
+        { label = "Backend Selection…", action = function()
             require("core.p4setup").askDefaultBackend(nil)
         end },
         { label = "Switch Workspace…", action = function()
