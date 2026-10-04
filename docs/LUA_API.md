@@ -301,7 +301,8 @@ one.
 ## Test harness
 
 `simulateClick(x, y, "left" | "right" | "double", window?)`,
-`simulateText(text, window?)`, `simulateScroll(x, y, delta, window?)` (mouse
+`simulateText(text, window?)`, `simulateDrag(x1, y1, x2, y2, window?)` (press,
+move, release with the left button), `simulateScroll(x, y, delta, window?)` (mouse
 wheel; positive scrolls up), and `screenshot(path, window?)` (PNG of the next
 frame) drive the UI — or pop-out `window` — from a script run via
 `GITGUD_SCRIPT` — see `docs/BUILDING.md` ▸ Tests.
