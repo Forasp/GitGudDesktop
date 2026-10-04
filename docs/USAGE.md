@@ -22,6 +22,11 @@ see *Switching interfaces* below.
   detached HEAD, with buttons to continue, open the merge tool, or abort.
 - **Console** — docked along the bottom when open (Ctrl+J).
 
+Drag the seams between the branch tree, the sidebar, and the content pane,
+the top edge of the console, or (in graph mode) the line under the graph to
+resize them; the cursor turns into a resize arrow over each. Sizes are
+remembered between runs.
+
 ## Repositories
 
 *Current repository ▾* lists every repository you've opened (filter by

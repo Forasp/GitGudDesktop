@@ -157,7 +157,7 @@ end
 -- @param split  { bar, container, top, bottom, offset, setting, default?, inset? }
 function frame.splitPanel(split)
     panelSplits[#panelSplits + 1] = split
-    gitgud.setDraggable(split.bar, true)
+    gitgud.setDraggable(split.bar, true, "vertical")
     gitgud.on(split.bar .. ".dragging", function(value)
         local y = tonumber(value:match(",(-?%d+)$"))
         local _, cy, _, height = gitgud.getRect(split.container)
@@ -176,8 +176,8 @@ end
 
 --- Wire the main splitters and the window size.
 function frame.init()
-    gitgud.setDraggable("SplitLeft", true)
-    gitgud.setDraggable("SplitBottom", true)
+    gitgud.setDraggable("SplitLeft", true, "horizontal")
+    gitgud.setDraggable("SplitBottom", true, "vertical")
 
     gitgud.on("SplitLeft.dragging", function(value)
         local x = tonumber(value:match("^(-?%d+)"))

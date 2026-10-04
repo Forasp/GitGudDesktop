@@ -159,6 +159,8 @@ dot above HEAD for uncommitted changes. Show a row's picture inline:
 | `getSelectedIndices(name)` / `selectListItems(name, {rows})` | every selected row (1-based) of a list with the `MultiSelect` property (Ctrl+click adds, Shift+click extends); select exactly these rows |
 | `getScroll(name, "horizontal"?)` / `setScroll(name, px, "horizontal"?)` | vertical (or horizontal) scroll of a list or pane |
 | `setDraggable(name, on = true)` | the widget raises `dragStarted`, `dragging`, `dragEnded` (`"x,y"`) while dragged with the left button — splitters, column dividers |
+| `setDraggable(name, true, direction)` | the same, and the matching system resize cursor over it and while it's dragged: `"horizontal"` (left-right arrows), `"vertical"` (up-down), `"both"` (four arrows) |
+| `setCursor(name, shape)` | the system cursor over a widget and its children: `"sizewe"`, `"sizens"`, `"sizeall"`, `"hand"`, or `""` for the UI's own |
 | `setVisible` / `setEnabled` / `setChecked(name, bool)` | `setChecked` doesn't raise `toggled` |
 | `setProperty(name, prop, value)` / `getProperty(name, prop)` | any widget property |
 | `getRect(name)` | `x, y, width, height` on screen, or `nil` |
@@ -299,7 +301,8 @@ one.
 ## Test harness
 
 `simulateClick(x, y, "left" | "right" | "double", window?)`,
-`simulateText(text, window?)`, `simulateScroll(x, y, delta, window?)` (mouse
+`simulateText(text, window?)`, `simulateDrag(x1, y1, x2, y2, window?)` (press,
+move, release with the left button), `simulateScroll(x, y, delta, window?)` (mouse
 wheel; positive scrolls up), and `screenshot(path, window?)` (PNG of the next
 frame) drive the UI — or pop-out `window` — from a script run via
 `GITGUD_SCRIPT` — see `docs/BUILDING.md` ▸ Tests.

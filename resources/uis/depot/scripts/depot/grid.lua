@@ -397,7 +397,7 @@ function grid.create(name, parent, spec)
         gitgud.setProperty(divider, "HoverFillColour", C.selectionBorder)
         gitgud.setProperty(divider, "PushedFillColour", C.text2)
         gitgud.setProperty(divider, "BorderColour", C.transparent)
-        gitgud.setDraggable(divider, true)
+        gitgud.setDraggable(divider, true, "horizontal")
         local column = state.columns[c]
         gitgud.on(divider .. ".dragging", function(value)
             local x = tonumber(value:match("^(-?%d+)"))

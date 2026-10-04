@@ -31,6 +31,8 @@
 // SDL scancode -> DirectInput keynum table (public domain, copied from
 // third_party/cegui/application_templates). CEGUI's Key::Scan values are
 // DirectInput keynums. The table needs SDL_NUM_SCANCODES.
+#include <SDL_events.h> // SDL_ENABLE / SDL_DISABLE
+#include <SDL_mouse.h>
 #include <SDL_scancode.h>
 
 #include "ui/cegui/sdl_scancode_to_dinput_mappings.h"
@@ -706,6 +708,10 @@ namespace gitgud::ui
         }
         if (_Surface.m_pContext)
         {
+            if (m_pSystemCursorContext == _Surface.m_pContext)
+            {
+                m_pSystemCursorContext = nullptr;
+            }
             CEGUI::System::getSingleton().destroyGUIContext(*_Surface.m_pContext);
             _Surface.m_pContext = nullptr;
         }
@@ -1076,6 +1082,7 @@ namespace gitgud::ui
     void CeguiBackend::InjectMousePosition(float _fX, float _fY)
     {
         InputContext()->injectMousePosition(_fX, _fY);
+        UpdateCursorShape();
     }
 
     void CeguiBackend::InjectMouseButton(int _iButton, bool _bDown)
@@ -1093,6 +1100,8 @@ namespace gitgud::ui
         {
             InputContext()->injectMouseButtonUp(mapped);
         }
+        // A drag ending can leave the mouse over something else.
+        UpdateCursorShape();
     }
 
     void CeguiBackend::InjectMouseScroll(float _fDelta)
@@ -1586,6 +1595,129 @@ namespace gitgud::ui
                 m_Draggable.erase(pw);
                 return true;
             });
+    }
+
+    void CeguiBackend::SetCursorShape(const std::string& _WidgetId, const std::string& _Shape)
+    {
+        CEGUI::Window* pw = FindWidget(_WidgetId);
+        if (!pw)
+        {
+            return;
+        }
+        int ishape = -1;
+        if (_Shape == "sizewe")
+        {
+            ishape = SDL_SYSTEM_CURSOR_SIZEWE;
+        }
+        else if (_Shape == "sizens")
+        {
+            ishape = SDL_SYSTEM_CURSOR_SIZENS;
+        }
+        else if (_Shape == "sizeall")
+        {
+            ishape = SDL_SYSTEM_CURSOR_SIZEALL;
+        }
+        else if (_Shape == "hand")
+        {
+            ishape = SDL_SYSTEM_CURSOR_HAND;
+        }
+        if (ishape < 0)
+        {
+            m_CursorShapes.erase(pw);
+            return;
+        }
+        const bool bnew = m_CursorShapes.count(pw) == 0;
+        m_CursorShapes[pw] = ishape;
+        if (bnew)
+        {
+            pw->subscribeEvent(CEGUI::Window::EventDestructionStarted,
+                [this, pw](const CEGUI::EventArgs&) -> bool
+                {
+                    m_CursorShapes.erase(pw);
+                    return true;
+                });
+        }
+    }
+
+    void CeguiBackend::UpdateCursorShape()
+    {
+        CEGUI::GUIContext* pcontext = InputContext();
+        if (!pcontext)
+        {
+            return;
+        }
+        // The widget being dragged keeps its cursor even when the mouse runs
+        // ahead of it; otherwise the one under the mouse (or a parent) decides.
+        int ishape = -1;
+        CEGUI::Window* pw = pcontext->getInputCaptureWindow();
+        if (!pw)
+        {
+            pw = pcontext->getWindowContainingCursor();
+        }
+        for (; pw && ishape < 0; pw = pw->getParent())
+        {
+            const auto it = m_CursorShapes.find(pw);
+            if (it != m_CursorShapes.end())
+            {
+                ishape = it->second;
+            }
+        }
+
+        const auto markDirty = [this](CEGUI::GUIContext* _pContext)
+        {
+            if (_pContext == m_pGuiContext)
+            {
+                m_bForceRedraw = true;
+                return;
+            }
+            for (auto& [id, surface] : m_Surfaces)
+            {
+                if (surface.m_pContext == _pContext)
+                {
+                    surface.m_bForceRedraw = true;
+                }
+            }
+        };
+
+        if (ishape >= 0)
+        {
+            // CEGUI sets its own cursor image on every window change; keep
+            // it blank while the system cursor shows.
+            if (pcontext->getCursorImage())
+            {
+                pcontext->setCursorImage(nullptr);
+                markDirty(pcontext);
+            }
+            if (ishape != m_iSystemCursor)
+            {
+                static SDL_Cursor* s_apCursors[SDL_NUM_SYSTEM_CURSORS] = {};
+                if (!s_apCursors[ishape])
+                {
+                    s_apCursors[ishape] =
+                        SDL_CreateSystemCursor(static_cast<SDL_SystemCursor>(ishape));
+                }
+                SDL_SetCursor(s_apCursors[ishape]);
+                SDL_ShowCursor(SDL_ENABLE);
+            }
+            m_iSystemCursor = ishape;
+            m_pSystemCursorContext = pcontext;
+            return;
+        }
+
+        if (m_iSystemCursor >= 0)
+        {
+            SDL_ShowCursor(SDL_DISABLE); // CEGUI draws the cursor again
+            if (m_pSystemCursorContext)
+            {
+                CEGUI::Window* punder = m_pSystemCursorContext->getWindowContainingCursor();
+                m_pSystemCursorContext->setCursorImage(
+                    punder ? punder->getEffectiveCursor()
+                           : m_pSystemCursorContext->getDefaultCursorImage());
+                markDirty(m_pSystemCursorContext);
+            }
+            m_iSystemCursor = -1;
+            m_pSystemCursorContext = nullptr;
+        }
     }
 
     namespace

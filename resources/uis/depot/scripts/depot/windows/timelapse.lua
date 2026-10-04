@@ -157,7 +157,7 @@ function timelapse.open(path, start)
         show(state, state.index)
     end)
 
-    gitgud.setDraggable(id .. ":SliderThumb", true)
+    gitgud.setDraggable(id .. ":SliderThumb", true, "horizontal")
     gitgud.on(id .. ":SliderThumb.dragging", function(value)
         local x = tonumber(value:match("^(-?%d+)"))
         local tx, _, tw = gitgud.getRect(id .. ":SliderTrack")
