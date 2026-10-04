@@ -81,6 +81,7 @@ namespace gitgud::ui
             const std::string& _WidgetId, int _iIndex, bool _bEnsureVisible) override;
         void SelectListItems(const std::string& _WidgetId, const std::vector<int>& _Rows) override;
         void SetDraggable(const std::string& _WidgetId, bool _bDraggable) override;
+        void SetCursorShape(const std::string& _WidgetId, const std::string& _Shape) override;
         float GetScroll(const std::string& _WidgetId, bool _bHorizontal = false) const override;
         void SetScroll(
             const std::string& _WidgetId, float _fPosition, bool _bHorizontal = false) override;
@@ -159,6 +160,15 @@ namespace gitgud::ui
         // Widgets opted into drag events (SetDraggable), and whether each is
         // mid-drag. Keyed by window so a recreated widget subscribes afresh.
         std::unordered_map<CEGUI::Window*, bool> m_Draggable;
+
+        // System cursor shapes asked for per widget (SetCursorShape), as SDL
+        // system cursor ids, and the one showing now (-1: CEGUI's own cursor).
+        std::unordered_map<CEGUI::Window*, int> m_CursorShapes;
+        int m_iSystemCursor = -1;
+        CEGUI::GUIContext* m_pSystemCursorContext = nullptr;
+        // Show the system cursor over (or while dragging) a widget that asked
+        // for one, and CEGUI's cursor everywhere else. Called after mouse input.
+        void UpdateCursorShape();
 
         // What each list was last filled with by SetList: a hash of the rows
         // and their count. Refreshes often push identical rows; matching ones

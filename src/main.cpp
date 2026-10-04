@@ -92,8 +92,8 @@ namespace
 
     std::string ReadLastRepo()
     {
-        std::ifstream in(fs::u8path(gitgud::platform::ConfigDirectory()) / kLastRepoFile,
-            std::ios::binary);
+        std::ifstream in(
+            fs::u8path(gitgud::platform::ConfigDirectory()) / kLastRepoFile, std::ios::binary);
         std::string path;
         std::getline(in, path);
         while (!path.empty() && (path.back() == '\r' || path.back() == ' '))
@@ -286,9 +286,25 @@ namespace
     // client area. Edges/corners Resize; anything the UI marks as a drag region
     // (layout widgets carrying the AppDrag user string) moves the window — which
     // also gives us native Aero snap and double-click-to-maximize for free.
+    // The mouse is on the borderless window's resize rim (WindowHitTest);
+    // reset when it leaves the window.
+    bool g_bOnResizeRim = false;
+
     SDL_HitTestResult WindowHitTest(SDL_Window* _pWin, const SDL_Point* _pP, void* _pData)
     {
         constexpr int ikEdge = 8; // Resize grip thickness, px
+        auto* pui = static_cast<gitgud::ui::IUiBackend*>(_pData);
+
+        // On the resize rim Windows shows its own resize arrows; hide the
+        // cursor the UI draws so it doesn't linger next to them.
+        const auto onRim = [pui](bool _bOn)
+        {
+            if (pui && _bOn != g_bOnResizeRim)
+            {
+                pui->SetCursorVisible("", !_bOn);
+            }
+            g_bOnResizeRim = _bOn;
+        };
 
         if (!(SDL_GetWindowFlags(_pWin) & SDL_WINDOW_MAXIMIZED))
         {
@@ -300,6 +316,7 @@ namespace
             const bool bt = _pP->y < ikEdge;
             const bool bb = _pP->y >= ih - ikEdge;
             const int ieVal = bt + (bl * 2) + (br * 4) + (bb * 8);
+            onRim(ieVal != 0);
 
             switch (ieVal)
             {
@@ -321,8 +338,10 @@ namespace
                 return SDL_HITTEST_RESIZE_BOTTOMRIGHT;
             }
         }
-
-        auto* pui = static_cast<gitgud::ui::IUiBackend*>(_pData);
+        else
+        {
+            onRim(false);
+        }
 
         if (pui && pui->IsDragRegion(static_cast<float>(_pP->x), static_cast<float>(_pP->y)))
         {
@@ -1326,6 +1345,10 @@ int main(int _iArgc, char* _aSzArgv[])
             }
             else if (_Ev.window.event == SDL_WINDOWEVENT_LEAVE && ui)
             {
+                if (bmain)
+                {
+                    g_bOnResizeRim = false;
+                }
                 ui->SetCursorVisible(target, false);
             }
             else if (_Ev.window.event == SDL_WINDOWEVENT_MAXIMIZED && bmain)

@@ -497,15 +497,40 @@ namespace gitgud::lua::bindings
             return 0;
         }
 
-        // gitgud.setDraggable(name, bool) - raise dragStarted / dragging /
-        // dragEnded ("x,y") while the widget is dragged with the left button
+        // gitgud.setDraggable(name, bool, direction?) - raise dragStarted /
+        // dragging / dragEnded ("x,y") while the widget is dragged with the
+        // left button. direction "horizontal" | "vertical" | "both" shows the
+        // matching resize cursor over it (as gitgud.setCursor does).
         int LSetDraggable(lua_State* _pL)
         {
             const char* szname = luaL_checkstring(_pL, 1);
             const bool bon = lua_isnoneornil(_pL, 2) || lua_toboolean(_pL, 2) != 0;
+            const std::string direction = luaL_optstring(_pL, 3, "");
             if (auto* pui = Self(_pL)->UiBackend())
             {
                 pui->SetDraggable(szname, bon);
+                if (!direction.empty() || !bon)
+                {
+                    const char* szshape = !bon                        ? ""
+                                          : direction == "horizontal" ? "sizewe"
+                                          : direction == "vertical"   ? "sizens"
+                                          : direction == "both"       ? "sizeall"
+                                                                      : "";
+                    pui->SetCursorShape(szname, szshape);
+                }
+            }
+            return 0;
+        }
+
+        // gitgud.setCursor(name, shape) - the system cursor over a widget and
+        // its children: "sizewe", "sizens", "sizeall", "hand", or "" (default)
+        int LSetCursor(lua_State* _pL)
+        {
+            const char* szname = luaL_checkstring(_pL, 1);
+            const char* szshape = luaL_optstring(_pL, 2, "");
+            if (auto* pui = Self(_pL)->UiBackend())
+            {
+                pui->SetCursorShape(szname, szshape);
             }
             return 0;
         }
@@ -855,6 +880,7 @@ namespace gitgud::lua::bindings
             {"getSelectedIndices", LGetSelectedIndices},
             {"selectListItems", LSelectListItems},
             {"setDraggable", LSetDraggable},
+            {"setCursor", LSetCursor},
             // images
             {"isImage", LIsImage},
             {"imageDiff", LImageDiff},

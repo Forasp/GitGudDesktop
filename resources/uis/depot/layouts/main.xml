@@ -54,7 +54,6 @@
                 <Property name="HoverFillColour" value="FF276460"/>
                 <Property name="PushedFillColour" value="FF34796A"/>
                 <Property name="BorderColour" value="00000000"/>
-                <Property name="TooltipText" value="Drag to resize"/>
             </Window>
             <Window type="Gitgud/Button" name="SplitBottom">
                 <Property name="Area" value="{{0,0},{0.8,0},{1,0},{0.8,5}}"/>
@@ -63,7 +62,6 @@
                 <Property name="HoverFillColour" value="FF276460"/>
                 <Property name="PushedFillColour" value="FF34796A"/>
                 <Property name="BorderColour" value="00000000"/>
-                <Property name="TooltipText" value="Drag to resize"/>
             </Window>
         </Window>
 

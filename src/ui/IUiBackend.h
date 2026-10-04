@@ -171,6 +171,11 @@ namespace gitgud::ui
         // pixels), then "<id>.dragEnded"; "<id>.dragStarted" comes first. For
         // splitters, column dividers, panning a picture.
         virtual void SetDraggable(const std::string& _WidgetId, bool _bDraggable) = 0;
+        // The system mouse cursor shown over a widget (and its children), and
+        // kept while it is being dragged: "sizewe" (left-right arrows),
+        // "sizens" (up-down), "sizeall" (four arrows), "hand", or "" for the
+        // UI's own cursor.
+        virtual void SetCursorShape(const std::string& _WidgetId, const std::string& _Shape) = 0;
         // Scroll offset (pixels) of a list or scrollable pane: vertical, or
         // horizontal with `_bHorizontal`.
         virtual float GetScroll(const std::string& _WidgetId, bool _bHorizontal = false) const = 0;
