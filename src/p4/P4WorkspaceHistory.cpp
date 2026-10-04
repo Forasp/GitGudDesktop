@@ -24,7 +24,8 @@ namespace gitgud::p4
 
         std::string Trimmed(std::string _Text)
         {
-            while (!_Text.empty() && (_Text.back() == '\n' || _Text.back() == '\r' || _Text.back() == ' '))
+            while (!_Text.empty() &&
+                   (_Text.back() == '\n' || _Text.back() == '\r' || _Text.back() == ' '))
             {
                 _Text.pop_back();
             }
@@ -33,12 +34,14 @@ namespace gitgud::p4
 
         bool IsDeleteAction(const std::string& _Action)
         {
-            return _Action == "delete" || _Action == "move/delete" || _Action == "purge" || _Action == "archive";
+            return _Action == "delete" || _Action == "move/delete" || _Action == "purge" ||
+                   _Action == "archive";
         }
 
         bool IsAddAction(const std::string& _Action)
         {
-            return _Action == "add" || _Action == "branch" || _Action == "move/add" || _Action == "import";
+            return _Action == "add" || _Action == "branch" || _Action == "move/add" ||
+                   _Action == "import";
         }
 
         // Old line index for each new line of a diff (-1 for added lines).
@@ -49,7 +52,8 @@ namespace gitgud::p4
             std::size_t nnext = 0;
             for (const git::DiffHunk& h : _Diff.m_Hunks)
             {
-                const std::size_t nhunkStart = h.m_iNewStart > 0 ? static_cast<std::size_t>(h.m_iNewStart - 1) : 0;
+                const std::size_t nhunkStart =
+                    h.m_iNewStart > 0 ? static_cast<std::size_t>(h.m_iNewStart - 1) : 0;
                 for (; nnext < nhunkStart && nnext < _nNewCount; ++nnext)
                 {
                     out[nnext] = static_cast<long>(nnext) + ioffset;
@@ -102,7 +106,8 @@ namespace gitgud::p4
         if (!_Query.m_From.empty() && _Query.m_From != "HEAD" && _Query.m_From != "head")
         {
             const std::string suffix = RevisionSuffix(_Query.m_From);
-            const bool bchange = suffix.size() > 1 && std::isdigit(static_cast<unsigned char>(suffix[1]));
+            const bool bchange =
+                suffix.size() > 1 && std::isdigit(static_cast<unsigned char>(suffix[1]));
             files = bchange ? files + suffix : BranchPath(_Query.m_From) + "/...";
         }
 
@@ -120,11 +125,14 @@ namespace gitgud::p4
         else
         {
             const std::size_t nwant = _Query.m_MaxCount + _Query.m_Skip + 1;
-            changes = RunOrThrow({"changes", "-l", "-s", "submitted", "-m", std::to_string(nwant), files}).m_Stats;
+            changes =
+                RunOrThrow({"changes", "-l", "-s", "submitted", "-m", std::to_string(nwant), files})
+                    .m_Stats;
         }
 
         std::vector<git::CommitInfo> out;
-        for (std::size_t i = _Query.m_Skip; i < changes.size() && out.size() < _Query.m_MaxCount; ++i)
+        for (std::size_t i = _Query.m_Skip; i < changes.size() && out.size() < _Query.m_MaxCount;
+            ++i)
         {
             git::CommitInfo c = CommitFromChange(changes[i]);
             if (i + 1 < changes.size())
@@ -136,10 +144,11 @@ namespace gitgud::p4
         return out;
     }
 
-    std::vector<git::CommitInfo> P4Workspace::FileLog(const std::string& _Path, std::size_t _MaxCount) const
+    std::vector<git::CommitInfo> P4Workspace::FileLog(
+        const std::string& _Path, std::size_t _MaxCount) const
     {
-        const CommandResult r =
-            Run({"changes", "-l", "-i", "-s", "submitted", "-m", std::to_string(_MaxCount + 1), LocalArg(_Path)});
+        const CommandResult r = Run({"changes", "-l", "-i", "-s", "submitted", "-m",
+            std::to_string(_MaxCount + 1), LocalArg(_Path)});
         std::vector<git::CommitInfo> out;
         for (std::size_t i = 0; i < r.m_Stats.size() && out.size() < _MaxCount; ++i)
         {
@@ -172,8 +181,8 @@ namespace gitgud::p4
         {
             scope = m_BranchRoot + "/...";
         }
-        const CommandResult r =
-            RunOrThrow({"changes", "-l", "-s", "submitted", "-m", std::to_string(_Query.m_MaxCount), scope});
+        const CommandResult r = RunOrThrow(
+            {"changes", "-l", "-s", "submitted", "-m", std::to_string(_Query.m_MaxCount), scope});
 
         // Each change's parent is the previous change on the same branch;
         // a branch's first change hangs off the newest older change of the
@@ -249,7 +258,8 @@ namespace gitgud::p4
 
     // ---- one change's diff -----------------------------------------------------------
 
-    std::vector<git::FileDiff> P4Workspace::DiffCommit(const std::string& _Oid, const git::DiffOptions& _Options) const
+    std::vector<git::FileDiff> P4Workspace::DiffCommit(
+        const std::string& _Oid, const git::DiffOptions& _Options) const
     {
         std::string change = _Oid;
         if (!change.empty() && change[0] == '@')
@@ -294,7 +304,8 @@ namespace gitgud::p4
             }
             if (!IsDeleteAction(action))
             {
-                bnew = PrintFile(depotFile + (bshelved ? "@=" + change : "#" + std::to_string(irev)), newText);
+                bnew = PrintFile(
+                    depotFile + (bshelved ? "@=" + change : "#" + std::to_string(irev)), newText);
             }
             git::FileDiff fd = git::internal::DiffFileVersions(
                 rel, Version(ToLf(oldText), bold), rel, Version(ToLf(newText), bnew), _Options);
@@ -309,8 +320,9 @@ namespace gitgud::p4
 
     // ---- comparing versions -------------------------------------------------------------
 
-    git::FileDiff P4Workspace::DiffVersions(const std::string& _OldPath, const std::string& _OldRevision,
-        const std::string& _NewPath, const std::string& _NewRevision, const git::DiffOptions& _Options) const
+    git::FileDiff P4Workspace::DiffVersions(const std::string& _OldPath,
+        const std::string& _OldRevision, const std::string& _NewPath,
+        const std::string& _NewRevision, const git::DiffOptions& _Options) const
     {
         std::string oldText;
         std::string newText;
@@ -320,13 +332,14 @@ namespace gitgud::p4
             _OldPath, Version(oldText, bold), _NewPath, Version(newText, bnew), _Options);
     }
 
-    std::vector<git::ChangedFile> P4Workspace::ChangedFiles(
-        const std::string& _OldRevision, const std::string& _NewRevision, const std::string& _Prefix) const
+    std::vector<git::ChangedFile> P4Workspace::ChangedFiles(const std::string& _OldRevision,
+        const std::string& _NewRevision, const std::string& _Prefix) const
     {
         std::map<std::string, git::ChangedFile> byPath;
         const std::string scope = _Prefix.empty() ? AllFiles() : LocalArg(_Prefix) + "\\...";
         const bool bworkdir = _NewRevision == "workdir";
-        const std::string newSuffix = bworkdir ? std::string("#have") : RevisionSuffix(_NewRevision);
+        const std::string newSuffix =
+            bworkdir ? std::string("#have") : RevisionSuffix(_NewRevision);
 
         if (_OldRevision.empty())
         {
@@ -344,17 +357,21 @@ namespace gitgud::p4
             const std::string oldSuffix = RevisionSuffix(_OldRevision);
             if (oldSuffix != newSuffix)
             {
-                for (const Record& f : Run({"diff2", "-q", scope + oldSuffix, scope + newSuffix}).m_Stats)
+                for (const Record& f :
+                    Run({"diff2", "-q", scope + oldSuffix, scope + newSuffix}).m_Stats)
                 {
                     const std::string status = Field(f, "status");
-                    const std::string depot =
-                        Field(f, "depotFile2").empty() ? Field(f, "depotFile") : Field(f, "depotFile2");
-                    const std::string rel = RelativeFromDepot(depot.empty() ? Field(f, "depotFile") : depot);
+                    const std::string depot = Field(f, "depotFile2").empty()
+                                                  ? Field(f, "depotFile")
+                                                  : Field(f, "depotFile2");
+                    const std::string rel =
+                        RelativeFromDepot(depot.empty() ? Field(f, "depotFile") : depot);
                     if (rel.empty() || status == "identical")
                     {
                         continue;
                     }
-                    const char ccode = status == "left only" ? 'D' : (status == "right only" ? 'A' : 'M');
+                    const char ccode =
+                        status == "left only" ? 'D' : (status == "right only" ? 'A' : 'M');
                     byPath[rel] = {rel, rel, ccode};
                 }
             }
@@ -363,7 +380,8 @@ namespace gitgud::p4
         {
             for (const git::StatusEntry& e : Status())
             {
-                if (!_Prefix.empty() && e.m_Path.rfind(_Prefix + "/", 0) != 0 && e.m_Path != _Prefix)
+                if (!_Prefix.empty() && e.m_Path.rfind(_Prefix + "/", 0) != 0 &&
+                    e.m_Path != _Prefix)
                 {
                     continue;
                 }
@@ -392,9 +410,11 @@ namespace gitgud::p4
 
     // ---- browsing ---------------------------------------------------------------------
 
-    std::vector<git::TreeEntry> P4Workspace::ListTree(const std::string& _Revision, const std::string& _Dir) const
+    std::vector<git::TreeEntry> P4Workspace::ListTree(
+        const std::string& _Revision, const std::string& _Dir) const
     {
-        const std::string suffix = _Revision == "workdir" ? std::string("#have") : RevisionSuffix(_Revision);
+        const std::string suffix =
+            _Revision == "workdir" ? std::string("#have") : RevisionSuffix(_Revision);
         std::string base = m_Root + (_Dir.empty() ? std::string() : "/" + _Dir);
         std::replace(base.begin(), base.end(), '/', '\\');
         const std::string pattern = EscapePath(base) + "\\*" + suffix;
@@ -412,7 +432,8 @@ namespace gitgud::p4
             out.push_back(std::move(e));
         }
         std::vector<git::TreeEntry> files;
-        for (const Record& f : Run({"fstat", "-Ol", "-T", "depotFile,headAction,headRev,fileSize", pattern}).m_Stats)
+        for (const Record& f :
+            Run({"fstat", "-Ol", "-T", "depotFile,headAction,headRev,fileSize", pattern}).m_Stats)
         {
             if (IsDeleteAction(Field(f, "headAction")))
             {
@@ -427,7 +448,10 @@ namespace gitgud::p4
             e.m_Size = ToInt64(Field(f, "fileSize"));
             files.push_back(std::move(e));
         }
-        const auto byName = [](const git::TreeEntry& _A, const git::TreeEntry& _B) { return _A.m_Name < _B.m_Name; };
+        const auto byName = [](const git::TreeEntry& _A, const git::TreeEntry& _B)
+        {
+            return _A.m_Name < _B.m_Name;
+        };
         std::sort(out.begin(), out.end(), byName);
         std::sort(files.begin(), files.end(), byName);
         out.insert(out.end(), files.begin(), files.end());
@@ -436,10 +460,12 @@ namespace gitgud::p4
 
     // ---- blame ------------------------------------------------------------------------------
 
-    git::BlameResult P4Workspace::Blame(const std::string& _Path, const std::string& _Revision) const
+    git::BlameResult P4Workspace::Blame(
+        const std::string& _Path, const std::string& _Revision) const
     {
         const bool bworkdir = _Revision == "workdir";
-        const std::string spec = LocalArg(_Path) + (bworkdir ? std::string("#have") : RevisionSuffix(_Revision));
+        const std::string spec =
+            LocalArg(_Path) + (bworkdir ? std::string("#have") : RevisionSuffix(_Revision));
         const CommandResult r = Run({"annotate", "-c", "-I", "-q", spec});
 
         std::vector<std::string> depotLines;
@@ -568,9 +594,11 @@ namespace gitgud::p4
                 pattern = m_BranchRoot + "/*" + pattern.substr(nend);
             }
         }
-        const CommandResult r = Run({"filelog", "-l", "-m", std::to_string(_Query.m_MaxNodes), pattern});
+        const CommandResult r =
+            Run({"filelog", "-l", "-m", std::to_string(_Query.m_MaxNodes), pattern});
 
         git::RevisionGraph g;
+
         struct Rev
         {
             std::string m_File;
@@ -578,7 +606,9 @@ namespace gitgud::p4
             git::CommitInfo m_Commit;
             std::string m_Action;
         };
+
         std::vector<Rev> revs;
+
         struct Link
         {
             std::string m_FromFile;
@@ -587,14 +617,17 @@ namespace gitgud::p4
             int m_iToRev = 0;
             bool m_bMerge = false;
         };
+
         std::vector<Link> links;
-        const std::set<std::string> excluded(_Query.m_ExcludeBranches.begin(), _Query.m_ExcludeBranches.end());
+        const std::set<std::string> excluded(
+            _Query.m_ExcludeBranches.begin(), _Query.m_ExcludeBranches.end());
         std::map<std::string, int> rowOf;
 
         for (const Record& f : r.m_Stats)
         {
             const std::string file = Field(f, "depotFile");
-            const std::string branchPath = UsesStreams() ? StreamOf(file) : file.substr(0, file.rfind('/'));
+            const std::string branchPath =
+                UsesStreams() ? StreamOf(file) : file.substr(0, file.rfind('/'));
             const std::string branch = BranchNameOf(branchPath);
             if (excluded.count(branch) != 0)
             {
@@ -605,8 +638,10 @@ namespace gitgud::p4
                 rowOf[file] = static_cast<int>(g.m_Rows.size());
                 git::RevisionRow row;
                 row.m_Name = branch;
-                row.m_bHead = UsesStreams() ? StartsWithNoCase(branchPath, m_Stream) && branchPath.size() == m_Stream.size()
-                                            : !DepotFromRelative(_Path).empty() && DepotFromRelative(_Path) == file;
+                row.m_bHead = UsesStreams() ? StartsWithNoCase(branchPath, m_Stream) &&
+                                                  branchPath.size() == m_Stream.size()
+                                            : !DepotFromRelative(_Path).empty() &&
+                                                  DepotFromRelative(_Path) == file;
                 g.m_Rows.push_back(row);
             }
             for (int i = 0; f.count("rev" + std::to_string(i)) != 0; ++i)
@@ -619,7 +654,8 @@ namespace gitgud::p4
                 rev.m_Commit.m_Oid = Field(f, "change" + n);
                 rev.m_Commit.m_ShortOid = rev.m_Commit.m_Oid;
                 rev.m_Commit.m_Message = Trimmed(Field(f, "desc" + n));
-                rev.m_Commit.m_Summary = rev.m_Commit.m_Message.substr(0, rev.m_Commit.m_Message.find('\n'));
+                rev.m_Commit.m_Summary =
+                    rev.m_Commit.m_Message.substr(0, rev.m_Commit.m_Message.find('\n'));
                 rev.m_Commit.m_AuthorName = Field(f, "user" + n);
                 rev.m_Commit.m_TimeUtc = ToInt64(Field(f, "time" + n));
                 revs.push_back(rev);
@@ -637,17 +673,20 @@ namespace gitgud::p4
                     {
                         erev.erase(0, 1);
                     }
-                    links.push_back({Field(f, "file" + m), static_cast<int>(ToInt64(erev)), file, rev.m_iRev,
-                        how != "branch from" && how != "add from"});
+                    links.push_back({Field(f, "file" + m), static_cast<int>(ToInt64(erev)), file,
+                        rev.m_iRev, how != "branch from" && how != "add from"});
                 }
             }
         }
 
         // Columns: oldest change first.
-        std::sort(revs.begin(), revs.end(), [](const Rev& _A, const Rev& _B)
-            { return ToInt64(_A.m_Commit.m_Oid) != ToInt64(_B.m_Commit.m_Oid)
-                         ? ToInt64(_A.m_Commit.m_Oid) < ToInt64(_B.m_Commit.m_Oid)
-                         : _A.m_iRev < _B.m_iRev; });
+        std::sort(revs.begin(), revs.end(),
+            [](const Rev& _A, const Rev& _B)
+            {
+                return ToInt64(_A.m_Commit.m_Oid) != ToInt64(_B.m_Commit.m_Oid)
+                           ? ToInt64(_A.m_Commit.m_Oid) < ToInt64(_B.m_Commit.m_Oid)
+                           : _A.m_iRev < _B.m_iRev;
+            });
         std::map<std::pair<std::string, int>, int> nodeOf;
         for (const Rev& rev : revs)
         {
@@ -656,10 +695,10 @@ namespace gitgud::p4
             node.m_iRow = rowOf[rev.m_File];
             node.m_iColumn = static_cast<int>(g.m_Nodes.size());
             node.m_iRevision = rev.m_iRev;
-            node.m_cAction = IsAddAction(rev.m_Action) ? 'A'
+            node.m_cAction = IsAddAction(rev.m_Action)      ? 'A'
                              : IsDeleteAction(rev.m_Action) ? 'D'
-                             : rev.m_Action == "integrate" ? 'I'
-                                                           : 'M';
+                             : rev.m_Action == "integrate"  ? 'I'
+                                                            : 'M';
             nodeOf[{rev.m_File, rev.m_iRev}] = static_cast<int>(g.m_Nodes.size());
             g.m_Nodes.push_back(node);
         }

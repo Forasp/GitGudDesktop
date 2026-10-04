@@ -113,7 +113,8 @@ namespace gitgud::p4
         return out;
     }
 
-    std::string P4Workspace::CreateChange(const std::string& _Description, const std::vector<std::string>& _Paths)
+    std::string P4Workspace::CreateChange(
+        const std::string& _Description, const std::vector<std::string>& _Paths)
     {
         const std::string change = NewChange(_Description, {});
         if (!_Paths.empty())
@@ -123,7 +124,8 @@ namespace gitgud::p4
         return change;
     }
 
-    void P4Workspace::SetChangeDescription(const std::string& _Change, const std::string& _Description)
+    void P4Workspace::SetChangeDescription(
+        const std::string& _Change, const std::string& _Description)
     {
         CommandResult spec = RunOrThrow({"change", "-o", _Change});
         if (spec.m_Stats.empty())
@@ -184,7 +186,8 @@ namespace gitgud::p4
         RunOrThrow(args);
     }
 
-    void P4Workspace::Move(const std::string& _From, const std::string& _To, const std::string& _Change)
+    void P4Workspace::Move(
+        const std::string& _From, const std::string& _To, const std::string& _Change)
     {
         bool bopened = false;
         for (const Record& o : Opened())
@@ -242,8 +245,8 @@ namespace gitgud::p4
         return out;
     }
 
-    std::string P4Workspace::SubmitPending(
-        const std::string& _Change, const std::string& _Description, const std::vector<std::string>& _Paths)
+    std::string P4Workspace::SubmitPending(const std::string& _Change,
+        const std::string& _Description, const std::vector<std::string>& _Paths)
     {
         if (!PendingResolves().empty())
         {
@@ -269,7 +272,8 @@ namespace gitgud::p4
             std::vector<std::string> depotFiles;
             for (const Record& o : files)
             {
-                if (chosen.empty() || chosen.count(RelativeFromClientOrLocal(Field(o, "clientFile"))))
+                if (chosen.empty() ||
+                    chosen.count(RelativeFromClientOrLocal(Field(o, "clientFile"))))
                 {
                     depotFiles.push_back(Field(o, "depotFile"));
                 }
@@ -308,11 +312,13 @@ namespace gitgud::p4
         return SubmitChange(from);
     }
 
-    std::string P4Workspace::ShelveChange(const std::string& _Change, const std::vector<std::string>& _Paths, bool _bRevert)
+    std::string P4Workspace::ShelveChange(
+        const std::string& _Change, const std::vector<std::string>& _Paths, bool _bRevert)
     {
         if (_Change.empty() || _Change == "default")
         {
-            throw GitError("Shelve a numbered changelist (create one for the default changelist's files first)");
+            throw GitError("Shelve a numbered changelist (create one for the default changelist's "
+                           "files first)");
         }
         // -f replaces earlier shelved copies of the same files.
         std::vector<std::string> args = {"shelve", "-f", "-c", _Change};
@@ -364,7 +370,8 @@ namespace gitgud::p4
         return out;
     }
 
-    void P4Workspace::DeleteShelf(const std::string& _Change, const std::vector<std::string>& _Paths)
+    void P4Workspace::DeleteShelf(
+        const std::string& _Change, const std::vector<std::string>& _Paths)
     {
         std::vector<std::string> args = {"shelve", "-d", "-c", _Change};
         for (const std::string& p : _Paths)
@@ -374,7 +381,50 @@ namespace gitgud::p4
         RunOrThrow(args);
     }
 
-    std::vector<std::string> P4Workspace::SyncPaths(const std::vector<std::string>& _Paths, const std::string& _Revision)
+    std::vector<PendingChange> P4Workspace::ListShelves(bool _bAllUsers) const
+    {
+        std::vector<std::string> args = {"changes", "-l", "-s", "shelved", "-m", "200"};
+        if (!_bAllUsers)
+        {
+            args.emplace_back("-c");
+            args.push_back(m_Conn.m_Client);
+        }
+        std::vector<PendingChange> out;
+        for (const Record& s : RunOrThrow(args).m_Stats)
+        {
+            PendingChange c;
+            c.m_Change = Field(s, "change");
+            c.m_Description = Trimmed(Field(s, "desc"));
+            c.m_User = Field(s, "user") + "@" + Field(s, "client");
+            c.m_TimeUtc = ToInt64(Field(s, "time"));
+            out.push_back(std::move(c));
+        }
+        return out;
+    }
+
+    std::vector<ShelvedFile> P4Workspace::ShelvedFiles(const std::string& _Change) const
+    {
+        std::vector<ShelvedFile> out;
+        const CommandResult d = Run({"describe", "-S", "-s", _Change});
+        if (d.m_Stats.empty())
+        {
+            return out;
+        }
+        const std::vector<std::string> files = Indexed(d.m_Stats.front(), "depotFile");
+        const std::vector<std::string> actions = Indexed(d.m_Stats.front(), "action");
+        for (std::size_t i = 0; i < files.size(); ++i)
+        {
+            ShelvedFile f;
+            f.m_DepotFile = files[i];
+            f.m_Path = RelativeFromDepot(files[i]);
+            f.m_Action = i < actions.size() ? actions[i] : std::string();
+            out.push_back(std::move(f));
+        }
+        return out;
+    }
+
+    std::vector<std::string> P4Workspace::SyncPaths(
+        const std::vector<std::string>& _Paths, const std::string& _Revision)
     {
         std::string suffix = "#head";
         if (_Revision == "none")

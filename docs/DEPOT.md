@@ -142,6 +142,13 @@ These open as separate windows (Window ▸ lists them; Esc closes one):
 | Branch spec / stream | branch |
 | Resolve | accept yours, theirs, or your edited merge of a conflicted file |
 
+## On a Perforce workspace
+
+Open a Perforce workspace and none of the mapping above applies: pending
+changelists, check out, submit, and shelves are the server's own, and every
+command is the `p4` command it names. See
+[Perforce workspaces ▸ The Depot UI on Perforce](P4.md#the-depot-ui-on-perforce).
+
 ## Keyboard shortcuts
 
 | | |

@@ -123,8 +123,8 @@ namespace gitgud::p4
         int m_iHeadRev = 0;
         std::string m_HeadAction;
         std::string m_HeadType;
-        std::string m_OpenAction;              // ours ("" = not opened)
-        std::string m_OpenChange;              // ours
+        std::string m_OpenAction;             // ours ("" = not opened)
+        std::string m_OpenChange;             // ours
         std::vector<std::string> m_OtherOpen; // "user@client" of others who opened it
         bool m_bOtherLock = false;
     };
@@ -164,7 +164,8 @@ namespace gitgud::p4
         void SetStagedLines(const std::string& _Path, const std::vector<std::size_t>& _Lines,
             std::size_t _ExpectedLineCount);
         void DiscardLines(const std::string& _Path, const std::vector<std::size_t>& _Lines,
-            std::size_t _ExpectedLineCount, const std::function<bool(const std::string&)>& _RemoveFile);
+            std::size_t _ExpectedLineCount,
+            const std::function<bool(const std::string&)>& _RemoveFile);
         void DiscardChanges(const std::vector<std::string>& _Paths,
             const std::function<bool(const std::string&)>& _RemoveFile);
         void AddToGitignore(const std::string& _Pattern);
@@ -173,8 +174,8 @@ namespace gitgud::p4
         std::string Commit(const std::string& _Message);
         std::string AmendCommit(const std::string& _Message);
         std::string UndoLastCommit();
-        git::FileDiff DiffFile(
-            const std::string& _Path, git::DiffTarget _Target, const git::DiffOptions& _Options) const;
+        git::FileDiff DiffFile(const std::string& _Path, git::DiffTarget _Target,
+            const git::DiffOptions& _Options) const;
         void StageHunk(const std::string& _Path, std::size_t _HunkIndex);
         void UnstageHunk(const std::string& _Path, std::size_t _HunkIndex);
 
@@ -196,7 +197,8 @@ namespace gitgud::p4
         void ResetTo(const std::string& _Oid, git::ResetMode _Mode);
 
         std::vector<git::TagInfo> Tags() const;
-        void CreateTag(const std::string& _Name, const std::string& _Target, const std::string& _Message);
+        void CreateTag(
+            const std::string& _Name, const std::string& _Target, const std::string& _Message);
         void DeleteTag(const std::string& _Name);
 
         git::RepoState State() const;
@@ -241,10 +243,12 @@ namespace gitgud::p4
         std::vector<git::SubmoduleInfo> Submodules() const;
         void UpdateSubmodule(const std::string& _Name, bool _bInit);
         std::vector<git::WorktreeInfo> Worktrees() const;
-        void AddWorktree(const std::string& _Name, const std::string& _Path, const std::string& _Branch);
+        void AddWorktree(
+            const std::string& _Name, const std::string& _Path, const std::string& _Branch);
         void RemoveWorktree(const std::string& _Name);
 
-        std::vector<git::TreeEntry> ListTree(const std::string& _Revision, const std::string& _Dir) const;
+        std::vector<git::TreeEntry> ListTree(
+            const std::string& _Revision, const std::string& _Dir) const;
         git::FileDiff DiffVersions(const std::string& _OldPath, const std::string& _OldRevision,
             const std::string& _NewPath, const std::string& _NewRevision,
             const git::DiffOptions& _Options) const;
@@ -252,7 +256,8 @@ namespace gitgud::p4
             const std::string& _NewRevision, const std::string& _Prefix) const;
         std::string Shelve(const std::string& _Branch, const std::vector<std::string>& _Paths,
             const std::string& _Message);
-        git::UnshelveResult Unshelve(const std::string& _Revision, const std::vector<std::string>& _Paths,
+        git::UnshelveResult Unshelve(const std::string& _Revision,
+            const std::vector<std::string>& _Paths,
             const std::function<bool(const std::string&)>& _RemoveFile);
         git::RevisionGraph FileRevisionGraph(
             const std::string& _Path, const git::RevisionGraphQuery& _Query) const;
@@ -273,7 +278,8 @@ namespace gitgud::p4
         // pending changelists (oldest first), each with its open and shelved files.
         std::vector<PendingChange> PendingChanges() const;
         // A new numbered changelist; `_Paths` (open files) move into it.
-        std::string CreateChange(const std::string& _Description, const std::vector<std::string>& _Paths);
+        std::string CreateChange(
+            const std::string& _Description, const std::vector<std::string>& _Paths);
         void SetChangeDescription(const std::string& _Change, const std::string& _Description);
         // Deletes an empty changelist (its shelf must be deleted first).
         void DeleteChange(const std::string& _Change);
@@ -292,18 +298,24 @@ namespace gitgud::p4
         // Submit `_Change` with `_Description`. When `_Paths` is not empty,
         // only those files go; the rest move to a new pending changelist (or
         // stay in the default one). Returns the submitted change number.
-        std::string SubmitPending(
-            const std::string& _Change, const std::string& _Description, const std::vector<std::string>& _Paths);
+        std::string SubmitPending(const std::string& _Change, const std::string& _Description,
+            const std::vector<std::string>& _Paths);
         // Shelve `_Change` (default: into a new numbered changelist). Returns the
         // changelist that holds the shelf. `_bRevert` reverts the files afterwards.
-        std::string ShelveChange(const std::string& _Change, const std::vector<std::string>& _Paths, bool _bRevert);
+        std::string ShelveChange(
+            const std::string& _Change, const std::vector<std::string>& _Paths, bool _bRevert);
         // Unshelve `_From`'s shelved files into `_To` ("default" or a number).
-        git::UnshelveResult UnshelveChange(
-            const std::string& _From, const std::string& _To, const std::vector<std::string>& _Paths);
+        git::UnshelveResult UnshelveChange(const std::string& _From, const std::string& _To,
+            const std::vector<std::string>& _Paths);
         void DeleteShelf(const std::string& _Change, const std::vector<std::string>& _Paths);
+        // Shelved changelists on the server: this workspace's, or everyone's
+        // (`_bAllUsers`), newest first. m_Files is left empty; see ShelvedFiles.
+        std::vector<PendingChange> ListShelves(bool _bAllUsers) const;
+        std::vector<ShelvedFile> ShelvedFiles(const std::string& _Change) const;
         // Get revision: sync `_Paths` ("" = everything) to `_Revision`
         // ("" = latest, a change number, "#n", or "none" to remove).
-        std::vector<std::string> SyncPaths(const std::vector<std::string>& _Paths, const std::string& _Revision);
+        std::vector<std::string> SyncPaths(
+            const std::vector<std::string>& _Paths, const std::string& _Revision);
         // Server state of the files directly in `_Dir` ("" = root), or of
         // every file below it with `_bRecursive`.
         std::vector<FileState> FileStates(const std::string& _Dir, bool _bRecursive) const;
@@ -329,14 +341,15 @@ namespace gitgud::p4
         }
 
         // Exposed for tests and the setup flow.
-        static void WriteConfigFile(const std::string& _Root, const std::map<std::string, std::string>& _Values);
+        static void WriteConfigFile(
+            const std::string& _Root, const std::map<std::string, std::string>& _Values);
         static std::map<std::string, std::string> ReadConfigFile(const std::string& _Root);
 
       private:
         Connection m_Conn;
-        std::string m_Root;   // forward slashes, no trailing slash
-        std::string m_Stream; // "//proj/main" ("" in a classic workspace)
-        std::string m_BranchRoot; // classic: "//depot/proj"
+        std::string m_Root;                          // forward slashes, no trailing slash
+        std::string m_Stream;                        // "//proj/main" ("" in a classic workspace)
+        std::string m_BranchRoot;                    // classic: "//depot/proj"
         std::map<std::string, std::string> m_Config; // .p4config contents
         PasswordProvider m_Passwords;
         // Client view lines "<depot> <client>" (with -/+ prefixes kept).
@@ -344,7 +357,8 @@ namespace gitgud::p4
 
         // ---- plumbing (P4Workspace.cpp) ----
         CommandResult Run(const std::vector<std::string>& _Args, const Record& _Input = {}) const;
-        CommandResult RunOrThrow(const std::vector<std::string>& _Args, const Record& _Input = {}) const;
+        CommandResult RunOrThrow(
+            const std::vector<std::string>& _Args, const Record& _Input = {}) const;
         void LoadClient(); // reads the client spec: stream, view
         void SaveConfig();
         // Workspace-relative "src/a.txt" -> escaped absolute local path.
@@ -366,14 +380,16 @@ namespace gitgud::p4
         std::string BranchPath(const std::string& _Name) const;
         std::string BranchNameOf(const std::string& _Path) const;
         // Content of a depot file revision ("//a/b.txt@12"); false when missing.
-        bool PrintFile(const std::string& _FileSpec, std::string& _Out, bool* _pBinary = nullptr) const;
+        bool PrintFile(
+            const std::string& _FileSpec, std::string& _Out, bool* _pBinary = nullptr) const;
         std::string ReadWorkFile(const std::string& _Path, bool& _bExists) const;
         git::CommitInfo CommitFromChange(const Record& _Change) const;
         // Submit the default changelist (or `_Change`) with `_Message`.
         std::string SubmitDefault(const std::string& _Message);
         std::string SubmitChange(const std::string& _Change);
         // Create a numbered pending changelist holding `_DepotOrLocalFiles`.
-        std::string NewChange(const std::string& _Description, const std::vector<std::string>& _Files);
+        std::string NewChange(
+            const std::string& _Description, const std::vector<std::string>& _Files);
         std::vector<Record> Opened(const std::string& _Change = "") const;
         std::vector<Record> PendingResolves() const;
         std::string UserEmail() const;
@@ -382,7 +398,8 @@ namespace gitgud::p4
         void SwitchTo(const std::string& _BranchPath);
         // Runs `p4 resolve -am` and returns the files still needing a resolve.
         std::vector<std::string> AutoResolve();
-        git::MergeResult IntegrateFrom(const std::string& _FromPath, const std::string& _Label, bool _bSubmit);
+        git::MergeResult IntegrateFrom(
+            const std::string& _FromPath, const std::string& _Label, bool _bSubmit);
         std::vector<Record> ShelvedChanges() const;
         std::string ShelfAt(std::size_t _Index) const;
         void Unsupported(const std::string& _What) const;

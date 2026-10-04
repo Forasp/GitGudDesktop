@@ -261,6 +261,41 @@ Used by `views/updates.lua` (Help ▸ Check for Updates…).
 | `updateRestart()` | install now: `true` (then quit, e.g. `emit("window.close", "")`) or `nil, msg, otherCopies` when other copies are open |
 | `updateReport()` | once after an update was installed or failed: `"ok <version>"` or `"failed <message>"`, plus `"edited <folder>"` when edited files were saved; else `nil` |
 
+## Backends and Perforce
+
+The calls above work on Git repositories and on Perforce workspaces alike
+(see [Perforce workspaces](P4.md) for how each maps). On Perforce, commit ids
+are changelist numbers, and calls a backend can't do return `nil, "message"`.
+
+| Function | |
+|---|---|
+| `backend()` | `"git"`, `"p4"`, or `""` when nothing is open |
+| `supports(feature)` | whether the open repository can do it: `lineStaging`, `amend`, `undoCommit`, `reset`, `reflog`, `interactiveRebase`, `submodules`, `lfs`, `remotes`, `push`, `renameBranch`, `signing`, `changelists` (server-side changelists: Perforce only), … |
+| `config("p4.port" / "p4.user" / "p4.client" / "p4.stream" / "p4.depotRoot")` | the workspace's server, user, workspace, stream, and the depot folder its root maps (`setConfig` changes port, user, `p4.charset`) |
+| `p4Available()` | `true, path` when the p4 command-line client is found (else `false, ""`) |
+| `p4Info()` | `p4 info` fields (`userName`, `clientName`, `clientStream`, `serverVersion`, …) plus `port`, `streams` |
+| `p4Changes()` | the default changelist, then numbered pending ones: `{ {change, description, user, time, files = { {path, depotFile, action, type, rev, unresolved, locked} }, shelved = { {path, depotFile, action} } }, … }` (`change` is `"default"` or the number) |
+| `p4NewChange(description, paths?)` | create a pending changelist (open `paths` move into it); returns its number |
+| `p4SetDescription(change, text)` / `p4DeleteChange(change)` | edit / delete a pending changelist |
+| `p4Reopen(paths, change?)` / `p4Edit` / `p4Add` / `p4Delete` | move to, check out in, open for add or delete in a changelist (`change` defaults to `"default"`) |
+| `p4Move(from, to, change?)` | rename/move (checks the file out first) |
+| `p4Revert(paths, keepLocal?)` / `p4RevertUnchanged(change?)` | revert files / revert unchanged open files (returns their paths) |
+| `p4Reconcile(paths?)` | open offline edits, new files, and deletions (`paths` empty: the whole workspace) |
+| `p4Submit(change, description, paths?)` | submit (only `paths` when given; the rest move to default); returns the submitted number |
+| `p4Shelve(change, paths?, revert?)` / `p4Unshelve(from, to?, paths?)` / `p4DeleteShelf(change, paths?)` | shelve a numbered changelist / unshelve (returns `{applied, conflicted}`) / delete shelved files |
+| `p4Shelves(allUsers?)` / `p4ShelvedFiles(change)` | shelved changelists `{ {change, description, user, time} }` / a shelf's files |
+| `p4Lock(paths, lock)` | lock (`true`) or unlock open files |
+| `p4FileStates(dir?, recursive?)` | `{ {path, depotFile, haveRev, headRev, headAction, headType, openAction, openChange, otherOpen, otherLock} }` |
+| `p4Sync(paths?, revision?)` | get latest or a revision in the background: `p4Sync.done` (detail: files left alone because you changed them) / `p4Sync.error` |
+| `p4ListStreams{port, user, charset?}` / `p4ListDepots{…}` / `p4ListWorkspaces{…}` | ask a server, no workspace needed: `p4Streams.done` (`stream\tname\tparent\ttype` lines), `p4Depots.done` (`name\ttype`), `p4Workspaces.done` (`name\troot\tstream\thost`) |
+| `p4CreateWorkspace{port, user, password?, charset?, client?, root, stream? \| depotPath + branchRoot?, create?, sync?}` | create a workspace (and with `create` its stream) in the background: `p4CreateWorkspace.done` (detail: the root; open it with `openRepo`) |
+| `p4Login(port, user, password)` / `p4Trust(port, fingerprint?)` | log in (ticket kept in memory) / trust an `ssl:` server |
+
+Perforce passwords go through the usual credential events with the host
+`"p4:<P4PORT>"` (`credential.missing`, `credential.rejected`), from any call,
+not only network ones; `setCredential("p4:" .. port, user, password)` saves
+one.
+
 ## Test harness
 
 `simulateClick(x, y, "left" | "right" | "double", window?)`,

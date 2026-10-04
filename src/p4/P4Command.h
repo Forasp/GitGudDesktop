@@ -63,8 +63,8 @@ namespace gitgud::p4
 
     // Asks for the password of `_User` on server `_Port`. `_bRejected` is true
     // when the server just refused the previous answer. Return false to give up.
-    using PasswordProvider = std::function<bool(
-        const std::string& _Port, const std::string& _User, bool _bRejected, std::string& _OutPassword)>;
+    using PasswordProvider = std::function<bool(const std::string& _Port, const std::string& _User,
+        bool _bRejected, std::string& _OutPassword)>;
 
     class P4Command
     {
@@ -72,6 +72,7 @@ namespace gitgud::p4
         // Full path of the p4 executable: $GITGUD_P4, else p4 on PATH, else the
         // default install folder. "" when none is found.
         static std::string Executable();
+
         static bool Available()
         {
             return !Executable().empty();
@@ -85,8 +86,8 @@ namespace gitgud::p4
             const Record& _Input = {}, const PasswordProvider& _Passwords = nullptr);
 
         // Like Run, but feeds raw text to stdin (p4 login reads the password).
-        static CommandResult RunText(const Connection& _Conn,
-            const std::vector<std::string>& _Args, const std::string& _Input);
+        static CommandResult RunText(const Connection& _Conn, const std::vector<std::string>& _Args,
+            const std::string& _Input);
 
         // Run and throw GitError with the server's message when it failed.
         static CommandResult RunOrThrow(const Connection& _Conn,

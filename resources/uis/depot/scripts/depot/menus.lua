@@ -36,6 +36,15 @@ local function hasRemote()
     return isOpen() and repo.primaryRemote() ~= nil
 end
 
+--- A Perforce workspace (p4-only commands show; Git-only ones hide).
+local function isP4()
+    return gitgud.backend() == "p4"
+end
+
+local function isGit()
+    return not isP4()
+end
+
 --- Preferences (Edit > Preferences…): identity, this UI's options, and the
 -- way to another interface.
 function menus.preferences()
@@ -235,7 +244,7 @@ end
 local function actionsMenu()
     menu.addMenu("actions", "Actions")
     menu.addItems("actions", {
-        { label = "Get Latest Revision", shortcut = "ctrl+shift+g", enabled = isOpen, action = actions.getLatest },
+        { label = "Get Latest Revision", shortcut = "ctrl+shift+g", enabled = isOpen, action = function() actions.getLatest() end },
         { label = "Get Revision…", enabled = isOpen, action = function()
             actions.getRevision()
         end },
@@ -257,6 +266,15 @@ local function actionsMenu()
         end },
         { label = "Revert Unchanged Files", enabled = isOpen, action = function()
             actions.revertUnchanged()
+        end },
+        { label = "Reconcile Offline Work…", visible = isP4, enabled = isOpen, action = function()
+            actions.reconcile(selection.files())
+        end },
+        { label = "Lock", visible = isP4, enabled = hasFiles, action = function()
+            actions.lock(nil, true)
+        end },
+        { label = "Unlock", visible = isP4, enabled = hasFiles, action = function()
+            actions.lock(nil, false)
         end },
         { separator = true },
         { label = "Submit…", shortcut = "ctrl+s", enabled = isOpen, action = function()
@@ -323,16 +341,25 @@ end
 local function connectionMenu()
     menu.addMenu("connection", "Connection")
     menu.addItems("connection", {
-        { label = "Fetch", shortcut = "ctrl+shift+f", enabled = hasRemote, action = commands.fetch },
-        { label = "Get Latest (Pull)", enabled = hasRemote, action = actions.getLatest },
-        { label = "Push", shortcut = "ctrl+p", enabled = hasRemote, action = commands.push },
-        { label = "Force Push…", enabled = hasRemote, action = commands.forcePush },
-        { label = "Push Labels", enabled = hasRemote, action = commands.pushLabels },
+        { label = "Fetch", shortcut = "ctrl+shift+f", visible = isGit, enabled = hasRemote, action = commands.fetch },
+        { label = "Get Latest (Pull)", enabled = hasRemote, action = function() actions.getLatest() end },
+        { label = "Push", shortcut = "ctrl+p", visible = isGit, enabled = hasRemote, action = commands.push },
+        { label = "Force Push…", visible = isGit, enabled = hasRemote, action = commands.forcePush },
+        { label = "Push Labels", visible = isGit, enabled = hasRemote, action = commands.pushLabels },
         { separator = true },
-        { label = "Remotes…", enabled = isOpen, action = commands.remotes },
-        { label = "SSH Keys…", action = require("views.ssh").keys },
+        { label = "Remotes…", visible = isGit, enabled = isOpen, action = commands.remotes },
+        { label = "SSH Keys…", visible = isGit, action = require("views.ssh").keys },
         { separator = true },
         { label = "Open Workspace…", action = require("views.repositories").addExisting },
+        { label = "New Perforce Workspace…", action = function()
+            require("views.repositories").p4Workspace(false)
+        end },
+        { label = "New Perforce Stream…", action = function()
+            require("views.repositories").p4Workspace(true)
+        end },
+        { label = "Git or Perforce by Default…", action = function()
+            require("core.p4setup").askDefaultBackend(nil)
+        end },
         { label = "Switch Workspace…", action = function()
             require("depot.views.workspaces").switchMenu(120, 30)
         end },

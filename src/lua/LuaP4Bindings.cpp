@@ -74,12 +74,14 @@ namespace gitgud::lua::bindings
 
         std::string OptString(lua_State* _pL, int _iArg, const char* _szDefault)
         {
-            return lua_isnoneornil(_pL, _iArg) ? std::string(_szDefault) : std::string(luaL_checkstring(_pL, _iArg));
+            return lua_isnoneornil(_pL, _iArg) ? std::string(_szDefault)
+                                               : std::string(luaL_checkstring(_pL, _iArg));
         }
 
         std::vector<std::string> OptList(lua_State* _pL, int _iArg)
         {
-            return lua_isnoneornil(_pL, _iArg) ? std::vector<std::string>() : StringList(_pL, _iArg);
+            return lua_isnoneornil(_pL, _iArg) ? std::vector<std::string>()
+                                               : StringList(_pL, _iArg);
         }
 
         // {port, user, charset} -> Connection (no workspace).
@@ -116,7 +118,8 @@ namespace gitgud::lua::bindings
         {
             const std::string feature = luaL_checkstring(_pL, 1);
             auto* prepo = Self(_pL)->Repository();
-            lua_pushboolean(_pL, prepo && prepo->IsOpen() ? prepo->Supports(feature) : feature != "changelists");
+            lua_pushboolean(_pL,
+                prepo && prepo->IsOpen() ? prepo->Supports(feature) : feature != "changelists");
             return 1;
         }
 
@@ -129,7 +132,8 @@ namespace gitgud::lua::bindings
             return 2;
         }
 
-        // gitgud.p4Info() -> {userName, clientName, clientStream, serverAddress, serverVersion, ...}
+        // gitgud.p4Info() -> {userName, clientName, clientStream, serverAddress, serverVersion,
+        // ...}
         int LP4Info(lua_State* _pL)
         {
             return P4Call(_pL, false,
@@ -256,22 +260,26 @@ namespace gitgud::lua::bindings
 
         int LP4Reopen(lua_State* _pL)
         {
-            return PathsAndChange(_pL, [](P4Workspace& _Ws, const auto& _P, const auto& _C) { _Ws.Reopen(_P, _C); });
+            return PathsAndChange(
+                _pL, [](P4Workspace& _Ws, const auto& _P, const auto& _C) { _Ws.Reopen(_P, _C); });
         }
 
         int LP4Edit(lua_State* _pL)
         {
-            return PathsAndChange(_pL, [](P4Workspace& _Ws, const auto& _P, const auto& _C) { _Ws.Edit(_P, _C); });
+            return PathsAndChange(
+                _pL, [](P4Workspace& _Ws, const auto& _P, const auto& _C) { _Ws.Edit(_P, _C); });
         }
 
         int LP4Add(lua_State* _pL)
         {
-            return PathsAndChange(_pL, [](P4Workspace& _Ws, const auto& _P, const auto& _C) { _Ws.Add(_P, _C); });
+            return PathsAndChange(
+                _pL, [](P4Workspace& _Ws, const auto& _P, const auto& _C) { _Ws.Add(_P, _C); });
         }
 
         int LP4Delete(lua_State* _pL)
         {
-            return PathsAndChange(_pL, [](P4Workspace& _Ws, const auto& _P, const auto& _C) { _Ws.Delete(_P, _C); });
+            return PathsAndChange(
+                _pL, [](P4Workspace& _Ws, const auto& _P, const auto& _C) { _Ws.Delete(_P, _C); });
         }
 
         // gitgud.p4Move(from, to, change?)
@@ -373,6 +381,81 @@ namespace gitgud::lua::bindings
                 [&](P4Workspace& _Ws)
                 {
                     _Ws.DeleteShelf(change, paths);
+                    lua_pushboolean(_pL, 1);
+                    return 1;
+                });
+        }
+
+        // gitgud.p4Shelves(allUsers?) -> {{change, description, user ("name@client"), time}}
+        int LP4Shelves(lua_State* _pL)
+        {
+            const bool ball = lua_toboolean(_pL, 1) != 0;
+            return P4Call(_pL, false,
+                [&](P4Workspace& _Ws)
+                {
+                    const auto shelves = _Ws.ListShelves(ball);
+                    lua_createtable(_pL, static_cast<int>(shelves.size()), 0);
+                    int i = 1;
+                    for (const auto& s : shelves)
+                    {
+                        lua_createtable(_pL, 0, 4);
+                        SetField(_pL, "change", s.m_Change);
+                        SetField(_pL, "description", s.m_Description);
+                        SetField(_pL, "user", s.m_User);
+                        SetField(_pL, "time", static_cast<lua_Integer>(s.m_TimeUtc));
+                        lua_rawseti(_pL, -2, i++);
+                    }
+                    return 1;
+                });
+        }
+
+        // gitgud.p4ShelvedFiles(change) -> {{path, depotFile, action}}
+        int LP4ShelvedFiles(lua_State* _pL)
+        {
+            const std::string change = luaL_checkstring(_pL, 1);
+            return P4Call(_pL, false,
+                [&](P4Workspace& _Ws)
+                {
+                    const auto files = _Ws.ShelvedFiles(change);
+                    lua_createtable(_pL, static_cast<int>(files.size()), 0);
+                    int i = 1;
+                    for (const auto& f : files)
+                    {
+                        lua_createtable(_pL, 0, 3);
+                        SetField(_pL, "path", f.m_Path);
+                        SetField(_pL, "depotFile", f.m_DepotFile);
+                        SetField(_pL, "action", f.m_Action);
+                        lua_rawseti(_pL, -2, i++);
+                    }
+                    return 1;
+                });
+        }
+
+        // gitgud.p4Reconcile(paths?) -> opens offline edits, adds, and deletes
+        // in the default changelist ("Reconcile Offline Work")
+        int LP4Reconcile(lua_State* _pL)
+        {
+            const std::vector<std::string> paths = OptList(_pL, 1);
+            return P4Call(_pL, true,
+                [&](P4Workspace& _Ws)
+                {
+                    if (paths.empty())
+                    {
+                        std::vector<gitgud::git::StatusEntry> status = _Ws.Status();
+                        std::vector<std::string> all;
+                        for (const auto& e : status)
+                        {
+                            if (!e.m_bStaged && e.m_cCode != 'U')
+                            {
+                                all.push_back(e.m_Path);
+                            }
+                        }
+                        _Ws.Stage(all);
+                    }
+                    else
+                    {
+                        _Ws.Stage(paths);
+                    }
                     lua_pushboolean(_pL, 1);
                     return 1;
                 });
@@ -487,7 +570,8 @@ namespace gitgud::lua::bindings
                     std::string out;
                     for (const auto& s : P4Workspace::ListStreams(conn, passwords))
                     {
-                        out += s.m_Stream + "\t" + s.m_Name + "\t" + s.m_Parent + "\t" + s.m_Type + "\n";
+                        out += s.m_Stream + "\t" + s.m_Name + "\t" + s.m_Parent + "\t" + s.m_Type +
+                               "\n";
                     }
                     return out;
                 });
@@ -523,7 +607,8 @@ namespace gitgud::lua::bindings
                     std::string out;
                     for (const auto& w : P4Workspace::ListWorkspaces(conn, passwords))
                     {
-                        out += w.m_Name + "\t" + w.m_Root + "\t" + w.m_Stream + "\t" + w.m_Host + "\n";
+                        out +=
+                            w.m_Name + "\t" + w.m_Root + "\t" + w.m_Stream + "\t" + w.m_Host + "\n";
                     }
                     return out;
                 });
@@ -630,6 +715,9 @@ namespace gitgud::lua::bindings
             {"p4Shelve", LP4Shelve},
             {"p4Unshelve", LP4Unshelve},
             {"p4DeleteShelf", LP4DeleteShelf},
+            {"p4Shelves", LP4Shelves},
+            {"p4ShelvedFiles", LP4ShelvedFiles},
+            {"p4Reconcile", LP4Reconcile},
             {"p4Lock", LP4Lock},
             {"p4FileStates", LP4FileStates},
             {"p4Sync", LP4Sync},

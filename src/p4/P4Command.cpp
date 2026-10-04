@@ -45,7 +45,8 @@ namespace gitgud::p4
                 std::uint32_t u = 0;
                 for (int i = 3; i >= 0; --i)
                 {
-                    u = (u << 8) | static_cast<unsigned char>(m_Data[m_nPos + static_cast<std::size_t>(i)]);
+                    u = (u << 8) |
+                        static_cast<unsigned char>(m_Data[m_nPos + static_cast<std::size_t>(i)]);
                 }
                 m_nPos += 4;
                 _iOut = static_cast<std::int32_t>(u);
@@ -195,7 +196,8 @@ namespace gitgud::p4
             if (out.m_Errors.empty() && out.m_Stats.empty() && out.m_Info.empty() &&
                 out.m_Warnings.empty() && out.m_Data.empty() && _Process.m_iExitCode != 0)
             {
-                out.m_Errors.push_back("p4 failed (exit code " + std::to_string(_Process.m_iExitCode) + ")");
+                out.m_Errors.push_back(
+                    "p4 failed (exit code " + std::to_string(_Process.m_iExitCode) + ")");
             }
             return out;
         }
@@ -204,7 +206,8 @@ namespace gitgud::p4
         {
             for (const std::string& e : _Result.m_Errors)
             {
-                if (e.find("Unicode server permits only unicode enabled clients") != std::string::npos)
+                if (e.find("Unicode server permits only unicode enabled clients") !=
+                    std::string::npos)
                 {
                     return true;
                 }
@@ -318,7 +321,8 @@ namespace gitgud::p4
             {
                 continue;
             }
-            const std::filesystem::path candidate = std::filesystem::u8path(base) / "Perforce" / "p4.exe";
+            const std::filesystem::path candidate =
+                std::filesystem::u8path(base) / "Perforce" / "p4.exe";
             if (std::filesystem::exists(candidate, ec))
             {
                 return candidate.u8string();
@@ -353,8 +357,8 @@ namespace gitgud::p4
         if (Executable().empty())
         {
             CommandResult missing;
-            missing.m_Errors.emplace_back(
-                "The p4 command-line client was not found. Install it, or set GITGUD_P4 to p4.exe.");
+            missing.m_Errors.emplace_back("The p4 command-line client was not found. Install it, "
+                                          "or set GITGUD_P4 to p4.exe.");
             return missing;
         }
 
@@ -441,7 +445,8 @@ namespace gitgud::p4
     }
 
     CommandResult P4Command::RunOrThrow(const Connection& _Conn,
-        const std::vector<std::string>& _Args, const Record& _Input, const PasswordProvider& _Passwords)
+        const std::vector<std::string>& _Args, const Record& _Input,
+        const PasswordProvider& _Passwords)
     {
         CommandResult result = Run(_Conn, _Args, _Input, _Passwords);
         if (!result.Ok())

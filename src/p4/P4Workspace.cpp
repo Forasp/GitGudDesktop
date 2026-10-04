@@ -257,7 +257,8 @@ namespace gitgud::p4
         std::ofstream out(fs::u8path(_Root) / g_szConfigFile, std::ios::binary | std::ios::trunc);
         if (!out)
         {
-            throw GitError("Could not write " + std::string(g_szConfigFile) + " in '" + _Root + "'");
+            throw GitError(
+                "Could not write " + std::string(g_szConfigFile) + " in '" + _Root + "'");
         }
         out << "# Written by GitGud: the Perforce server and workspace for this folder.\n";
         // P4 settings first (the p4 command line reads these too when
@@ -328,7 +329,8 @@ namespace gitgud::p4
         EnsureIgnoreSetting();
         if (!IsWorkspace(_Path))
         {
-            throw GitError("'" + _Path + "' is not a Perforce workspace (no .p4config naming P4CLIENT)");
+            throw GitError(
+                "'" + _Path + "' is not a Perforce workspace (no .p4config naming P4CLIENT)");
         }
         auto ws = std::make_unique<P4Workspace>();
         ws->m_Root = NormalizeRoot(_Path);
@@ -455,7 +457,8 @@ namespace gitgud::p4
         std::string client = _Setup.m_Client;
         if (client.empty())
         {
-            client = _Setup.m_User + "-" + HostName() + "-" + fs::u8path(root).filename().u8string();
+            client =
+                _Setup.m_User + "-" + HostName() + "-" + fs::u8path(root).filename().u8string();
             std::replace(client.begin(), client.end(), ' ', '-');
         }
         conn.m_Client = client;
@@ -477,12 +480,14 @@ namespace gitgud::p4
             }
             if (!bhaveDepot)
             {
-                CommandResult spec = P4Command::RunOrThrow(conn, {"depot", "-o", "-t", "stream", depot}, {}, passwords);
+                CommandResult spec = P4Command::RunOrThrow(
+                    conn, {"depot", "-o", "-t", "stream", depot}, {}, passwords);
                 if (spec.m_Stats.empty())
                 {
                     throw GitError("Could not prepare depot '" + depot + "'");
                 }
-                P4Command::RunOrThrow(conn, {"depot", "-i"}, SpecForInput(spec.m_Stats.front()), passwords);
+                P4Command::RunOrThrow(
+                    conn, {"depot", "-i"}, SpecForInput(spec.m_Stats.front()), passwords);
             }
             const CommandResult existing = P4Command::Run(conn, {"streams", stream}, {}, passwords);
             if (existing.m_Stats.empty())
@@ -574,18 +579,21 @@ namespace gitgud::p4
 
     // ---- server queries -------------------------------------------------------------
 
-    std::vector<StreamInfo> P4Workspace::ListStreams(const Connection& _Conn, const PasswordProvider& _Passwords)
+    std::vector<StreamInfo> P4Workspace::ListStreams(
+        const Connection& _Conn, const PasswordProvider& _Passwords)
     {
         std::vector<StreamInfo> out;
         const CommandResult r = P4Command::RunOrThrow(_Conn, {"streams"}, {}, _Passwords);
         for (const Record& s : r.m_Stats)
         {
-            out.push_back({Field(s, "Stream"), Field(s, "Name"), Field(s, "Parent"), Field(s, "Type")});
+            out.push_back(
+                {Field(s, "Stream"), Field(s, "Name"), Field(s, "Parent"), Field(s, "Type")});
         }
         return out;
     }
 
-    std::vector<DepotInfo> P4Workspace::ListDepots(const Connection& _Conn, const PasswordProvider& _Passwords)
+    std::vector<DepotInfo> P4Workspace::ListDepots(
+        const Connection& _Conn, const PasswordProvider& _Passwords)
     {
         std::vector<DepotInfo> out;
         const CommandResult r = P4Command::RunOrThrow(_Conn, {"depots"}, {}, _Passwords);
@@ -600,17 +608,20 @@ namespace gitgud::p4
         const Connection& _Conn, const PasswordProvider& _Passwords)
     {
         std::vector<WorkspaceInfo> out;
-        const CommandResult r = P4Command::RunOrThrow(_Conn, {"clients", "-u", _Conn.m_User}, {}, _Passwords);
+        const CommandResult r =
+            P4Command::RunOrThrow(_Conn, {"clients", "-u", _Conn.m_User}, {}, _Passwords);
         for (const Record& c : r.m_Stats)
         {
-            out.push_back({Field(c, "client"), Field(c, "Root"), Field(c, "Stream"), Field(c, "Host")});
+            out.push_back(
+                {Field(c, "client"), Field(c, "Root"), Field(c, "Stream"), Field(c, "Host")});
         }
         return out;
     }
 
     // ---- plumbing -------------------------------------------------------------------
 
-    CommandResult P4Workspace::Run(const std::vector<std::string>& _Args, const Record& _Input) const
+    CommandResult P4Workspace::Run(
+        const std::vector<std::string>& _Args, const Record& _Input) const
     {
         PasswordProvider passwords = m_Passwords;
         if (!passwords)
@@ -621,7 +632,8 @@ namespace gitgud::p4
         return P4Command::Run(m_Conn, _Args, _Input, passwords);
     }
 
-    CommandResult P4Workspace::RunOrThrow(const std::vector<std::string>& _Args, const Record& _Input) const
+    CommandResult P4Workspace::RunOrThrow(
+        const std::vector<std::string>& _Args, const Record& _Input) const
     {
         CommandResult r = Run(_Args, _Input);
         if (!r.Ok())
@@ -770,7 +782,8 @@ namespace gitgud::p4
         }
         std::string rev = _Revision;
         bool bparent = false;
-        if (rev.size() > 1 && (rev.back() == '^' || (rev.size() > 2 && rev.compare(rev.size() - 2, 2, "~1") == 0)))
+        if (rev.size() > 1 &&
+            (rev.back() == '^' || (rev.size() > 2 && rev.compare(rev.size() - 2, 2, "~1") == 0)))
         {
             bparent = true;
             rev.erase(rev.back() == '^' ? rev.size() - 1 : rev.size() - 2);
@@ -779,7 +792,14 @@ namespace gitgud::p4
         {
             rev.erase(0, 1);
         }
-        if (!rev.empty() && std::all_of(rev.begin(), rev.end(), [](char _c) { return std::isdigit(static_cast<unsigned char>(_c)) != 0; }))
+        // "@=12" is change 12's shelved copy; its "parent" is what the file
+        // was shelved on top of, taken as the revision you have.
+        if (!rev.empty() && rev[0] == '=')
+        {
+            return bparent ? std::string("#have") : "@" + rev;
+        }
+        if (!rev.empty() && std::all_of(rev.begin(), rev.end(), [](char _c)
+                                { return std::isdigit(static_cast<unsigned char>(_c)) != 0; }))
         {
             const std::int64_t ichange = ToInt64(rev) - (bparent ? 1 : 0);
             return "@" + std::to_string(std::max<std::int64_t>(ichange, 0));
@@ -788,7 +808,8 @@ namespace gitgud::p4
         return "@" + rev;
     }
 
-    bool P4Workspace::PrintFile(const std::string& _FileSpec, std::string& _Out, bool* _pBinary) const
+    bool P4Workspace::PrintFile(
+        const std::string& _FileSpec, std::string& _Out, bool* _pBinary) const
     {
         const CommandResult r = Run({"print", "-q", _FileSpec});
         if (!r.Ok() || r.m_Stats.empty())
@@ -797,7 +818,8 @@ namespace gitgud::p4
         }
         // A deleted head revision prints nothing useful.
         const std::string action = Field(r.m_Stats.front(), "action");
-        if (action == "delete" || action == "move/delete" || action == "purge" || action == "archive")
+        if (action == "delete" || action == "move/delete" || action == "purge" ||
+            action == "archive")
         {
             return false;
         }
@@ -856,8 +878,10 @@ namespace gitgud::p4
         const std::vector<Record> opened = Opened();
         if (!opened.empty())
         {
-            throw GitError(_What + " needs a workspace with no open files: submit, shelve (stash), or "
-                                   "revert the " + std::to_string(opened.size()) + " open file(s) first.");
+            throw GitError(_What +
+                           " needs a workspace with no open files: submit, shelve (stash), or "
+                           "revert the " +
+                           std::to_string(opened.size()) + " open file(s) first.");
         }
     }
 
@@ -868,7 +892,8 @@ namespace gitgud::p4
         std::map<std::string, git::StatusEntry> byPath;
         const auto actionCode = [](const std::string& _Action) -> char
         {
-            if (_Action == "add" || _Action == "move/add" || _Action == "branch" || _Action == "import")
+            if (_Action == "add" || _Action == "move/add" || _Action == "branch" ||
+                _Action == "import")
             {
                 return 'A';
             }
@@ -1019,8 +1044,8 @@ namespace gitgud::p4
         return out;
     }
 
-    void P4Workspace::SetStagedLines(
-        const std::string& _Path, const std::vector<std::size_t>& _Lines, std::size_t _ExpectedLineCount)
+    void P4Workspace::SetStagedLines(const std::string& _Path,
+        const std::vector<std::size_t>& _Lines, std::size_t _ExpectedLineCount)
     {
         const git::FileDiff combined = DiffFile(_Path, git::DiffTarget::Head, {});
         std::size_t ntotal = 0;
@@ -1082,7 +1107,8 @@ namespace gitgud::p4
         // taken from the new side unless chosen for discarding.
         std::string haveText;
         const bool bhave = PrintFile(LocalArg(_Path) + "#have", haveText);
-        const std::vector<std::string> oldLines = SplitLines(bhave ? ToLf(haveText) : std::string());
+        const std::vector<std::string> oldLines =
+            SplitLines(bhave ? ToLf(haveText) : std::string());
         bool bworkExists = false;
         const std::string work = ReadWorkFile(_Path, bworkExists);
         const bool btrailingNewline = !work.empty() && work.back() == '\n';
@@ -1092,7 +1118,8 @@ namespace gitgud::p4
         std::size_t nflat = 0;
         for (const git::DiffHunk& h : combined.m_Hunks)
         {
-            const std::size_t nhunkOld = h.m_iOldStart > 0 ? static_cast<std::size_t>(h.m_iOldStart - 1) : 0;
+            const std::size_t nhunkOld =
+                h.m_iOldStart > 0 ? static_cast<std::size_t>(h.m_iOldStart - 1) : 0;
             while (nold < nhunkOld && nold < oldLines.size())
             {
                 out.push_back(oldLines[nold++]);
@@ -1135,7 +1162,8 @@ namespace gitgud::p4
                 text += "\n";
             }
         }
-        std::ofstream file(fs::u8path(m_Root) / fs::u8path(_Path), std::ios::binary | std::ios::trunc);
+        std::ofstream file(
+            fs::u8path(m_Root) / fs::u8path(_Path), std::ios::binary | std::ios::trunc);
         if (!file)
         {
             throw GitError("Could not write '" + _Path + "'");
@@ -1143,8 +1171,8 @@ namespace gitgud::p4
         file << text;
     }
 
-    void P4Workspace::DiscardChanges(
-        const std::vector<std::string>& _Paths, const std::function<bool(const std::string&)>& _RemoveFile)
+    void P4Workspace::DiscardChanges(const std::vector<std::string>& _Paths,
+        const std::function<bool(const std::string&)>& _RemoveFile)
     {
         if (_Paths.empty())
         {
@@ -1233,7 +1261,8 @@ namespace gitgud::p4
         out << _Pattern << "\n";
     }
 
-    bool P4Workspace::ReadFileVersion(const std::string& _Path, const std::string& _Revision, std::string& _Out) const
+    bool P4Workspace::ReadFileVersion(
+        const std::string& _Path, const std::string& _Revision, std::string& _Out) const
     {
         if (_Revision == "workdir")
         {
@@ -1270,7 +1299,8 @@ namespace gitgud::p4
 
     // ---- submitting ---------------------------------------------------------------------
 
-    std::string P4Workspace::NewChange(const std::string& _Description, const std::vector<std::string>& _Files)
+    std::string P4Workspace::NewChange(
+        const std::string& _Description, const std::vector<std::string>& _Files)
     {
         CommandResult tmpl = RunOrThrow({"change", "-o"});
         if (tmpl.m_Stats.empty())
@@ -1408,7 +1438,8 @@ namespace gitgud::p4
             }
         }
         const bool bopened = !action.empty();
-        if ((_Target == git::DiffTarget::Unstaged && bopened) || (_Target == git::DiffTarget::Staged && !bopened))
+        if ((_Target == git::DiffTarget::Unstaged && bopened) ||
+            (_Target == git::DiffTarget::Staged && !bopened))
         {
             return {};
         }
@@ -1420,8 +1451,9 @@ namespace gitgud::p4
         {
             return {};
         }
-        git::FileDiff d = git::internal::DiffFileVersions(
-            _Path, Version(bhave ? ToLf(haveText) : std::string(), bhave), _Path, Version(work, bwork), _Options);
+        git::FileDiff d = git::internal::DiffFileVersions(_Path,
+            Version(bhave ? ToLf(haveText) : std::string(), bhave), _Path, Version(work, bwork),
+            _Options);
         return d;
     }
 
@@ -1447,7 +1479,8 @@ namespace gitgud::p4
         if (_Key == "user.name")
         {
             const CommandResult r = Run({"user", "-o", m_Conn.m_User});
-            const std::string full = r.m_Stats.empty() ? std::string() : Field(r.m_Stats.front(), "FullName");
+            const std::string full =
+                r.m_Stats.empty() ? std::string() : Field(r.m_Stats.front(), "FullName");
             return full.empty() ? m_Conn.m_User : full;
         }
         if (_Key == "user.email")
@@ -1469,6 +1502,28 @@ namespace gitgud::p4
         if (_Key == "p4.stream")
         {
             return m_Stream;
+        }
+        if (_Key == "p4.depotRoot")
+        {
+            // The depot folder the workspace root maps to: the stream, or
+            // the first view line's depot side ("//depot/proj/main").
+            if (UsesStreams())
+            {
+                return m_Stream;
+            }
+            for (const auto& [lhs, rhs] : m_View)
+            {
+                if (!lhs.empty() && lhs[0] != '-')
+                {
+                    std::string root = lhs[0] == '+' ? lhs.substr(1) : lhs;
+                    if (root.size() >= 4 && root.compare(root.size() - 4, 4, "/...") == 0)
+                    {
+                        root.erase(root.size() - 4);
+                    }
+                    return root;
+                }
+            }
+            return "//" + m_Conn.m_Client;
         }
         return {};
     }
@@ -1605,7 +1660,9 @@ namespace gitgud::p4
                 w.find("Can't clobber writable file") != std::string::npos)
             {
                 const std::size_t nfile = w.rfind(" file ");
-                blocked.push_back(nfile == std::string::npos ? w : RelativeFromClientOrLocal(w.substr(nfile + 6)));
+                blocked.push_back(nfile == std::string::npos
+                                      ? w
+                                      : RelativeFromClientOrLocal(w.substr(nfile + 6)));
             }
         }
         for (const Record& s : preview.m_Stats)
@@ -1623,8 +1680,9 @@ namespace gitgud::p4
             {
                 list += "\n  " + b;
             }
-            throw GitError("Your local changes to these files would be overwritten by getting latest:" + list +
-                           "\nStage (open) them first so the incoming changes merge, or discard them.");
+            throw GitError(
+                "Your local changes to these files would be overwritten by getting latest:" + list +
+                "\nStage (open) them first so the incoming changes merge, or discard them.");
         }
         if (!bany)
         {

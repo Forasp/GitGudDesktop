@@ -34,7 +34,8 @@ local collapsed = {}   -- node id -> true for changelists the user closed
 -- @param file  { path, code, opened }
 -- @return node
 local function fileNode(clId, file)
-    local action = file.opened and "edit (unchanged)" or icons.actionName(file.code)
+    -- Perforce rows carry the server's own action name ("move/add", "integrate").
+    local action = file.action or (file.opened and "edit (unchanged)" or icons.actionName(file.code))
     if file.code == "?" then
         action = changelists.isMarkedForAdd(file.path) and "add" or "not added"
     end
@@ -248,7 +249,9 @@ local function contextMenu(nodes, x, y)
                 require("depot.windows.folderdiff").open("", oid .. "^", oid)
             end },
             { separator = true },
-            { label = mine and "Share Shelf (Push)" or "Shared on " .. tostring(shelf.remote), enabled = mine and repo.primaryRemote() ~= nil, action = function()
+            { label = gitgud.backend() == "p4" and "Shelved on the server (shared)"
+                    or (mine and "Share Shelf (Push)" or "Shared on " .. tostring(shelf.remote)),
+                enabled = gitgud.backend() ~= "p4" and mine and repo.primaryRemote() ~= nil, action = function()
                 local remote = repo.primaryRemote()
                 require("depot.log").command("git push --force " .. remote .. " " .. shelf.branch)
                 gitgud.pushBranch(remote, shelf.branch, { force = true })

@@ -223,7 +223,9 @@ namespace gitgud::git
                 return out;
             }
             const auto isBinary = [](const std::string* _pText)
-            { return _pText && _pText->find('\0') != std::string::npos; };
+            {
+                return _pText && _pText->find('\0') != std::string::npos;
+            };
             if (isBinary(_pBase) || isBinary(_pOurs) || isBinary(_pTheirs))
             {
                 out.m_bBinary = true;
@@ -254,14 +256,15 @@ namespace gitgud::git
             {
                 RaiseLastError("Merging '" + _Path + "' failed");
             }
-            const std::string text = merged.ptr ? std::string(merged.ptr, merged.len) : std::string();
+            const std::string text =
+                merged.ptr ? std::string(merged.ptr, merged.len) : std::string();
             git_merge_file_result_free(&merged);
             ChunkMergedText(text, out);
             return out;
         }
 
-        bool MergeBuffers(const std::string& _Path, const std::string* _pBase, const std::string& _Ours,
-            const std::string& _Theirs, std::string& _OutMerged)
+        bool MergeBuffers(const std::string& _Path, const std::string* _pBase,
+            const std::string& _Ours, const std::string& _Theirs, std::string& _OutMerged)
         {
             git_merge_file_input base = GIT_MERGE_FILE_INPUT_INIT;
             if (_pBase)
@@ -298,81 +301,81 @@ namespace gitgud::git
 
         void ChunkMergedText(const std::string& _Text, ConflictFile& _Out)
         {
-        const std::string& text = _Text;
-        ConflictFile& out = _Out;
-        out.m_bTrailingNewline = !text.empty() && text.back() == '\n';
+            const std::string& text = _Text;
+            ConflictFile& out = _Out;
+            out.m_bTrailingNewline = !text.empty() && text.back() == '\n';
 
-        enum class Section
-        {
-            Common,
-            Ours,
-            Base,
-            Theirs
-        };
-        Section section = Section::Common;
-        ConflictChunk chunk;
+            enum class Section
+            {
+                Common,
+                Ours,
+                Base,
+                Theirs
+            };
+            Section section = Section::Common;
+            ConflictChunk chunk;
 
-        const auto flush = [&]()
-        {
-            if (chunk.m_bConflict || !chunk.m_Lines.empty())
+            const auto flush = [&]()
             {
-                out.m_Chunks.push_back(std::move(chunk));
-            }
-            chunk = ConflictChunk();
-        };
+                if (chunk.m_bConflict || !chunk.m_Lines.empty())
+                {
+                    out.m_Chunks.push_back(std::move(chunk));
+                }
+                chunk = ConflictChunk();
+            };
 
-        std::size_t nstart = 0;
-        while (nstart < text.size())
-        {
-            std::size_t nend = text.find('\n', nstart);
-            if (nend == std::string::npos)
+            std::size_t nstart = 0;
+            while (nstart < text.size())
             {
-                nend = text.size();
-            }
-            const std::string line = text.substr(nstart, nend - nstart);
-            nstart = nend + 1;
+                std::size_t nend = text.find('\n', nstart);
+                if (nend == std::string::npos)
+                {
+                    nend = text.size();
+                }
+                const std::string line = text.substr(nstart, nend - nstart);
+                nstart = nend + 1;
 
-            if (section == Section::Common && IsMarker(line, '<'))
-            {
-                flush();
-                chunk.m_bConflict = true;
-                section = Section::Ours;
-                continue;
-            }
-            if (section == Section::Ours && IsMarker(line, '|'))
-            {
-                section = Section::Base;
-                continue;
-            }
-            if ((section == Section::Ours || section == Section::Base) && IsMarker(line, '='))
-            {
-                section = Section::Theirs;
-                continue;
-            }
-            if (section == Section::Theirs && IsMarker(line, '>'))
-            {
-                flush();
-                section = Section::Common;
-                continue;
-            }
+                if (section == Section::Common && IsMarker(line, '<'))
+                {
+                    flush();
+                    chunk.m_bConflict = true;
+                    section = Section::Ours;
+                    continue;
+                }
+                if (section == Section::Ours && IsMarker(line, '|'))
+                {
+                    section = Section::Base;
+                    continue;
+                }
+                if ((section == Section::Ours || section == Section::Base) && IsMarker(line, '='))
+                {
+                    section = Section::Theirs;
+                    continue;
+                }
+                if (section == Section::Theirs && IsMarker(line, '>'))
+                {
+                    flush();
+                    section = Section::Common;
+                    continue;
+                }
 
-            switch (section)
-            {
-            case Section::Common:
-                chunk.m_Lines.push_back(line);
-                break;
-            case Section::Ours:
-                chunk.m_Ours.push_back(line);
-                break;
-            case Section::Base:
-                chunk.m_Base.push_back(line);
-                break;
-            case Section::Theirs:
-                chunk.m_Theirs.push_back(line);
-                break;
+                switch (section)
+                {
+                case Section::Common:
+                    chunk.m_Lines.push_back(line);
+                    break;
+                case Section::Ours:
+                    chunk.m_Ours.push_back(line);
+                    break;
+                case Section::Base:
+                    chunk.m_Base.push_back(line);
+                    break;
+                case Section::Theirs:
+                    chunk.m_Theirs.push_back(line);
+                    break;
+                }
             }
-        }
-        flush();
+            flush();
         }
 
     } // namespace internal

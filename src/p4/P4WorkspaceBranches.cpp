@@ -81,7 +81,8 @@ namespace gitgud::p4
 
     std::string P4Workspace::BranchNameOf(const std::string& _Path) const
     {
-        const std::string parent = UsesStreams() ? m_Stream.substr(0, m_Stream.rfind('/')) : m_BranchRoot;
+        const std::string parent =
+            UsesStreams() ? m_Stream.substr(0, m_Stream.rfind('/')) : m_BranchRoot;
         if (!parent.empty() && StartsWithNoCase(_Path, parent + "/") &&
             _Path.find('/', parent.size() + 1) == std::string::npos)
         {
@@ -143,7 +144,8 @@ namespace gitgud::p4
             git::BranchInfo b;
             b.m_Name = BranchNameOf(path);
             b.m_bIsHead = b.m_Name == current;
-            b.m_Upstream = parent.empty() || parent == "none" ? std::string() : BranchNameOf(parent);
+            b.m_Upstream =
+                parent.empty() || parent == "none" ? std::string() : BranchNameOf(parent);
             const CommandResult tip = Run({"changes", "-m", "1", "-s", "submitted", path + "/..."});
             if (!tip.m_Stats.empty())
             {
@@ -162,7 +164,8 @@ namespace gitgud::p4
         std::string at;
         if (!_StartPoint.empty() && _StartPoint != "HEAD" && _StartPoint != "head")
         {
-            if (AllDigits(_StartPoint) || (_StartPoint[0] == '@' && AllDigits(_StartPoint.substr(1))))
+            if (AllDigits(_StartPoint) ||
+                (_StartPoint[0] == '@' && AllDigits(_StartPoint.substr(1))))
             {
                 at = "@" + (AllDigits(_StartPoint) ? _StartPoint : _StartPoint.substr(1));
             }
@@ -182,7 +185,8 @@ namespace gitgud::p4
 
         if (UsesStreams())
         {
-            CommandResult tmpl = RunOrThrow({"stream", "-o", "-t", "development", "-P", from, path});
+            CommandResult tmpl =
+                RunOrThrow({"stream", "-o", "-t", "development", "-P", from, path});
             if (tmpl.m_Stats.empty())
             {
                 throw GitError("Could not prepare stream " + path);
@@ -196,8 +200,8 @@ namespace gitgud::p4
             RunOrThrow({"stream", "-i"}, spec);
         }
         // Copy the files on the server (no workspace needed).
-        const CommandResult pop =
-            Run({"populate", "-d", "Branch " + _Name + " from " + BranchNameOf(from), from + "/..." + at, path + "/..."});
+        const CommandResult pop = Run({"populate", "-d",
+            "Branch " + _Name + " from " + BranchNameOf(from), from + "/..." + at, path + "/..."});
         if (!pop.Ok() && !MentionsAlreadyIntegrated(pop))
         {
             throw GitError(pop.Message());
@@ -253,7 +257,8 @@ namespace gitgud::p4
 
     void P4Workspace::CheckoutCommit(const std::string& _Oid)
     {
-        const CommandResult r = Run({"sync", "//" + m_Conn.m_Client + "/..." + RevisionSuffix(_Oid)});
+        const CommandResult r =
+            Run({"sync", "//" + m_Conn.m_Client + "/..." + RevisionSuffix(_Oid)});
         if (!r.Ok())
         {
             throw GitError(r.Message());
@@ -275,7 +280,8 @@ namespace gitgud::p4
         }
         if (!UsesStreams())
         {
-            Unsupported("Deleting a branch folder (delete its files from a workspace that maps it)");
+            Unsupported(
+                "Deleting a branch folder (delete its files from a workspace that maps it)");
         }
         RunOrThrow({"stream", "-d", BranchPath(_Name)});
     }
@@ -319,7 +325,8 @@ namespace gitgud::p4
 
     // ---- merging -------------------------------------------------------------------------
 
-    git::MergeResult P4Workspace::IntegrateFrom(const std::string& _FromPath, const std::string& _Label, bool _bSubmit)
+    git::MergeResult P4Workspace::IntegrateFrom(
+        const std::string& _FromPath, const std::string& _Label, bool _bSubmit)
     {
         git::MergeResult result;
         if (!m_Config["GITGUD_MERGE_CHANGE"].empty())
@@ -330,8 +337,9 @@ namespace gitgud::p4
         const std::string target = "//" + m_Conn.m_Client + "/...";
         // Streams: merge against the usual flow too (-F), since git merges
         // in any direction. Classic depots: integrate the folder into ours.
-        CommandResult r = UsesStreams() ? Run({"merge", "-F", "-c", change, "--from", _FromPath})
-                                        : Run({"integrate", "-c", change, _FromPath + "/...", target});
+        CommandResult r = UsesStreams()
+                              ? Run({"merge", "-F", "-c", change, "--from", _FromPath})
+                              : Run({"integrate", "-c", change, _FromPath + "/...", target});
         if (UsesStreams() && !r.Ok() && !MentionsAlreadyIntegrated(r))
         {
             r = Run({"integrate", "-c", change, _FromPath + "/...", target});
@@ -353,7 +361,8 @@ namespace gitgud::p4
         if (!result.m_ConflictedPaths.empty())
         {
             result.m_Kind = git::MergeResult::Kind::Conflicts;
-            result.m_Message = std::to_string(result.m_ConflictedPaths.size()) + " file(s) need resolving";
+            result.m_Message =
+                std::to_string(result.m_ConflictedPaths.size()) + " file(s) need resolving";
             return result;
         }
         if (_bSubmit)
@@ -369,7 +378,8 @@ namespace gitgud::p4
 
     git::MergeResult P4Workspace::Merge(const std::string& _BranchName)
     {
-        return IntegrateFrom(BranchPath(_BranchName), "Merge " + _BranchName + " into " + CurrentBranch(), true);
+        return IntegrateFrom(
+            BranchPath(_BranchName), "Merge " + _BranchName + " into " + CurrentBranch(), true);
     }
 
     git::MergeResult P4Workspace::SquashMerge(const std::string& _BranchName)
@@ -387,9 +397,10 @@ namespace gitgud::p4
         git::RebaseResult r;
         r.m_Message = m.m_Message;
         r.m_ConflictedPaths = m.m_ConflictedPaths;
-        r.m_Kind = m.m_Kind == git::MergeResult::Kind::UpToDate  ? git::RebaseResult::Kind::UpToDate
-                   : m.m_Kind == git::MergeResult::Kind::Conflicts ? git::RebaseResult::Kind::Conflicts
-                                                                   : git::RebaseResult::Kind::Done;
+        r.m_Kind = m.m_Kind == git::MergeResult::Kind::UpToDate ? git::RebaseResult::Kind::UpToDate
+                   : m.m_Kind == git::MergeResult::Kind::Conflicts
+                       ? git::RebaseResult::Kind::Conflicts
+                       : git::RebaseResult::Kind::Done;
         return r;
     }
 
@@ -457,11 +468,13 @@ namespace gitgud::p4
             throw GitError("Finish or abort the merge in progress first");
         }
         const std::string change = NewChange("Undo change " + _Oid, {});
-        const CommandResult r = Run({"undo", "-c", change, "//" + m_Conn.m_Client + "/...@=" + _Oid});
+        const CommandResult r =
+            Run({"undo", "-c", change, "//" + m_Conn.m_Client + "/...@=" + _Oid});
         if (Opened(change).empty())
         {
             Run({"change", "-d", change});
-            throw GitError(r.Ok() ? "Change " + _Oid + " changed nothing in this workspace" : r.Message());
+            throw GitError(
+                r.Ok() ? "Change " + _Oid + " changed nothing in this workspace" : r.Message());
         }
         if (!AutoResolve().empty())
         {
@@ -499,7 +512,8 @@ namespace gitgud::p4
             throw GitError("Change " + _Oid + " is already on this branch");
         }
         const std::string change = NewChange(Field(d.m_Stats.front(), "desc"), {});
-        const CommandResult r = Run({"integrate", "-c", change, source + "/...@=" + _Oid, ours + "/..."});
+        const CommandResult r =
+            Run({"integrate", "-c", change, source + "/...@=" + _Oid, ours + "/..."});
         if (Opened(change).empty())
         {
             Run({"change", "-d", change});
@@ -516,7 +530,8 @@ namespace gitgud::p4
 
     void P4Workspace::ResetTo(const std::string&, git::ResetMode)
     {
-        Unsupported("Moving a branch back (submitted changes are permanent; use Revert, or get an older revision)");
+        Unsupported("Moving a branch back (submitted changes are permanent; use Revert, or get an "
+                    "older revision)");
     }
 
     void P4Workspace::SetBranchTarget(const std::string&, const std::string&)
@@ -530,7 +545,8 @@ namespace gitgud::p4
         return {};
     }
 
-    git::RebaseResult P4Workspace::InteractiveRebase(const std::string&, const std::vector<git::RebaseStep>&)
+    git::RebaseResult P4Workspace::InteractiveRebase(
+        const std::string&, const std::vector<git::RebaseStep>&)
     {
         Unsupported("Interactive rebase (submitted changes can't be rewritten)");
         return {};
@@ -564,7 +580,8 @@ namespace gitgud::p4
         return out;
     }
 
-    void P4Workspace::CreateTag(const std::string& _Name, const std::string& _Target, const std::string& _Message)
+    void P4Workspace::CreateTag(
+        const std::string& _Name, const std::string& _Target, const std::string& _Message)
     {
         std::string change = _Target;
         if (change.empty() || change == "HEAD" || change == "head")
@@ -585,7 +602,8 @@ namespace gitgud::p4
             throw GitError("Label '" + _Name + "' already exists");
         }
         Record spec = SpecForInput(tmpl.m_Stats.front());
-        spec["Description"] = _Message.empty() ? std::string("Created by GitGud.\n") : _Message + "\n";
+        spec["Description"] =
+            _Message.empty() ? std::string("Created by GitGud.\n") : _Message + "\n";
         spec["Revision"] = "@" + change;
         for (auto it = spec.begin(); it != spec.end();)
         {
@@ -665,7 +683,8 @@ namespace gitgud::p4
         {
             throw GitError("No local changes to stash");
         }
-        const std::string change = NewChange(_Message.empty() ? std::string("Stashed by GitGud") : _Message, files);
+        const std::string change =
+            NewChange(_Message.empty() ? std::string("Stashed by GitGud") : _Message, files);
         RunOrThrow({"shelve", "-c", change});
         RunOrThrow({"revert", "-w", "-c", change, "//" + m_Conn.m_Client + "/..."});
     }
@@ -720,15 +739,18 @@ namespace gitgud::p4
             std::string newText;
             const std::int64_t irev = i < revs.size() ? ToInt64(revs[i]) : 0;
             const bool badd = action == "add" || action == "move/add" || action == "branch";
-            const bool bold = !badd && irev > 0 && PrintFile(files[i] + "#" + std::to_string(irev), oldText);
-            const bool bnew = action != "delete" && action != "move/delete" && PrintFile(files[i] + "@=" + change, newText);
-            out.push_back(git::internal::DiffFileVersions(
-                rel, Version(ToLf(oldText), bold), rel, Version(ToLf(newText), bnew), git::DiffOptions()));
+            const bool bold =
+                !badd && irev > 0 && PrintFile(files[i] + "#" + std::to_string(irev), oldText);
+            const bool bnew = action != "delete" && action != "move/delete" &&
+                              PrintFile(files[i] + "@=" + change, newText);
+            out.push_back(git::internal::DiffFileVersions(rel, Version(ToLf(oldText), bold), rel,
+                Version(ToLf(newText), bnew), git::DiffOptions()));
         }
         return out;
     }
 
-    std::string P4Workspace::Shelve(const std::string&, const std::vector<std::string>& _Paths, const std::string& _Message)
+    std::string P4Workspace::Shelve(
+        const std::string&, const std::vector<std::string>& _Paths, const std::string& _Message)
     {
         // A real Perforce shelf: open the files, move them into a new
         // changelist, shelve it. The files stay open, as after `p4 shelve`.
@@ -752,8 +774,8 @@ namespace gitgud::p4
         return change;
     }
 
-    git::UnshelveResult P4Workspace::Unshelve(const std::string& _Revision, const std::vector<std::string>& _Paths,
-        const std::function<bool(const std::string&)>&)
+    git::UnshelveResult P4Workspace::Unshelve(const std::string& _Revision,
+        const std::vector<std::string>& _Paths, const std::function<bool(const std::string&)>&)
     {
         std::vector<std::string> args = {"unshelve", "-s", _Revision, "-c", "default"};
         for (const std::string& p : _Paths)
@@ -804,7 +826,8 @@ namespace gitgud::p4
         self.m_Branch = CurrentBranch();
         self.m_bMain = true;
         out.push_back(self);
-        const std::string depot = UsesStreams() ? m_Stream.substr(0, m_Stream.rfind('/')) + "/" : std::string();
+        const std::string depot =
+            UsesStreams() ? m_Stream.substr(0, m_Stream.rfind('/')) + "/" : std::string();
         for (const Record& c : Run({"clients", "-u", m_Conn.m_User}).m_Stats)
         {
             const std::string name = Field(c, "client");
@@ -825,7 +848,8 @@ namespace gitgud::p4
         return out;
     }
 
-    void P4Workspace::AddWorktree(const std::string& _Name, const std::string& _Path, const std::string& _Branch)
+    void P4Workspace::AddWorktree(
+        const std::string& _Name, const std::string& _Path, const std::string& _Branch)
     {
         bool bexists = false;
         for (const git::BranchInfo& b : Branches())
@@ -862,9 +886,12 @@ namespace gitgud::p4
         }
         Connection other = m_Conn;
         other.m_Client = _Name;
-        const CommandResult spec = P4Command::RunOrThrow(other, {"client", "-o", _Name}, {}, m_Passwords);
-        const std::string root = spec.m_Stats.empty() ? std::string() : Field(spec.m_Stats.front(), "Root");
-        const CommandResult opened = P4Command::Run(other, {"opened", "-C", _Name}, {}, m_Passwords);
+        const CommandResult spec =
+            P4Command::RunOrThrow(other, {"client", "-o", _Name}, {}, m_Passwords);
+        const std::string root =
+            spec.m_Stats.empty() ? std::string() : Field(spec.m_Stats.front(), "Root");
+        const CommandResult opened =
+            P4Command::Run(other, {"opened", "-C", _Name}, {}, m_Passwords);
         if (!opened.m_Stats.empty())
         {
             throw GitError("Workspace '" + _Name + "' has open files; submit or revert them first");

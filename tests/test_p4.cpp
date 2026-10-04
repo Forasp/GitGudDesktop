@@ -49,7 +49,8 @@ namespace
             return;
         }
         s_bDone = true;
-        for (const char* szvar : {"P4PORT", "P4USER", "P4CLIENT", "P4CONFIG", "P4PASSWD", "P4CHARSET"})
+        for (const char* szvar :
+            {"P4PORT", "P4USER", "P4CLIENT", "P4CONFIG", "P4PASSWD", "P4CHARSET"})
         {
             _putenv_s(szvar, "");
         }
@@ -84,10 +85,12 @@ namespace
             fs::create_directories(m_Dir / "tmp");
             IsolateEnvironment(fs::temp_directory_path());
             P4Command::ClearTickets();
-            m_Conn.m_Port = "rsh:" + Env("GITGUD_TEST_P4D") + " -r " + (m_Dir / "root").string() + " -L log -i";
+            m_Conn.m_Port =
+                "rsh:" + Env("GITGUD_TEST_P4D") + " -r " + (m_Dir / "root").string() + " -L log -i";
             m_Conn.m_User = "tim";
             m_Conn.m_Dir = (m_Dir / "tmp").string();
-            P4Command::RunText(m_Conn, {"passwd"}, std::string(g_szPassword) + "\n" + g_szPassword + "\n");
+            P4Command::RunText(
+                m_Conn, {"passwd"}, std::string(g_szPassword) + "\n" + g_szPassword + "\n");
             std::string error;
             REQUIRE(P4Command::Login(m_Conn, g_szPassword, error));
         }
@@ -104,7 +107,8 @@ namespace
         }
 
         // A new workspace on stream `_Stream` (created when `_bCreate`).
-        git::Repository Workspace(const std::string& _Name, const std::string& _Stream, bool _bCreate = false)
+        git::Repository Workspace(
+            const std::string& _Name, const std::string& _Stream, bool _bCreate = false)
         {
             WorkspaceSetup setup;
             setup.m_Port = m_Conn.m_Port;
@@ -136,7 +140,8 @@ namespace
         return text;
     }
 
-    const git::StatusEntry* Find(const std::vector<git::StatusEntry>& _Status, const std::string& _Path)
+    const git::StatusEntry* Find(
+        const std::vector<git::StatusEntry>& _Status, const std::string& _Path)
     {
         for (const auto& e : _Status)
         {
@@ -149,8 +154,8 @@ namespace
     }
 
     // A stream repository with one submitted file.
-    std::string CommitFile(git::Repository& _Repo, const std::string& _Name, const std::string& _Text,
-        const std::string& _Message)
+    std::string CommitFile(git::Repository& _Repo, const std::string& _Name,
+        const std::string& _Text, const std::string& _Message)
     {
         WriteFile(_Repo, _Name, _Text);
         _Repo.Stage(_Name);
@@ -171,7 +176,10 @@ TEST_CASE("p4 marshal round-trips dictionaries", "[p4]")
     CHECK(back[0] == rec);
     CHECK(back[1].at("a") == "b");
     // Ints (p4 sends some fields as 'i') decode as text.
-    const std::string withInt = std::string("{s\x04\0\0\0codes\x04\0\0\0stats\x05\0\0\0leveli\x07\0\0\0" "0", 41);
+    const std::string withInt =
+        std::string("{s\x04\0\0\0codes\x04\0\0\0stats\x05\0\0\0leveli\x07\0\0\0"
+                    "0",
+            41);
     const auto ints = p4::UnmarshalRecords(withInt);
     REQUIRE(ints.size() == 1);
     CHECK(ints[0].at("level") == "7");
@@ -189,7 +197,8 @@ TEST_CASE("p4 config file round trip", "[p4]")
 {
     const fs::path dir = fs::temp_directory_path() / "gitgud_p4_config_test";
     fs::create_directories(dir);
-    P4Workspace::WriteConfigFile(dir.string(), {{"P4PORT", "ssl:x:1666"}, {"P4CLIENT", "ws"}, {"GITGUD_X", "1"}});
+    P4Workspace::WriteConfigFile(
+        dir.string(), {{"P4PORT", "ssl:x:1666"}, {"P4CLIENT", "ws"}, {"GITGUD_X", "1"}});
     CHECK(P4Workspace::IsWorkspace(dir.string()));
     const auto cfg = P4Workspace::ReadConfigFile(dir.string());
     CHECK(cfg.at("P4PORT") == "ssl:x:1666");
@@ -377,7 +386,8 @@ TEST_CASE("p4 streams as branches: create, switch, merge", "[p4][server]")
     repo.CreateBranch("dev");
     auto branches = repo.Branches();
     REQUIRE(branches.size() == 2);
-    const auto dev = std::find_if(branches.begin(), branches.end(), [](const auto& _B) { return _B.m_Name == "dev"; });
+    const auto dev = std::find_if(
+        branches.begin(), branches.end(), [](const auto& _B) { return _B.m_Name == "dev"; });
     REQUIRE(dev != branches.end());
     CHECK(dev->m_Upstream == "main");
     CHECK_FALSE(dev->m_bIsHead);
@@ -430,7 +440,8 @@ TEST_CASE("p4 streams as branches: create, switch, merge", "[p4][server]")
     const git::RevisionGraph g = repo.FileRevisionGraph("a.txt");
     CHECK(g.m_Rows.size() == 2);
     CHECK(g.m_Nodes.size() >= 6);
-    CHECK(std::any_of(g.m_Edges.begin(), g.m_Edges.end(), [](const auto& _E) { return _E.m_bMerge; }));
+    CHECK(std::any_of(
+        g.m_Edges.begin(), g.m_Edges.end(), [](const auto& _E) { return _E.m_bMerge; }));
 
     // The graph log chains each branch.
     const auto graph = repo.GraphLog(git::GraphQuery());
@@ -545,7 +556,8 @@ TEST_CASE("p4 asks for a password when the ticket is missing", "[p4][server]")
     // (the app's provider erases it and asks the user).
     bool bsawRejected = false;
     repo.SetCredentialProvider(
-        [&](const std::string& _Url, const std::string& _User, bool _bRejected, std::string&, std::string& _OutPass)
+        [&](const std::string& _Url, const std::string& _User, bool _bRejected, std::string&,
+            std::string& _OutPass)
         {
             CHECK(_Url.rfind("p4:", 0) == 0);
             CHECK(_User == "tim");

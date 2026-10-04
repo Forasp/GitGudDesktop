@@ -421,4 +421,13 @@ function changelists.reload()
     app.publish("changelists.changed")
 end
 
-return changelists
+-- A Perforce workspace keeps its changelists on the server
+-- (depot/p4changelists.lua); everything above is for Git.
+return setmetatable({}, {
+    __index = function(_, key)
+        if gitgud.backend() == "p4" then
+            return require("depot.p4changelists")[key]
+        end
+        return changelists[key]
+    end,
+})
