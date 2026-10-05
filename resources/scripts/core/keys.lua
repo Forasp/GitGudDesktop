@@ -23,21 +23,77 @@ function keys.bind(combo, handler, description)
     bindings[combo] = { handler = handler, description = description }
 end
 
---- The human-readable label for a combo, for menus ("Ctrl+Shift+P").
+-- On macOS C++ reports the Command key as "ctrl" (so every binding works
+-- unchanged), and labels use the Mac's symbols in its order: Option, Shift,
+-- Command ("ctrl+shift+p" reads as "⇧⌘P").
+local MAC = gitgud.platform == "macos"
+local MAC_MODIFIERS = { { "alt", "⌥" }, { "shift", "⇧" }, { "ctrl", "⌘" } }
+local MAC_KEYS = {
+    enter = "↩", tab = "⇥", backspace = "⌫", escape = "⎋",
+    up = "↑", down = "↓", left = "←", right = "→",
+}
+
+--- The human-readable label for a combo, for menus ("Ctrl+Shift+P", or
+-- "⇧⌘P" on macOS).
 -- @param combo  combo string
 -- @return display label
 function keys.label(combo)
     local parts = {}
+    local held = {}
 
     for part in combo:gmatch("[^+]+") do
-        if #part == 1 then
+        if MAC and (part == "ctrl" or part == "alt" or part == "shift") then
+            held[part] = true
+        elseif #part == 1 then
             parts[#parts + 1] = part:upper()
+        elseif MAC and MAC_KEYS[part] then
+            parts[#parts + 1] = MAC_KEYS[part]
         else
             parts[#parts + 1] = part:sub(1, 1):upper() .. part:sub(2)
         end
     end
 
+    if MAC then
+        local symbols = {}
+        for _, modifier in ipairs(MAC_MODIFIERS) do
+            if held[modifier[1]] then
+                symbols[#symbols + 1] = modifier[2]
+            end
+        end
+        return table.concat(symbols) .. table.concat(parts, "+")
+    end
+
     return table.concat(parts, "+")
+end
+
+--- Rewrite the shortcuts written out in a piece of text ("Undo  (Ctrl+Z)")
+-- for this platform: unchanged on Windows and Linux, Mac symbols on macOS.
+-- @param s  text with shortcuts like "Ctrl+Shift+N" or "Ctrl+,"
+-- @return the text to show
+function keys.text(s)
+    if not MAC then
+        return s
+    end
+    return (s:gsub("%f[%w]Ctrl%+[%w%+,%-=`]*[%w,%-=`]", function(shortcut)
+        return keys.label(shortcut:lower())
+    end):gsub("%f[%w]Alt%+[%w%+,%-=`]*[%w,%-=`]", function(shortcut)
+        return keys.label(shortcut:lower())
+    end))
+end
+
+--- keys.text for the TooltipText of each named widget (tooltips written in
+-- layout XML).
+-- @param names  widget names
+function keys.adaptTooltips(names)
+    if not MAC then
+        return
+    end
+    for _, name in ipairs(names) do
+        local tooltip = gitgud.getProperty(name, "TooltipText")
+        if tooltip and tooltip ~= "" then
+            gitgud.setProperty(name, "TooltipText", keys.text(tooltip))
+        end
+    end
 end
 
 --- Register something Escape should close (a popup or dialog). The most

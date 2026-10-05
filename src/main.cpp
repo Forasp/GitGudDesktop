@@ -286,6 +286,26 @@ namespace
         return ims > 0 ? ims : 25;
     }
 
+    // Flags for every window: OpenGL, and on macOS a full-resolution drawable
+    // on Retina displays (the UI is laid out in points either way).
+    constexpr Uint32 kWindowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN
+#if defined(__APPLE__)
+                                    | SDL_WINDOW_ALLOW_HIGHDPI
+#endif
+        ;
+
+    // Drawable pixels per window point: 2 on a Retina display, else 1.
+    float PixelRatio(SDL_Window* _pWindow)
+    {
+        int iw = 0;
+        int ih = 0;
+        int idw = 0;
+        int idh = 0;
+        SDL_GetWindowSize(_pWindow, &iw, &ih);
+        SDL_GL_GetDrawableSize(_pWindow, &idw, &idh);
+        return iw > 0 && idw > 0 ? static_cast<float>(idw) / static_cast<float>(iw) : 1.0f;
+    }
+
     // SDL hit test for the borderless window: it decides, per mouse position,
     // whether the point acts as a Resize border, a title-bar drag area, or plain
     // client area. Edges/corners Resize; anything the UI marks as a drag region
@@ -359,10 +379,15 @@ namespace
     // "ctrl+shift+p", "f5", "escape", "ctrl+enter", "down" — the combo string
     // Lua's keymap matches on. Plain typing keys return "" (they belong to
     // whatever editbox has focus); a combo needs Ctrl or Alt, or is a function
-    // key, Escape, an arrow, or Page Up/Down.
+    // key, Escape, an arrow, or Page Up/Down. On macOS Command counts as Ctrl,
+    // so every binding works with the Mac's usual key (Control still does too).
     std::string KeyCombo(const SDL_Keysym& _Key)
     {
+#if defined(__APPLE__)
+        const bool bctrl = (_Key.mod & (KMOD_CTRL | KMOD_GUI)) != 0;
+#else
         const bool bctrl = (_Key.mod & KMOD_CTRL) != 0;
+#endif
         const bool balt = (_Key.mod & KMOD_ALT) != 0;
         const bool bshift = (_Key.mod & KMOD_SHIFT) != 0;
         const bool bfunction = _Key.sym >= SDLK_F1 && _Key.sym <= SDLK_F12;
@@ -376,7 +401,8 @@ namespace
             return {};
         }
         if (_Key.sym == SDLK_LCTRL || _Key.sym == SDLK_RCTRL || _Key.sym == SDLK_LALT ||
-            _Key.sym == SDLK_RALT || _Key.sym == SDLK_LSHIFT || _Key.sym == SDLK_RSHIFT)
+            _Key.sym == SDLK_RALT || _Key.sym == SDLK_LSHIFT || _Key.sym == SDLK_RSHIFT ||
+            _Key.sym == SDLK_LGUI || _Key.sym == SDLK_RGUI)
         {
             return {};
         }
@@ -404,6 +430,57 @@ namespace
         }
         return combo + name;
     }
+
+    // The key the UI sees. On macOS Command is passed on as Control, so
+    // editboxes copy, paste, cut, undo and select all with Command.
+    int UiScancode(SDL_Scancode _Scancode)
+    {
+#if defined(__APPLE__)
+        if (_Scancode == SDL_SCANCODE_LGUI)
+        {
+            return SDL_SCANCODE_LCTRL;
+        }
+        if (_Scancode == SDL_SCANCODE_RGUI)
+        {
+            return SDL_SCANCODE_RCTRL;
+        }
+#endif
+        return _Scancode;
+    }
+
+#if defined(__APPLE__)
+    // macOS doesn't reliably zoom a window without a title bar, so the
+    // borderless main window zooms here: to its display's usable area (below
+    // the menu bar, beside the Dock), and back to where it was. Publishes
+    // "window.state" like a native maximize would.
+    void ToggleZoom(SDL_Window* _pWindow, SDL_Rect& _Restore, gitgud::app::EventBus& _Bus)
+    {
+        SDL_Rect usable{};
+        const int idisplay = SDL_GetWindowDisplayIndex(_pWindow);
+        if (idisplay < 0 || SDL_GetDisplayUsableBounds(idisplay, &usable) != 0)
+        {
+            return;
+        }
+        SDL_Rect now{};
+        SDL_GetWindowPosition(_pWindow, &now.x, &now.y);
+        SDL_GetWindowSize(_pWindow, &now.w, &now.h);
+        const bool bzoomed = std::abs(now.x - usable.x) <= 1 && std::abs(now.y - usable.y) <= 1 &&
+                             std::abs(now.w - usable.w) <= 1 && std::abs(now.h - usable.h) <= 1;
+        if (bzoomed && _Restore.w > 0)
+        {
+            SDL_SetWindowSize(_pWindow, _Restore.w, _Restore.h);
+            SDL_SetWindowPosition(_pWindow, _Restore.x, _Restore.y);
+            _Bus.Publish({"window.state", "restored"});
+        }
+        else
+        {
+            _Restore = now;
+            SDL_SetWindowPosition(_pWindow, usable.x, usable.y);
+            SDL_SetWindowSize(_pWindow, usable.w, usable.h);
+            _Bus.Publish({"window.state", "maximized"});
+        }
+    }
+#endif
 
     // Decode SDL's UTF-8 text input into codepoints.
     template <typename Fn> void ForEachCodepoint(const char* _szText, Fn&& _Fn)
@@ -518,8 +595,7 @@ namespace
             }
 
             SDL_Window* pwindow = SDL_CreateWindow(_Spec.m_Title.c_str(), SDL_WINDOWPOS_CENTERED,
-                SDL_WINDOWPOS_CENTERED, _Spec.m_iWidth, _Spec.m_iHeight,
-                SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN);
+                SDL_WINDOWPOS_CENTERED, _Spec.m_iWidth, _Spec.m_iHeight, kWindowFlags);
             if (!pwindow)
             {
                 _Error = SDL_GetError();
@@ -531,8 +607,12 @@ namespace
             SDL_GL_MakeCurrent(pwindow, m_Gl);
             int iw = 0;
             int ih = 0;
-            SDL_GL_GetDrawableSize(pwindow, &iw, &ih);
+            SDL_GetWindowSize(pwindow, &iw, &ih);
             const bool bcreated = m_pUi->CreateSurface(_Spec.m_Id, iw, ih, _Spec.m_Layout);
+            if (bcreated)
+            {
+                m_pUi->SetPixelRatio(_Spec.m_Id, PixelRatio(pwindow));
+            }
             SDL_GL_MakeCurrent(m_pMain, m_Gl);
             if (!bcreated)
             {
@@ -983,8 +1063,7 @@ int main(int _iArgc, char* _aSzArgv[])
 #endif
 
     SDL_Window* pwindow = SDL_CreateWindow("Gitgud", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        ikWidth, ikHeight,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_BORDERLESS);
+        ikWidth, ikHeight, kWindowFlags | SDL_WINDOW_BORDERLESS);
     if (!pwindow)
     {
         std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -1088,6 +1167,14 @@ int main(int _iArgc, char* _aSzArgv[])
         std::fprintf(stderr, "UI backend Init failed\n");
         return 1;
     }
+    float fmainRatio = PixelRatio(pwindow);
+    if (ui)
+    {
+        ui->SetPixelRatio("", fmainRatio);
+    }
+#if defined(__APPLE__)
+    std::printf("[display] %g drawable pixels per point\n", fmainRatio);
+#endif
 
     // Custom window chrome: the layout's title bar moves the window, the 8px
     // rim resizes it (see WindowHitTest above).
@@ -1148,9 +1235,19 @@ int main(int _iArgc, char* _aSzArgv[])
     // "window.state" events published from the SDL event loop below.
     bus.Subscribe(
         "window.minimize", [&](const gitgud::app::AppEvent&) { SDL_MinimizeWindow(pwindow); });
+#if defined(__APPLE__)
+    SDL_Rect zoomRestore{};
+#endif
     bus.Subscribe("window.toggleMaximize",
         [&](const gitgud::app::AppEvent&)
         {
+#if defined(__APPLE__)
+            if (SDL_GetWindowFlags(pwindow) & SDL_WINDOW_BORDERLESS)
+            {
+                ToggleZoom(pwindow, zoomRestore, bus);
+                return;
+            }
+#endif
             if (SDL_GetWindowFlags(pwindow) & SDL_WINDOW_MAXIMIZED)
             {
                 SDL_RestoreWindow(pwindow);
@@ -1272,6 +1369,13 @@ int main(int _iArgc, char* _aSzArgv[])
             int iw = 0;
             int ih = 0;
             SDL_GetWindowSize(pwindow, &iw, &ih);
+            // Moved to a display of another density (Retina and not).
+            if (const float fratio = PixelRatio(pwindow); fratio != fmainRatio)
+            {
+                fmainRatio = fratio;
+                ui->SetPixelRatio("", fratio);
+                bredraw = true;
+            }
             if (iw != imainWidth || ih != imainHeight)
             {
                 imainWidth = iw;
@@ -1290,7 +1394,9 @@ int main(int _iArgc, char* _aSzArgv[])
             popOut.m_bResizePending = false;
             int iw = 0;
             int ih = 0;
-            SDL_GL_GetDrawableSize(popOut.m_pWindow, &iw, &ih);
+            SDL_GetWindowSize(popOut.m_pWindow, &iw, &ih);
+            ui->SetPixelRatio(id, PixelRatio(popOut.m_pWindow));
+            popOut.m_bRedraw = true;
             if (iw == popOut.m_iWidth && ih == popOut.m_iHeight)
             {
                 continue;
@@ -1346,7 +1452,8 @@ int main(int _iArgc, char* _aSzArgv[])
             {
                 bredraw = true;
             }
-            if (_Ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
+            if (_Ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED ||
+                _Ev.window.event == SDL_WINDOWEVENT_DISPLAY_CHANGED)
             {
                 // Laid out once for the whole batch (applyResizes).
                 if (ppopOut)
@@ -1432,7 +1539,13 @@ int main(int _iArgc, char* _aSzArgv[])
             {
                 // One wheel notch is +/-1 in SDL; pass it through unscaled
                 // (CEGUI widgets already multiply by their own step size).
+                // A Mac trackpad scrolls in fractions of a notch: whole
+                // notches would make two-finger scrolling jump.
+#if defined(__APPLE__)
+                float fdelta = _Ev.wheel.preciseY;
+#else
                 float fdelta = static_cast<float>(_Ev.wheel.y);
+#endif
                 if (_Ev.wheel.direction == SDL_MOUSEWHEEL_FLIPPED)
                 {
                     fdelta = -fdelta;
@@ -1460,7 +1573,7 @@ int main(int _iArgc, char* _aSzArgv[])
             }
             if (ui)
             {
-                ui->InjectKey(_Ev.key.keysym.scancode, true);
+                ui->InjectKey(UiScancode(_Ev.key.keysym.scancode), true);
             }
             break;
         }
@@ -1468,7 +1581,7 @@ int main(int _iArgc, char* _aSzArgv[])
         case SDL_KEYUP:
             if (ui)
             {
-                ui->InjectKey(_Ev.key.keysym.scancode, false);
+                ui->InjectKey(UiScancode(_Ev.key.keysym.scancode), false);
             }
             break;
 

@@ -1,0 +1,352 @@
+diff --git a/cegui/include/CEGUI/Image.h b/cegui/include/CEGUI/Image.h
+index 6666ae61a..fa2ed858e 100644
+--- a/cegui/include/CEGUI/Image.h
++++ b/cegui/include/CEGUI/Image.h
+@@ -309,6 +309,18 @@ public:
+     */
+     void setNativeResolution(const Sizef& native_res);
+ 
++    /*!
++    \brief
++        Gitgud patch: how many texels of the image area make one unit of the
++        rendered size (2 for an image rasterised at twice its size for a
++        Retina display, 1 otherwise). The rendered size and offset are the
++        area's and the pixel offset's divided by it.
++    */
++    void setTexelDensity(float density);
++
++    //! Gitgud patch: see setTexelDensity.
++    float getTexelDensity() const { return d_texelDensity; }
++
+ 
+     /*!
+     \brief
+@@ -352,6 +364,8 @@ protected:
+     Sizef d_scaledSize;
+     //! The offset in pixels after having autoscaling applied.
+     glm::vec2 d_scaledOffset;
++    //! Gitgud patch: texels per rendered unit (setTexelDensity).
++    float d_texelDensity = 1.0f;
+ 
+ };
+ 
+diff --git a/cegui/include/CEGUI/RenderTarget.h b/cegui/include/CEGUI/RenderTarget.h
+index b8bb37870..4c1644f47 100644
+--- a/cegui/include/CEGUI/RenderTarget.h
++++ b/cegui/include/CEGUI/RenderTarget.h
+@@ -173,6 +173,17 @@ public:
+     */
+     virtual void deactivate();
+ 
++    /*!
++    \brief
++        Gitgud patch: device pixels per unit of this target's area (2 for a
++        window on a Retina display). The area stays in units; the renderer
++        draws into area * ratio pixels.
++    */
++    void setPixelRatio(float ratio) { d_pixelRatio = ratio > 0.0f ? ratio : 1.0f; }
++
++    //! Gitgud patch: see setPixelRatio.
++    float getPixelRatio() const { return d_pixelRatio; }
++
+     /*!
+     \brief
+         Take point \a p_in unproject it and put the result in \a p_out.
+@@ -253,6 +264,8 @@ protected:
+ 
+     //! Determines if the matrix is up to date
+     mutable bool d_matrixValid;
++    //! Gitgud patch: device pixels per unit of d_area (setPixelRatio).
++    float d_pixelRatio = 1.0f;
+     //! The view projection matrix
+     mutable glm::mat4 d_matrix;
+ 
+diff --git a/cegui/include/CEGUI/Renderer.h b/cegui/include/CEGUI/Renderer.h
+index 230d47a2c..37e50a620 100644
+--- a/cegui/include/CEGUI/Renderer.h
++++ b/cegui/include/CEGUI/Renderer.h
+@@ -503,6 +503,26 @@ public:
+     */
+     void setFontScale(const float fontScale);
+ 
++    /*!
++    \brief
++        Gitgud patch: the number of device pixels per unit of the GUI's
++        coordinates (2 on a Retina display, 1 elsewhere). Layout stays in
++        units; fonts rasterise their glyphs this many times larger and draw
++        them at their size in units, so text is sharp on high-density
++        displays. Each RenderTarget maps units to its pixels with its own
++        ratio (RenderTarget::setPixelRatio).
++
++        Like setFontScale, this updates all Fonts but doesn't invalidate the
++        Windows, which still hold geometry made from the old glyphs.
++    */
++    void setDisplayPixelRatio(const float ratio);
++
++    //! Gitgud patch: see setDisplayPixelRatio.
++    float getDisplayPixelRatio() const
++    {
++        return d_displayPixelRatio;
++    }
++
+     /*!
+     \brief
+         Calculates and returns the font scale factor, based on the 
+@@ -552,6 +572,8 @@ private:
+     std::map<const ShaderWrapper*, std::vector<GeometryBuffer*>> d_geomeryBufferPool;
+     //! The Font scale factor to be used when rendering Fonts (except Bitmap Fonts).
+     float d_fontScale;
++    //! Gitgud patch: device pixels per GUI unit (setDisplayPixelRatio).
++    float d_displayPixelRatio = 1.0f;
+ };
+ 
+ }
+diff --git a/cegui/include/CEGUI/text/FreeTypeFont.h b/cegui/include/CEGUI/text/FreeTypeFont.h
+index 1d5c3d786..63aa2a9f7 100644
+--- a/cegui/include/CEGUI/text/FreeTypeFont.h
++++ b/cegui/include/CEGUI/text/FreeTypeFont.h
+@@ -280,6 +280,9 @@ protected:
+     std::vector<argb_t> d_lastTextureBuffer;
+     //! Contains information about the extents of each line of glyphs of the latest texture
+     std::vector<TextureGlyphLine> d_textureGlyphLines;
++    //! Gitgud patch: the renderer's display pixel ratio the glyphs were
++    //! rasterised for (Renderer::setDisplayPixelRatio).
++    float d_pixelRatio = 1.0f;
+ };
+ 
+ }
+diff --git a/cegui/src/Image.cpp b/cegui/src/Image.cpp
+index 203215ef1..4cce37bfe 100644
+--- a/cegui/src/Image.cpp
++++ b/cegui/src/Image.cpp
+@@ -140,7 +140,7 @@ void Image::setImageArea(const Rectf& image_area)
+     if (d_autoScaled != AutoScaledMode::Disabled)
+         updateScaledSizeAndOffset(System::getSingleton().getRenderer()->getDisplaySize());
+     else
+-        d_scaledSize = d_imageArea.getSize();
++        d_scaledSize = d_imageArea.getSize() * (1.0f / d_texelDensity);
+ }
+ 
+ //----------------------------------------------------------------------------//
+@@ -151,7 +151,7 @@ void Image::setOffset(const glm::vec2& pixel_offset)
+     if (d_autoScaled != AutoScaledMode::Disabled)
+         updateScaledOffset(System::getSingleton().getRenderer()->getDisplaySize());
+     else
+-        d_scaledOffset = d_pixelOffset;
++        d_scaledOffset = d_pixelOffset * (1.0f / d_texelDensity);
+ }
+ 
+ //----------------------------------------------------------------------------//
+@@ -165,11 +165,18 @@ void Image::setAutoScaled(const AutoScaledMode autoscaled)
+     }
+     else
+     {
+-        d_scaledSize = d_imageArea.getSize();
+-        d_scaledOffset = d_pixelOffset;
++        d_scaledSize = d_imageArea.getSize() * (1.0f / d_texelDensity);
++        d_scaledOffset = d_pixelOffset * (1.0f / d_texelDensity);
+     }
+ }
+ 
++//----------------------------------------------------------------------------//
++void Image::setTexelDensity(float density)
++{
++    d_texelDensity = density > 0.0f ? density : 1.0f;
++    updateScaledSizeAndOffset(System::getSingleton().getRenderer()->getDisplaySize());
++}
++
+ //----------------------------------------------------------------------------//
+ void Image::setNativeResolution(const Sizef& native_res)
+ {
+@@ -194,8 +201,8 @@ void Image::updateScaledSizeAndOffset(const Sizef& renderer_display_size)
+     computeScalingFactors(d_autoScaled, renderer_display_size, d_nativeResolution,
+         scaleFactors.x, scaleFactors.y);
+ 
+-    d_scaledSize = d_imageArea.getSize() * scaleFactors;
+-    d_scaledOffset = d_pixelOffset * scaleFactors;
++    d_scaledSize = d_imageArea.getSize() * scaleFactors * (1.0f / d_texelDensity);
++    d_scaledOffset = d_pixelOffset * scaleFactors * (1.0f / d_texelDensity);
+ }
+ 
+ //----------------------------------------------------------------------------//
+@@ -205,7 +212,7 @@ void Image::updateScaledSize(const Sizef& renderer_display_size)
+     computeScalingFactors(d_autoScaled, renderer_display_size, d_nativeResolution,
+         scaleFactors.x, scaleFactors.y);
+ 
+-    d_scaledSize = d_imageArea.getSize() * scaleFactors;
++    d_scaledSize = d_imageArea.getSize() * scaleFactors * (1.0f / d_texelDensity);
+ }
+ 
+ //----------------------------------------------------------------------------//
+@@ -215,7 +222,7 @@ void Image::updateScaledOffset(const Sizef& renderer_display_size)
+     computeScalingFactors(d_autoScaled, renderer_display_size, d_nativeResolution,
+         scaleFactors.x, scaleFactors.y);
+ 
+-    d_scaledOffset = d_pixelOffset * scaleFactors;
++    d_scaledOffset = d_pixelOffset * scaleFactors * (1.0f / d_texelDensity);
+ }
+ 
+ }
+diff --git a/cegui/src/Renderer.cpp b/cegui/src/Renderer.cpp
+index 4ee6f113b..f3836675b 100644
+--- a/cegui/src/Renderer.cpp
++++ b/cegui/src/Renderer.cpp
+@@ -153,4 +153,14 @@ void Renderer::setFontScale(const float fontScale)
+     FontManager::getSingleton().updateAllFonts();
+ }
+ 
++//----------------------------------------------------------------------------//
++void Renderer::setDisplayPixelRatio(const float ratio)
++{
++    if (ratio <= 0.0f || ratio == d_displayPixelRatio)
++        return;
++
++    d_displayPixelRatio = ratio;
++    FontManager::getSingleton().updateAllFonts();
++}
++
+ }
+diff --git a/cegui/src/RendererModules/OpenGL/GL3GeometryBuffer.cpp b/cegui/src/RendererModules/OpenGL/GL3GeometryBuffer.cpp
+index e66815cc6..24a6913fc 100644
+--- a/cegui/src/RendererModules/OpenGL/GL3GeometryBuffer.cpp
++++ b/cegui/src/RendererModules/OpenGL/GL3GeometryBuffer.cpp
+@@ -35,6 +35,9 @@
+ #include "CEGUI/RendererModules/OpenGL/Shader.h"
+ #include "CEGUI/RendererModules/OpenGL/StateChangeWrapper.h"
+ #include "CEGUI/RendererModules/OpenGL/GLBaseShaderWrapper.h"
++#include "CEGUI/RenderTarget.h"
++
++#include <cmath>
+ 
+ #include <glm/glm.hpp>
+ #include <glm/gtc/type_ptr.hpp>
+@@ -69,15 +72,23 @@ void OpenGL3GeometryBuffer::draw(std::uint32_t drawModeMask) const
+ 
+     if (d_clippingActive)
+     {
++        // Gitgud patch: the clipping region is in units, the scissor box in
++        // device pixels (RenderTarget::setPixelRatio). Rounding each edge
++        // keeps neighbouring regions from overlapping or leaving a gap.
++        const float ratio = d_owner.getActiveRenderTarget()->getPixelRatio();
++        const GLint left = static_cast<GLint>(std::lround(d_preparedClippingRegion.left() * ratio));
++        const GLint right = static_cast<GLint>(std::lround(d_preparedClippingRegion.right() * ratio));
++        const GLint top = static_cast<GLint>(std::lround(d_preparedClippingRegion.top() * ratio));
++        const GLint bottom = static_cast<GLint>(std::lround(d_preparedClippingRegion.bottom() * ratio));
++        const GLint viewHeight = static_cast<GLint>(std::lround(d_owner.getActiveViewPort().getHeight() * ratio));
++
+         // Skip completely clipped geometry
+-        const GLint w = static_cast<GLint>(d_preparedClippingRegion.getWidth());
+-        const GLint h = static_cast<GLint>(d_preparedClippingRegion.getHeight());
+-        if (!w || !h)
++        const GLint w = right - left;
++        const GLint h = bottom - top;
++        if (w <= 0 || h <= 0)
+             return;
+ 
+-        d_glStateChanger->scissor(static_cast<GLint>(d_preparedClippingRegion.left()),
+-            static_cast<GLint>(d_owner.getActiveViewPort().getHeight() - d_preparedClippingRegion.bottom()),
+-            w, h);
++        d_glStateChanger->scissor(left, viewHeight - bottom, w, h);
+ 
+         d_glStateChanger->enable(GL_SCISSOR_TEST);
+     }
+diff --git a/cegui/src/RendererModules/OpenGL/RenderTarget.cpp b/cegui/src/RendererModules/OpenGL/RenderTarget.cpp
+index a5d044e71..195e0391d 100644
+--- a/cegui/src/RendererModules/OpenGL/RenderTarget.cpp
++++ b/cegui/src/RendererModules/OpenGL/RenderTarget.cpp
+@@ -48,10 +48,13 @@ OpenGLRenderTarget::~OpenGLRenderTarget()
+ 
+ void OpenGLRenderTarget::activate()
+ {
+-    glViewport(static_cast<GLsizei>(RenderTarget::d_area.left()),
+-               static_cast<GLsizei>(RenderTarget::d_area.top()),
+-               static_cast<GLsizei>(RenderTarget::d_area.getWidth()),
+-               static_cast<GLsizei>(RenderTarget::d_area.getHeight()));
++    // Gitgud patch: the area is in units; the viewport is in device pixels
++    // (RenderTarget::setPixelRatio). The projection still spans the area.
++    const float ratio = RenderTarget::d_pixelRatio;
++    glViewport(static_cast<GLsizei>(RenderTarget::d_area.left() * ratio),
++               static_cast<GLsizei>(RenderTarget::d_area.top() * ratio),
++               static_cast<GLsizei>(RenderTarget::d_area.getWidth() * ratio),
++               static_cast<GLsizei>(RenderTarget::d_area.getHeight() * ratio));
+ 
+     if (!RenderTarget::d_matrixValid)
+         updateMatrix();
+diff --git a/cegui/src/text/FreeTypeFont.cpp b/cegui/src/text/FreeTypeFont.cpp
+index adf7185b8..81e2fc92f 100644
+--- a/cegui/src/text/FreeTypeFont.cpp
++++ b/cegui/src/text/FreeTypeFont.cpp
+@@ -278,7 +278,10 @@ BitmapImage* FreeTypeFont::rasterise(const String& name, const FT_Bitmap& ft_bit
+ 
+     // This is the right bearing for bitmap glyphs, not d_fontFace->glyph->metrics.horiBearingX
+     const glm::vec2 offset(glyphLeft, -1.f * glyphTop);
+-    return new BitmapImage(name, d_glyphTextures.back(), imageArea, offset, AutoScaledMode::Disabled, d_nativeResolution);
++    auto image = new BitmapImage(name, d_glyphTextures.back(), imageArea, offset, AutoScaledMode::Disabled, d_nativeResolution);
++    // Gitgud patch: drawn at its size in units (see updateFont).
++    image->setTexelDensity(d_pixelRatio);
++    return image;
+ }
+ 
+ //----------------------------------------------------------------------------//
+@@ -457,8 +460,14 @@ void FreeTypeFont::updateFont()
+     float fontScaleFactor = System::getSingleton().getRenderer()->getFontScale();
+     if (d_autoScaled != AutoScaledMode::Disabled)
+         fontScaleFactor *= d_vertScaling;
+-    
+-    const uint32_t fontSize = static_cast<uint32_t>(std::lround(getSizeInPixels() * fontScaleFactor));
++
++    // Gitgud patch: rasterise at the display's pixel density (2x on a Retina
++    // display) and report every metric, advance and kerning in GUI units,
++    // so text keeps its size and gets sharper.
++    d_pixelRatio = System::getSingleton().getRenderer()->getDisplayPixelRatio();
++    const float toUnits = 1.0f / d_pixelRatio;
++
++    const uint32_t fontSize = static_cast<uint32_t>(std::lround(getSizeInPixels() * fontScaleFactor * d_pixelRatio));
+     FT_Error errorResult = FT_Set_Pixel_Sizes(d_fontFace, 0, fontSize);
+     if (errorResult != FT_Err_Ok)
+     {
+@@ -501,6 +510,14 @@ void FreeTypeFont::updateFont()
+         d_strikeoutTop = std::round(d_underlineTop + (d_ascender - d_descender) * 0.4f);
+     }
+ 
++    d_ascender *= toUnits;
++    d_descender *= toUnits;
++    d_height *= toUnits;
++    d_underlineThickness *= toUnits;
++    d_underlineTop *= toUnits;
++    d_strikeoutThickness *= toUnits;
++    d_strikeoutTop *= toUnits;
++
+     if (d_specificLineSpacing > 0.0f)
+         d_height = d_specificLineSpacing;
+ 
+@@ -666,8 +683,8 @@ float FreeTypeFont::getKerning(const FontGlyph* prev, const FontGlyph& curr) con
+     // Adjust for side bearing changes due to FreeType auto-hinting
+     kerningX += ftCurr->getLsbDelta();
+ 
+-    // Return value in pixels
+-    return kerningX * s_26dot6_toFloat;
++    // Return value in pixels (Gitgud patch: in GUI units, see updateFont)
++    return kerningX * s_26dot6_toFloat / d_pixelRatio;
+ }
+ 
+ //----------------------------------------------------------------------------//
+@@ -695,7 +712,7 @@ FreeTypeFontGlyph* FreeTypeFont::loadGlyph(uint32_t index)
+     const auto& ft_bitmap = d_fontFace->glyph->bitmap;
+     auto image = rasterise(name, ft_bitmap, d_fontFace->glyph->bitmap_left, d_fontFace->glyph->bitmap_top, ft_bitmap.width, ft_bitmap.rows);
+     glyph->setImage(image);
+-    glyph->setAdvance(d_fontFace->glyph->advance.x * static_cast<float>(s_26dot6_toFloat));
++    glyph->setAdvance(d_fontFace->glyph->advance.x * static_cast<float>(s_26dot6_toFloat) / d_pixelRatio);
+     glyph->setLsbDelta(d_fontFace->glyph->lsb_delta);
+     glyph->setRsbDelta(d_fontFace->glyph->rsb_delta);
+ 
+@@ -714,7 +731,8 @@ Image* FreeTypeFont::getOutline(uint32_t index, float thickness)
+     if (index >= d_glyphs.size())
+         return nullptr;
+ 
+-    const auto outlineThickness = static_cast<FT_Fixed>(std::round(thickness * 64.f));
++    // Gitgud patch: the thickness is in GUI units, the outline in pixels.
++    const auto outlineThickness = static_cast<FT_Fixed>(std::round(thickness * d_pixelRatio * 64.f));
+     if (outlineThickness < 1)
+         return nullptr;
+ 

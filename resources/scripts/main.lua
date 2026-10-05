@@ -81,3 +81,11 @@ gitgud.on("app.started", function(reason)
 end)
 
 app.start()
+
+-- The layouts' tooltips spell shortcuts the Windows way; on macOS show the
+-- Mac's (Command for Ctrl).
+require("core.keys").adaptTooltips({
+    "RepoButton", "BranchButton", "SyncButton", "UndoButton", "RedoButton", "GraphButton",
+    "ConsoleButton", "PaletteButton", "ChangesTab", "HistoryTab", "GraphCloseButton",
+    "ConsoleCloseButton", "CommitButton", "NewBranchButton",
+})

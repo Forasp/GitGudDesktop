@@ -481,7 +481,8 @@ local function updateCommitButton(state)
     gitgud.setEnabled("CommitButton", enabled)
     gitgud.setVisible("CommitGlow", enabled)
     gitgud.setProperty("CommitButton", "TooltipText",
-        conflicts and "Resolve the conflicted files first" or "Commit the included changes  (Ctrl+Enter)")
+        conflicts and "Resolve the conflicted files first"
+            or "Commit the included changes  (" .. keys.label("ctrl+enter") .. ")")
 end
 
 --- Show what the content pane should hold on the Changes tab.

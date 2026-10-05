@@ -350,6 +350,7 @@ namespace gitgud::platform
             return out;
         }
 
+#if !defined(__APPLE__)
         // file:// URI for an absolute path, percent-encoding everything but
         // unreserved characters and '/'.
         std::string FileUri(const std::string& _Path)
@@ -371,6 +372,25 @@ namespace gitgud::platform
             }
             return out;
         }
+#endif
+
+#if defined(__APPLE__)
+        // An AppleScript string literal: quotes and backslashes escaped.
+        std::string AppleScriptString(const std::string& _Text)
+        {
+            std::string out = "\"";
+            for (const char c : _Text)
+            {
+                if (c == '"' || c == '\\')
+                {
+                    out.push_back('\\');
+                }
+                out.push_back(c);
+            }
+            out.push_back('"');
+            return out;
+        }
+#endif
 
         std::string Trimmed(std::string _Text)
         {
@@ -381,6 +401,7 @@ namespace gitgud::platform
             return _Text;
         }
 
+#if !defined(__APPLE__)
         // The FreeDesktop trash spec's home trash: move the file into
         // $XDG_DATA_HOME/Trash/files and describe it in Trash/info. Only works
         // on the home folder's file system (rename can't cross devices).
@@ -436,6 +457,7 @@ namespace gitgud::platform
             }
             return false;
         }
+#endif
 
     } // namespace
 
@@ -507,12 +529,30 @@ namespace gitgud::platform
         }
 #if defined(__APPLE__)
         // Finder's own trash, through AppleScript (keeps "Put Back" working).
-        const std::string script = "tell application \"Finder\" to delete POSIX file \"" +
-                                   fs::absolute(path, ec).u8string() + "\"";
+        const std::string script = "tell application \"Finder\" to delete POSIX file " +
+                                   AppleScriptString(fs::absolute(path, ec).u8string());
         if (RunProcess({"osascript", "-e", script}, "").m_iExitCode == 0)
         {
             return true;
         }
+        // Without Finder (or permission to ask it), move the file into the
+        // user's Trash folder directly.
+        if (const char* szhome = std::getenv("HOME"))
+        {
+            const fs::path trash = fs::path(szhome) / ".Trash";
+            const fs::path source = fs::absolute(path, ec);
+            fs::path target = trash / source.filename();
+            for (int i = 1; fs::exists(fs::symlink_status(target, ec)) && i < 1000; ++i)
+            {
+                target = trash / (source.stem().string() + " " + std::to_string(i) +
+                                     source.extension().string());
+            }
+            if (std::rename(source.c_str(), target.c_str()) == 0)
+            {
+                return true;
+            }
+        }
+        return false;
 #else
         // gio knows every trash location (other drives too); the spec's home
         // trash covers systems without it.
@@ -522,15 +562,15 @@ namespace gitgud::platform
         {
             return true;
         }
-#endif
         return MoveToHomeTrash(fs::absolute(path, ec));
+#endif
     }
 
     std::string PickFolder(const std::string& _Title)
     {
 #if defined(__APPLE__)
         const std::string script =
-            "POSIX path of (choose folder with prompt \"" + _Title + "\")";
+            "POSIX path of (choose folder with prompt " + AppleScriptString(_Title) + ")";
         const ProcessResult result = RunProcess({"osascript", "-e", script}, "");
 #else
         // The desktop's own dialog tools: zenity (GNOME and most others) or

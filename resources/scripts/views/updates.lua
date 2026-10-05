@@ -18,6 +18,7 @@ local status = require("core.status")
 
 local updates = { name = "updates" }
 
+local RELEASES_PAGE = "https://github.com/Forasp/GitGudDesktop/releases/latest"
 local CHECK_EVERY_S = 20 * 3600 -- between automatic checks
 local FIRST_CHECK_MS = 8000     -- after starting
 
@@ -139,7 +140,14 @@ end
 --- Help ▸ Check for Updates…
 function updates.show()
     local info = gitgud.updateInfo()
-    if gitgud.platform ~= "windows" then
+    if gitgud.platform == "macos" then
+        dialog.confirm("Updates", "GitGud Desktop " .. info.current .. " doesn't update itself on "
+            .. "macOS. To update, download the latest GitGud-macOS-arm64.dmg from the releases "
+            .. "page and replace the app in Applications with the one inside.", "Open Releases Page",
+            function()
+                gitgud.openExternal(RELEASES_PAGE)
+            end)
+    elseif gitgud.platform ~= "windows" then
         dialog.alert("Updates", "GitGud Desktop " .. info.current .. " is updated through your "
             .. "system's package manager (for example Software Updater, apt, or dnf).")
     elseif not info.packaged then

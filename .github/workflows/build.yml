@@ -356,6 +356,77 @@ jobs:
           path: third_party/cegui-install-release
           key: ${{ steps.cegui-cache.outputs.cache-primary-key }}
 
+      # Start the built app bundle with a script that zooms the window and
+      # closes it once the UI is up; then two copies at once through `open -n`
+      # (several copies must run side by side); then the walkthrough on a
+      # scratch repository. Everything runs with a scratch HOME, and nothing
+      # here signs in, so the Keychain isn't touched.
+      - name: Smoke test and walkthrough
+        run: |
+          bundle="$PWD/build/release/bin/gitgud.app"
+          scratch="$RUNNER_TEMP/ui"
+          mkdir -p "$scratch/home" "$scratch/shots"
+          cat > "$scratch/smoke.lua" <<'LUA'
+          gitgud.on("window.state", function(state) print("[smoke] window " .. state) end)
+          gitgud.on("window.resized", function(size) print("[smoke] resized to " .. size) end)
+          gitgud.after(2000, function() gitgud.emit("window.toggleMaximize", "") end)
+          gitgud.after(4000, function()
+              print("[smoke] ui up")
+              gitgud.emit("window.close", "")
+          end)
+          LUA
+          # Run the app, killing it after two minutes.
+          run_app() {
+            HOME="$scratch/home" GITGUD_UI=default GITGUD_SCRIPT="$1" GITGUD_LOG="$2" \
+              GITGUD_SHOTS="$scratch/shots" "$bundle/Contents/MacOS/gitgud" "${@:3}" &
+            local pid=$!
+            for _ in $(seq 120); do sleep 1; kill -0 $pid 2>/dev/null || break; done
+            kill $pid 2>/dev/null || true
+            wait $pid || true
+          }
+          fail() {
+            echo "::error title=Smoke test::$1"
+            tail -30 "$2" || true
+            tail -30 "$scratch/home/Library/Application Support/Gitgud/logs/CEGUI.log" || true
+            exit 1
+          }
+
+          run_app "$scratch/smoke.lua" "$scratch/smoke.log"
+          grep "\[smoke\]\|\[display\]" "$scratch/smoke.log" || true
+          grep -q "\[smoke\] ui up" "$scratch/smoke.log" || fail "the app didn't start" "$scratch/smoke.log"
+
+          for i in 1 2; do
+            open -n -W --env HOME="$scratch/home" --env GITGUD_UI=default \
+              --env GITGUD_SCRIPT="$scratch/smoke.lua" --env GITGUD_LOG="$scratch/open$i.log" "$bundle" &
+          done
+          wait
+          for i in 1 2; do
+            grep -q "\[smoke\] ui up" "$scratch/open$i.log" || fail "copy $i from open -n didn't start" "$scratch/open$i.log"
+          done
+          echo "two copies ran side by side"
+
+          tests/ui/make-testrepo.sh "$scratch/repo"
+          run_app "$PWD/tests/ui/walkthrough.lua" "$scratch/walk.log" "$scratch/repo"
+          grep -i "error\|\[ui-test\]" "$scratch/walk.log" || true
+          ls "$scratch/shots"
+          [ -n "$(ls "$scratch/shots")" ] || fail "the walkthrough took no screenshots" "$scratch/walk.log"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: GitGud-macos-screenshots
+          path: ${{ runner.temp }}/ui/shots
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Preview (temporary)
+        if: always()
+        run: |
+          f=$(ls "$RUNNER_TEMP/ui/shots"/*.png | head -1)
+          sips -s format jpeg -s formatOptions 55 --resampleWidth 700 "$f" --out "$RUNNER_TEMP/p.jpg" > /dev/null
+          echo "@@PREVIEW-BEGIN"; base64 -i "$RUNNER_TEMP/p.jpg" | fold -w 160; echo "@@PREVIEW-END"
+
   # A tag publishes one release with every platform's files.
   release:
     if: startsWith(github.ref, 'refs/tags/v')

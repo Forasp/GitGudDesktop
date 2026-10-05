@@ -55,6 +55,8 @@ namespace gitgud::ui
         void RenderSurface(const std::string& _SurfaceId) override;
         void SetInputSurface(const std::string& _SurfaceId) override;
         void SetCursorVisible(const std::string& _SurfaceId, bool _bVisible) override;
+        void SetPixelRatio(const std::string& _SurfaceId, float _fRatio) override;
+        float PixelRatio() const override;
 
         void Resize(int _iWindowWidth, int _iWindowHeight) override;
         void Update(float _fElapsed) override;
@@ -90,8 +92,8 @@ namespace gitgud::ui
         bool DefineImage(const std::string& _ImageName, int _iWidth, int _iHeight,
             const std::vector<std::uint8_t>& _Rgba) override;
         bool DefineImageAtlas(const std::string& _TextureName, int _iWidth, int _iHeight,
-            const std::vector<std::uint8_t>& _Rgba,
-            const std::vector<ImageRegion>& _Regions) override;
+            const std::vector<std::uint8_t>& _Rgba, const std::vector<ImageRegion>& _Regions,
+            float _fDensity) override;
         bool CreateWidget(const std::string& _Type, const std::string& _WidgetId,
             const std::string& _ParentId) override;
         void DestroyWidget(const std::string& _WidgetId) override;

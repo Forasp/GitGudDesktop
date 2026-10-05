@@ -93,7 +93,8 @@ local function fileMenu()
         { separator = true },
         {
             label = "Exit",
-            shortcut = "alt+f4",
+            -- Command+Q on macOS (the app menu SDL provides quits).
+            shortcut = gitgud.platform == "macos" and "ctrl+q" or "alt+f4",
             action = function()
                 gitgud.emit("window.close", "")
             end,
@@ -437,7 +438,7 @@ end
 
 --- A dialog listing every menu shortcut.
 function menus.showShortcuts()
-    dialog.alert("Keyboard shortcuts",
+    dialog.alert("Keyboard shortcuts", require("core.keys").text(
         "Ctrl+1 / Ctrl+2 / Ctrl+3   Changes / History / Commit graph\n"
             .. "Ctrl+K or F1   Command palette      Ctrl+Z / Ctrl+Shift+Z   Undo / Redo\n"
             .. "Ctrl+J   Console      Ctrl+Shift+L   Branch tree\n"
@@ -449,7 +450,7 @@ function menus.showShortcuts()
             .. "Ctrl+Shift+N   New branch      Ctrl+Shift+M   Merge into current\n"
             .. "Ctrl+Shift+S   Stash all changes      F5   Refresh\n"
             .. "Ctrl+N / Ctrl+O / Ctrl+Shift+O   New / Add / Clone repository\n"
-            .. "Ctrl+,   Options      Escape   Close popups and dialogs")
+            .. "Ctrl+,   Options      Escape   Close popups and dialogs"))
 end
 
 --- The palette's live entries: check out a branch, show a changed file,
