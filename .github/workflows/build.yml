@@ -341,8 +341,6 @@ jobs:
           fi
           echo "--- warnings in src/ and from the linker"
           grep -E "/src/[^ ]*: warning:|^ld: warning" "$log" | grep -v third_party | sort -u | head -80
-          echo "--- gitgud's link libraries (temporary)"
-          ninja -C build/release -t commands bin/gitgud.app/Contents/MacOS/gitgud | tail -1 | tr ' ' '\n' | grep -n '\.a$\|\.dylib$\|framework\|^-l' || true
           exit $status
 
       - name: Save vcpkg packages
@@ -447,8 +445,21 @@ jobs:
       - name: Preview (temporary)
         if: always()
         run: |
-          for f in 00-retina 01-changes; do
-            sips -s format jpeg -s formatOptions 50 --resampleWidth 640 "$RUNNER_TEMP/ui/shots/$f.png" --out "$RUNNER_TEMP/$f.jpg" > /dev/null
+          cat > "$RUNNER_TEMP/crop.swift" <<'SWIFT'
+          import AppKit
+          let a = CommandLine.arguments
+          let img = NSImage(contentsOfFile: a[1])!
+          var r = NSRect.zero
+          let cg = img.cgImage(forProposedRect: &r, context: nil, hints: nil)!
+          let c = cg.cropping(to: CGRect(x: Int(a[3])!, y: Int(a[4])!, width: Int(a[5])!, height: Int(a[6])!))!
+          let data = NSBitmapImageRep(cgImage: c).representation(using: .jpeg, properties: [.compressionFactor: 0.7])!
+          try! data.write(to: URL(fileURLWithPath: a[2]))
+          SWIFT
+          shots="$RUNNER_TEMP/ui/shots"
+          swift "$RUNNER_TEMP/crop.swift" "$shots/00-retina.png" "$RUNNER_TEMP/a.jpg" 0 0 600 320
+          swift "$RUNNER_TEMP/crop.swift" "$shots/01-changes.png" "$RUNNER_TEMP/b.jpg" 0 0 600 320
+          sips -s format jpeg -s formatOptions 50 --resampleWidth 640 "$shots/00-retina.png" --out "$RUNNER_TEMP/c.jpg" > /dev/null
+          for f in a b c; do
             echo "@@PREVIEW-BEGIN $f"; base64 -i "$RUNNER_TEMP/$f.jpg" | fold -w 160; echo "@@PREVIEW-END"
           done
 

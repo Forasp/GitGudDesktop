@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -295,18 +296,26 @@ namespace
 #endif
         ;
 
+    // GITGUD_PIXEL_RATIO=2 shows on any display what a Retina one would: the
+    // UI is laid out in the drawable's pixels / 2 and drawn at 2 pixels per
+    // unit, so it comes out at half size. For checking Retina rendering
+    // without a Retina display. 0 when not set.
+    float ForcedPixelRatio()
+    {
+        static const float s_fForced = []
+        {
+            const char* szforced = std::getenv("GITGUD_PIXEL_RATIO");
+            return szforced ? std::max(0.0f, static_cast<float>(std::atof(szforced))) : 0.0f;
+        }();
+        return s_fForced;
+    }
+
     // Drawable pixels per window point: 2 on a Retina display, else 1.
-    // GITGUD_PIXEL_RATIO=2 draws as if it were 2 on any display (only the
-    // top-left quarter fits), to check Retina rendering without one.
     float PixelRatio(SDL_Window* _pWindow)
     {
-        if (const char* szforced = std::getenv("GITGUD_PIXEL_RATIO"))
+        if (ForcedPixelRatio() > 0.0f)
         {
-            const float fforced = static_cast<float>(std::atof(szforced));
-            if (fforced > 0.0f)
-            {
-                return fforced;
-            }
+            return ForcedPixelRatio();
         }
         int iw = 0;
         int ih = 0;
@@ -315,6 +324,37 @@ namespace
         SDL_GetWindowSize(_pWindow, &iw, &ih);
         SDL_GL_GetDrawableSize(_pWindow, &idw, &idh);
         return iw > 0 && idw > 0 ? static_cast<float>(idw) / static_cast<float>(iw) : 1.0f;
+    }
+
+    // The size the UI is laid out at: the window's size in points (with
+    // GITGUD_PIXEL_RATIO, its drawable's size over that ratio).
+    void LayoutSize(SDL_Window* _pWindow, int& _iWidth, int& _iHeight)
+    {
+        const float fforced = ForcedPixelRatio();
+        if (fforced > 0.0f)
+        {
+            SDL_GL_GetDrawableSize(_pWindow, &_iWidth, &_iHeight);
+            _iWidth = static_cast<int>(std::lround(static_cast<float>(_iWidth) / fforced));
+            _iHeight = static_cast<int>(std::lround(static_cast<float>(_iHeight) / fforced));
+            return;
+        }
+        SDL_GetWindowSize(_pWindow, &_iWidth, &_iHeight);
+    }
+
+    // Layout units per window point, for mouse positions (1 unless
+    // GITGUD_PIXEL_RATIO is set).
+    float InputScale(SDL_Window* _pWindow)
+    {
+        if (ForcedPixelRatio() <= 0.0f || !_pWindow)
+        {
+            return 1.0f;
+        }
+        int iw = 0;
+        int ih = 0;
+        int ilayoutWidth = 0;
+        SDL_GetWindowSize(_pWindow, &iw, &ih);
+        LayoutSize(_pWindow, ilayoutWidth, ih);
+        return iw > 0 ? static_cast<float>(ilayoutWidth) / static_cast<float>(iw) : 1.0f;
     }
 
     // SDL hit test for the borderless window: it decides, per mouse position,
@@ -379,7 +419,9 @@ namespace
             onRim(false);
         }
 
-        if (pui && pui->IsDragRegion(static_cast<float>(_pP->x), static_cast<float>(_pP->y)))
+        const float fscale = InputScale(_pWin);
+        if (pui && pui->IsDragRegion(static_cast<float>(_pP->x) * fscale,
+                       static_cast<float>(_pP->y) * fscale))
         {
             return SDL_HITTEST_DRAGGABLE;
         }
@@ -619,7 +661,7 @@ namespace
             SDL_GL_MakeCurrent(pwindow, m_Gl);
             int iw = 0;
             int ih = 0;
-            SDL_GetWindowSize(pwindow, &iw, &ih);
+            LayoutSize(pwindow, iw, ih);
             const bool bcreated = m_pUi->CreateSurface(_Spec.m_Id, iw, ih, _Spec.m_Layout);
             const float fratio = PixelRatio(pwindow);
             if (bcreated)
@@ -1376,7 +1418,9 @@ int main(int _iArgc, char* _aSzArgv[])
     // Lay the UI out at each window's current size, if that changed. Size
     // events only flag the window: a border drag queues one per mouse move,
     // and only the last size counts.
-    bool bmainResizePending = false;
+    // (With GITGUD_PIXEL_RATIO the first layout size differs from the one the
+    // UI started with.)
+    bool bmainResizePending = ForcedPixelRatio() > 0.0f;
     int imainWidth = -1;
     int imainHeight = -1;
     auto applyResizes = [&]()
@@ -1390,7 +1434,7 @@ int main(int _iArgc, char* _aSzArgv[])
             bmainResizePending = false;
             int iw = 0;
             int ih = 0;
-            SDL_GetWindowSize(pwindow, &iw, &ih);
+            LayoutSize(pwindow, iw, ih);
             // Moved to a display of another density (Retina and not).
             if (const float fratio = PixelRatio(pwindow); fratio != fmainRatio)
             {
@@ -1416,7 +1460,7 @@ int main(int _iArgc, char* _aSzArgv[])
             popOut.m_bResizePending = false;
             int iw = 0;
             int ih = 0;
-            SDL_GetWindowSize(popOut.m_pWindow, &iw, &ih);
+            LayoutSize(popOut.m_pWindow, iw, ih);
             if (const float fratio = PixelRatio(popOut.m_pWindow); fratio != popOut.m_fRatio)
             {
                 popOut.m_fRatio = fratio;
@@ -1547,8 +1591,9 @@ int main(int _iArgc, char* _aSzArgv[])
         case SDL_MOUSEMOTION:
             if (ui)
             {
-                ui->InjectMousePosition(
-                    static_cast<float>(_Ev.motion.x), static_cast<float>(_Ev.motion.y));
+                const float fscale = InputScale(SDL_GetWindowFromID(_Ev.motion.windowID));
+                ui->InjectMousePosition(static_cast<float>(_Ev.motion.x) * fscale,
+                    static_cast<float>(_Ev.motion.y) * fscale);
             }
             break;
 

@@ -10,6 +10,13 @@ project(Gitgud
     DESCRIPTION "A moddable Git client with an XML+Lua GUI"
     LANGUAGES CXX)
 
+# Apple's linker doesn't need a static library repeated on the link line
+# (CMake repeats them for linkers that do) and warns about duplicates; let
+# CMake list each library once where the linker allows it (CMake 3.29+).
+if(APPLE AND POLICY CMP0156)
+    cmake_policy(SET CMP0156 NEW)
+endif()
+
 # ---- Standard ------------------------------------------------------------
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
