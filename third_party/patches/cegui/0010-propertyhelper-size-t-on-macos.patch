@@ -1,0 +1,40 @@
+diff --git a/cegui/include/CEGUI/PropertyHelper.h b/cegui/include/CEGUI/PropertyHelper.h
+index 63789de51..03ef89a1e 100644
+--- a/cegui/include/CEGUI/PropertyHelper.h
++++ b/cegui/include/CEGUI/PropertyHelper.h
+@@ -258,6 +258,35 @@ public:
+     static string_return_type toString(pass_type val);
+ };
+ 
++#if defined(__APPLE__)
++// Gitgud patch: on macOS size_t is unsigned long, a type of its own next to
++// std::uint64_t (unsigned long long), so the size_t properties (Combobox,
++// EditboxBase, GridLayoutContainer...) had no helper and didn't compile.
++// Convert through the std::uint64_t helper.
++template<>
++class PropertyHelper<unsigned long>
++{
++public:
++    typedef unsigned long return_type;
++    typedef return_type safe_method_return_type;
++    typedef const unsigned long pass_type;
++    typedef String string_return_type;
++
++    static const String& getDataTypeName()
++    {
++        return PropertyHelper<std::uint64_t>::getDataTypeName();
++    }
++    static return_type fromString(const String& str)
++    {
++        return static_cast<return_type>(PropertyHelper<std::uint64_t>::fromString(str));
++    }
++    static string_return_type toString(pass_type val)
++    {
++        return PropertyHelper<std::uint64_t>::toString(val);
++    }
++};
++#endif
++
+ template<> 
+ class CEGUIEXPORT PropertyHelper<bool>
+ {

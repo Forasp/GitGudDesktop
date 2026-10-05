@@ -255,10 +255,16 @@ namespace gitgud::ui
 #if !defined(_WIN32)
         // CEGUI loads its XML parser, image codec and window renderers at run
         // time, by default from the folder it was installed to on the build
-        // machine. An installed GitGud carries them in <app>/lib/cegui-9999.0.
+        // machine. An installed GitGud carries them in <app>/lib/cegui-9999.0,
+        // or on macOS in the app bundle's Frameworks folder (resources/ is in
+        // Contents/Resources).
         {
             const std::string exeDir = _ResourceRoot.substr(0, _ResourceRoot.find_last_of('/'));
+#if defined(__APPLE__)
+            const std::string moduleDir = exeDir + "/../Frameworks";
+#else
             const std::string moduleDir = exeDir + "/lib/cegui-9999.0";
+#endif
             std::error_code ec;
             if (!std::getenv("CEGUI_MODULE_DIR") &&
                 std::filesystem::is_directory(std::filesystem::u8path(moduleDir), ec))

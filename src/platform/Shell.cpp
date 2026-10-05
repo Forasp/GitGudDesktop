@@ -77,7 +77,15 @@ namespace gitgud::platform
         std::uint32_t nsize = sizeof(szexe);
         if (_NSGetExecutablePath(szexe, &nsize) == 0)
         {
-            return fs::canonical(szexe, ec).parent_path().u8string();
+            // In an app bundle the exe is in Contents/MacOS and its files in
+            // Contents/Resources.
+            const fs::path dir = fs::canonical(szexe, ec).parent_path();
+            const fs::path resources = dir.parent_path() / "Resources";
+            if (dir.filename() == "MacOS" && fs::is_directory(resources, ec))
+            {
+                return resources.u8string();
+            }
+            return dir.u8string();
         }
 #else
         const fs::path exe = fs::read_symlink("/proc/self/exe", ec);

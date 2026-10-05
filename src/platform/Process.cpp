@@ -14,6 +14,7 @@
 #endif
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <thread>
@@ -643,6 +644,112 @@ namespace gitgud::platform
         }
 
     } // namespace
+
+#if defined(__APPLE__)
+    void AdoptLoginShellPath()
+    {
+        constexpr int ikTimeoutMs = 3000;
+        const char* szshell = std::getenv("SHELL");
+        const std::string shell = szshell && *szshell ? szshell : "/bin/zsh";
+        if (!IsExecutable(fs::u8path(shell)))
+        {
+            return;
+        }
+
+        ScopedFd outRead;
+        ScopedFd outWrite;
+        if (!MakePipe(outRead, outWrite))
+        {
+            return;
+        }
+        // Markers around the value: a profile may print things of its own.
+        const std::string kMark = "@@gitgud-path@@";
+        const std::vector<std::string> args{
+            shell, "-lc", "printf '" + kMark + "%s" + kMark + "' \"$PATH\""};
+        const std::vector<char*> argv = MakeArgv(shell, args);
+        const pid_t pid = StartChild(argv, "", -1, outWrite.m_iFd, -1, true);
+        if (pid < 0)
+        {
+            return;
+        }
+        outWrite.Close();
+
+        // Read until the shell closes its output or the time is up; a profile
+        // that waits for input or hangs must not hold up the app.
+        std::string output;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(ikTimeoutMs);
+        bool bdone = false;
+        while (!bdone)
+        {
+            const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now())
+                                  .count();
+            if (left <= 0)
+            {
+                break;
+            }
+            pollfd fd{outRead.m_iFd, POLLIN, 0};
+            const int iready = poll(&fd, 1, static_cast<int>(left));
+            if (iready < 0 && errno == EINTR)
+            {
+                continue;
+            }
+            if (iready <= 0)
+            {
+                break;
+            }
+            char szbuf[4096];
+            const ssize_t nread = read(outRead.m_iFd, szbuf, sizeof(szbuf));
+            if (nread > 0)
+            {
+                output.append(szbuf, static_cast<std::size_t>(nread));
+            }
+            else if (!(nread < 0 && errno == EINTR))
+            {
+                bdone = true;
+            }
+        }
+        if (!bdone)
+        {
+            kill(-pid, SIGKILL); // the shell and anything its profile started
+        }
+        if (WaitExitCode(pid) != 0 || !bdone)
+        {
+            return;
+        }
+        const std::size_t nbegin = output.find(kMark);
+        const std::size_t nend =
+            nbegin == std::string::npos ? nbegin : output.find(kMark, nbegin + kMark.size());
+        if (nend == std::string::npos)
+        {
+            return;
+        }
+        const std::string login =
+            output.substr(nbegin + kMark.size(), nend - nbegin - kMark.size());
+        if (login.empty())
+        {
+            return;
+        }
+
+        // The login shell's folders first, then any of ours it doesn't have.
+        std::string path = login;
+        const char* szcurrent = std::getenv("PATH");
+        const std::string current = szcurrent ? szcurrent : "";
+        const std::string wrapped = ":" + login + ":";
+        std::size_t nstart = 0;
+        while (nstart <= current.size())
+        {
+            const std::size_t nend = std::min(current.find(':', nstart), current.size());
+            const std::string dir = current.substr(nstart, nend - nstart);
+            if (!dir.empty() && wrapped.find(":" + dir + ":") == std::string::npos)
+            {
+                path += ":" + dir;
+            }
+            nstart = nend + 1;
+        }
+        setenv("PATH", path.c_str(), 1);
+    }
+#endif
 
     std::string FindProgram(const std::string& _Name)
     {

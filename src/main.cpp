@@ -67,6 +67,7 @@
 #include "lua/LuaEngine.h"
 #include "platform/CrashHandler.h"
 #include "platform/ICredentialStore.h"
+#include "platform/Process.h"
 #include "platform/Shell.h"
 #include "ui/IUiBackend.h"
 
@@ -923,6 +924,12 @@ int main(int _iArgc, char* _aSzArgv[])
     // Symbolized stack trace + minidump if we ever crash.
     gitgud::platform::InstallCrashHandler(gitgud::platform::LogDirectory());
 
+#if defined(__APPLE__)
+    // Started from Finder, PATH lacks what the shell profile adds (gpg,
+    // git-lfs, p4, editors): take the login shell's.
+    gitgud::platform::AdoptLoginShellPath();
+#endif
+
     // Updates (app/Updater.h). While gitgud-patcher.exe is replacing files,
     // wait for it instead of loading half-replaced ones. A downloaded update
     // is installed now, before anything loads, but only when no other copy of
@@ -969,6 +976,11 @@ int main(int _iArgc, char* _aSzArgv[])
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+#if defined(__APPLE__)
+    // macOS only gives a 3.2 core context when it's forward compatible. The
+    // pop-out windows share this context.
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+#endif
 
     SDL_Window* pwindow = SDL_CreateWindow("Gitgud", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         ikWidth, ikHeight,

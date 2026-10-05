@@ -17,6 +17,11 @@ if(WIN32)
     target_sources(gitgud_tests PRIVATE test_update.cpp)
 endif()
 
+# The Keychain store is macOS only.
+if(APPLE)
+    target_sources(gitgud_tests PRIVATE test_keychain.cpp)
+endif()
+
 target_link_libraries(gitgud_tests PRIVATE
     gitgud_core
     Catch2::Catch2WithMain
