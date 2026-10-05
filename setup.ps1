@@ -187,10 +187,39 @@ function Install-Patches {
 
 # -------------------------------------------------------- 4. Build CEGUI --
 
-# What a CEGUI install was built from: the submodule commit plus a hash of
-# every patch. When it matches the install's stamp, nothing needs rebuilding.
+# CEGUI's build options. Everything CEGUI would otherwise switch on by itself
+# when it finds a library on the build machine is set explicitly, so every
+# machine builds the same CEGUI. Part of the fingerprint below: changing one
+# rebuilds CEGUI.
+$CeguiOptions = @(
+    "-DCEGUI_BUILD_RENDERER_OPENGL3=ON", "-DCEGUI_BUILD_RENDERER_OPENGL=OFF",
+    "-DCEGUI_BUILD_RENDERER_OPENGLES=OFF", "-DCEGUI_BUILD_RENDERER_OPENGLES2_ALTERNATE=OFF",
+    "-DCEGUI_BUILD_RENDERER_OGRE=OFF", "-DCEGUI_BUILD_RENDERER_IRRLICHT=OFF",
+    "-DCEGUI_BUILD_RENDERER_DIRECT3D11=OFF",
+    "-DCEGUI_BUILD_XMLPARSER_PUGIXML=ON", "-DCEGUI_BUILD_XMLPARSER_EXPAT=OFF",
+    "-DCEGUI_BUILD_XMLPARSER_LIBXML2=OFF", "-DCEGUI_BUILD_XMLPARSER_XERCES=OFF",
+    "-DCEGUI_BUILD_XMLPARSER_TINYXML2=OFF",
+    "-DCEGUI_BUILD_IMAGECODEC_STB=ON", "-DCEGUI_BUILD_IMAGECODEC_SILLY=OFF",
+    "-DCEGUI_BUILD_IMAGECODEC_DEVIL=OFF", "-DCEGUI_BUILD_IMAGECODEC_FREEIMAGE=OFF",
+    "-DCEGUI_BUILD_IMAGECODEC_CORONA=OFF", "-DCEGUI_BUILD_IMAGECODEC_PVR=OFF",
+    "-DCEGUI_BUILD_IMAGECODEC_SDL2=OFF",
+    "-DCEGUI_BUILD_RESOURCE_PROVIDER_MINIZIP=OFF", "-DCEGUI_REGEX_MATCHER=std",
+    "-DCEGUI_USE_FREETYPE=ON", "-DCEGUI_USE_RAQM=OFF", "-DCEGUI_USE_FRIBIDI=OFF",
+    "-DCEGUI_BUILD_SAMPLES=OFF",
+    "-DCEGUI_BUILD_APPLICATION_TEMPLATES=OFF", "-DCEGUI_BUILD_LUA_MODULE=OFF",
+    # Off even where Python and SWIG are installed (they'd switch it on).
+    "-DCEGUI_BUILD_PYTHON_MODULES_SWIG=OFF", "-DCEGUI_BUILD_PYTHON_MODULES_PYPLUSPLUS=OFF",
+    # Nor search for what only those modules and CEGUI's tests use.
+    "-DCMAKE_DISABLE_FIND_PACKAGE_PythonLibs=ON", "-DCMAKE_DISABLE_FIND_PACKAGE_PythonInterp=ON",
+    "-DCMAKE_DISABLE_FIND_PACKAGE_Boost=ON", "-DCMAKE_DISABLE_FIND_PACKAGE_SWIG=ON",
+    "-DCEGUI_STRING_CLASS=UTF-32"
+)
+
+# What a CEGUI install was built from: the submodule commit, its build
+# options, and a hash of every patch. When it matches the install's stamp,
+# nothing needs rebuilding.
 function Get-CeguiFingerprint($Patches) {
-    $parts = @((& git -C $CeguiSource rev-parse HEAD).Trim())
+    $parts = @((& git -C $CeguiSource rev-parse HEAD).Trim(), "options $($CeguiOptions -join ' ')")
     foreach ($patch in $Patches) {
         $parts += "$($patch.Name) $((Get-FileHash $patch.FullName -Algorithm SHA256).Hash)"
     }
@@ -211,22 +240,13 @@ function Build-Cegui($Configuration, $Fingerprint) {
 
     $root = $Root -replace "\\", "/"
     $toolchain = "$($env:VCPKG_ROOT -replace '\\', '/')/scripts/buildsystems/vcpkg.cmake"
-    Invoke-Checked cmake @(
+    Invoke-Checked cmake (@(
         "-S", "$root/third_party/cegui", "-B", ($buildDir -replace "\\", "/"), "-G", "Ninja",
-        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
         "-DCMAKE_BUILD_TYPE=$Configuration",
         "-DCMAKE_INSTALL_PREFIX=$($installDir -replace '\\', '/')",
         "-DCMAKE_TOOLCHAIN_FILE=$toolchain",
-        "-DVCPKG_MANIFEST_DIR=$root/third_party/cegui-manifest",
-        "-DCEGUI_BUILD_RENDERER_OPENGL3=ON", "-DCEGUI_BUILD_RENDERER_OPENGL=OFF",
-        "-DCEGUI_BUILD_XMLPARSER_PUGIXML=ON", "-DCEGUI_BUILD_XMLPARSER_EXPAT=OFF",
-        "-DCEGUI_BUILD_IMAGECODEC_STB=ON", "-DCEGUI_BUILD_IMAGECODEC_SILLY=OFF",
-        "-DCEGUI_USE_FREETYPE=ON", "-DCEGUI_BUILD_SAMPLES=OFF",
-        "-DCEGUI_BUILD_APPLICATION_TEMPLATES=OFF", "-DCEGUI_BUILD_LUA_MODULE=OFF",
-        # Off even where Python and SWIG are installed (they'd switch it on).
-        "-DCEGUI_BUILD_PYTHON_MODULES_SWIG=OFF", "-DCEGUI_BUILD_PYTHON_MODULES_PYPLUSPLUS=OFF",
-        "-DCEGUI_STRING_CLASS=UTF-32"
-    )
+        "-DVCPKG_MANIFEST_DIR=$root/third_party/cegui-manifest"
+    ) + $CeguiOptions)
     Invoke-Checked cmake @("--build", $buildDir)
     Invoke-Checked cmake @("--install", $buildDir)
     Set-Content -Path $stamp -Value $Fingerprint -Encoding ascii

@@ -45,6 +45,34 @@ cegui_source="$root/third_party/cegui"
 patch_dir="$root/third_party/patches/cegui"
 started=$(date +%s)
 
+# CEGUI's build options. Everything CEGUI would otherwise switch on by
+# itself when it finds a library on the build machine is set explicitly, so
+# every machine builds the same CEGUI and the packages depend on nothing
+# extra. Part of the fingerprint below: changing one rebuilds CEGUI.
+cegui_options=(
+    -DCEGUI_BUILD_RENDERER_OPENGL3=ON -DCEGUI_BUILD_RENDERER_OPENGL=OFF
+    -DCEGUI_BUILD_RENDERER_OPENGLES=OFF -DCEGUI_BUILD_RENDERER_OPENGLES2_ALTERNATE=OFF
+    -DCEGUI_BUILD_RENDERER_OGRE=OFF -DCEGUI_BUILD_RENDERER_IRRLICHT=OFF
+    -DCEGUI_BUILD_XMLPARSER_PUGIXML=ON -DCEGUI_BUILD_XMLPARSER_EXPAT=OFF
+    -DCEGUI_BUILD_XMLPARSER_LIBXML2=OFF -DCEGUI_BUILD_XMLPARSER_XERCES=OFF
+    -DCEGUI_BUILD_XMLPARSER_TINYXML2=OFF
+    -DCEGUI_BUILD_IMAGECODEC_STB=ON -DCEGUI_BUILD_IMAGECODEC_SILLY=OFF
+    -DCEGUI_BUILD_IMAGECODEC_DEVIL=OFF -DCEGUI_BUILD_IMAGECODEC_FREEIMAGE=OFF
+    -DCEGUI_BUILD_IMAGECODEC_CORONA=OFF -DCEGUI_BUILD_IMAGECODEC_PVR=OFF
+    -DCEGUI_BUILD_IMAGECODEC_SDL2=OFF
+    -DCEGUI_BUILD_RESOURCE_PROVIDER_MINIZIP=OFF -DCEGUI_REGEX_MATCHER=std
+    -DCEGUI_USE_FREETYPE=ON -DCEGUI_USE_RAQM=OFF -DCEGUI_USE_FRIBIDI=OFF
+    -DCEGUI_BUILD_SAMPLES=OFF
+    -DCEGUI_BUILD_APPLICATION_TEMPLATES=OFF -DCEGUI_BUILD_LUA_MODULE=OFF
+    -DCEGUI_BUILD_PYTHON_MODULES_SWIG=OFF -DCEGUI_BUILD_PYTHON_MODULES_PYPLUSPLUS=OFF
+    -DCEGUI_STRING_CLASS=UTF-32
+    # Nor search for what only the Python modules and CEGUI's tests use.
+    -DCMAKE_DISABLE_FIND_PACKAGE_PythonLibs=ON -DCMAKE_DISABLE_FIND_PACKAGE_PythonInterp=ON
+    -DCMAKE_DISABLE_FIND_PACKAGE_Boost=ON -DCMAKE_DISABLE_FIND_PACKAGE_SWIG=ON
+    # GLVND is the OpenGL library to link on current Linux.
+    -DOpenGL_GL_PREFERENCE=GLVND
+)
+
 step() { printf '\n==> %s\n' "$1"; }
 note() { printf '    %s\n' "$1"; }
 
@@ -95,10 +123,12 @@ apply_patches() {
     done
 }
 
-# What a CEGUI install was built from: the submodule commit plus a hash of
-# every patch. When it matches the install's stamp, nothing needs rebuilding.
+# What a CEGUI install was built from: the submodule commit, its build
+# options, and a hash of every patch. When it matches the install's stamp,
+# nothing needs rebuilding.
 cegui_fingerprint() {
     git -C "$cegui_source" rev-parse HEAD
+    printf 'options %s\n' "${cegui_options[*]}"
     local patch
     for patch in "$patch_dir"/*.patch; do
         printf '%s %s\n' "$(basename "$patch")" "$(sha256sum "$patch" | awk '{print $1}')"
@@ -119,20 +149,11 @@ build_cegui() {
         return
     fi
     cmake -S "$cegui_source" -B "$build_dir" -G Ninja \
-        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX="$install_dir" \
         -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
         -DVCPKG_MANIFEST_DIR="$root/third_party/cegui-manifest" \
-        -DCEGUI_BUILD_RENDERER_OPENGL3=ON -DCEGUI_BUILD_RENDERER_OPENGL=OFF \
-        -DCEGUI_BUILD_RENDERER_OPENGLES=OFF -DCEGUI_BUILD_RENDERER_OPENGLES2_ALTERNATE=OFF \
-        -DCEGUI_BUILD_RENDERER_OGRE=OFF -DCEGUI_BUILD_RENDERER_IRRLICHT=OFF \
-        -DCEGUI_BUILD_XMLPARSER_PUGIXML=ON -DCEGUI_BUILD_XMLPARSER_EXPAT=OFF \
-        -DCEGUI_BUILD_IMAGECODEC_STB=ON -DCEGUI_BUILD_IMAGECODEC_SILLY=OFF \
-        -DCEGUI_USE_FREETYPE=ON -DCEGUI_BUILD_SAMPLES=OFF \
-        -DCEGUI_BUILD_APPLICATION_TEMPLATES=OFF -DCEGUI_BUILD_LUA_MODULE=OFF \
-        -DCEGUI_BUILD_PYTHON_MODULES_SWIG=OFF -DCEGUI_BUILD_PYTHON_MODULES_PYPLUSPLUS=OFF \
-        -DCEGUI_STRING_CLASS=UTF-32
+        "${cegui_options[@]}"
     cmake --build "$build_dir"
     cmake --install "$build_dir"
     printf '%s\n' "$fingerprint" > "$stamp"

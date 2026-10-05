@@ -51,6 +51,10 @@
 #include <io.h>
 #include <share.h>
 #include <sys/stat.h>
+#else
+#include <cerrno>
+#include <fcntl.h>
+#include <unistd.h>
 #endif
 
 #include "app/EventBus.h"
@@ -895,8 +899,22 @@ int main(int _iArgc, char* _aSzArgv[])
             _close(ifd);
         }
 #else
-        std::freopen(szlogPath, "w", stdout);
-        std::freopen(szlogPath, "a", stderr);
+        // One open file behind both streams, so their lines interleave
+        // instead of overwriting each other. If it can't be opened, output
+        // stays on the terminal.
+        const int ifd = open(szlogPath, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+        if (ifd >= 0)
+        {
+            std::fflush(stdout);
+            std::fflush(stderr);
+            dup2(ifd, STDOUT_FILENO);
+            dup2(ifd, STDERR_FILENO);
+            close(ifd);
+        }
+        else
+        {
+            std::fprintf(stderr, "GITGUD_LOG: can't write %s: %s\n", szlogPath, std::strerror(errno));
+        }
 #endif
         std::setvbuf(stdout, nullptr, _IONBF, 0);
         std::setvbuf(stderr, nullptr, _IONBF, 0);

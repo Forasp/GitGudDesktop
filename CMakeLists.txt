@@ -365,12 +365,19 @@ if(UNIX AND NOT APPLE AND GITGUD_UI_CEGUI AND CEGUI_FOUND)
     set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
     set(CPACK_RPM_PACKAGE_LICENSE "MIT")
     set(CPACK_RPM_PACKAGE_GROUP "Development/Tools")
-    set(CPACK_RPM_PACKAGE_SUGGESTS "git, git-lfs, gnupg2, xdg-utils, libsecret, zenity")
+    # Recommends (installed by default, like the .deb's) go straight into the
+    # spec header: CPack has no RECOMMENDS variable, and its weak-dependency
+    # probe runs an RPM_EXECUTABLE it never sets, so it drops SUGGESTS too.
+    set(_rpm_recommends "")
+    foreach(_package git git-lfs gnupg2 xdg-utils libsecret zenity)
+        string(APPEND _rpm_recommends "Recommends: ${_package}\n")
+    endforeach()
     # The bundled CEGUI libraries are private: neither provide nor require
     # them from the system.
     set(CPACK_RPM_SPEC_MORE_DEFINE
         "%global __provides_exclude_from ^/usr/lib/gitgud/.*$
-%global __requires_exclude ^libCEGUI.*$")
+%global __requires_exclude ^libCEGUI.*$
+${_rpm_recommends}")
     set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION ${_shared_dirs})
     include(CPack)
 endif()

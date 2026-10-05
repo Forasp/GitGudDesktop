@@ -81,7 +81,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: third_party/cegui-install-release
-          key: cegui-${{ steps.keys.outputs.image }}-${{ steps.keys.outputs.cegui }}-${{ hashFiles('third_party/patches/cegui/*.patch', 'third_party/cegui-manifest/vcpkg.json') }}
+          key: cegui-${{ steps.keys.outputs.image }}-${{ steps.keys.outputs.cegui }}-${{ hashFiles('third_party/patches/cegui/*.patch', 'third_party/cegui-manifest/vcpkg.json', 'setup.ps1') }}
 
       - name: Build and test
         run: |

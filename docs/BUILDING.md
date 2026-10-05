@@ -82,13 +82,14 @@ for VS** (its vcpkg sets `VCPKG_ROOT`; a plain shell can't configure) after
 `git submodule update --init`.
 
 CEGUI isn't in vcpkg; it's built from the `third_party/cegui` submodule,
-**twice** — Debug and Release — because MSVC can't mix debug and release
-runtimes across DLLs. First apply GitGud's patches (they fix CEGUI behaviour
-GitGud depends on; see each file's header):
+**twice** (Debug and Release) because MSVC can't mix debug and release
+runtimes across DLLs. First apply every patch in `third_party/patches/cegui`,
+in name order (they fix CEGUI behaviour GitGud depends on; see each file's
+header):
 
 ```powershell
-git -C third_party/cegui apply ../patches/cegui/0001-itemview-scroll-without-relayout.patch
-git -C third_party/cegui apply ../patches/cegui/0002-text-background-per-element.patch
+Get-ChildItem third_party/patches/cegui/*.patch | Sort-Object Name |
+  ForEach-Object { git -C third_party/cegui apply $_.FullName }
 ```
 
 Then configure, build, and install each configuration (repeat with
@@ -97,15 +98,10 @@ Then configure, build, and install each configuration (repeat with
 ```powershell
 $tc = "$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 cmake -S third_party/cegui -B build/cegui-rel -G Ninja `
-  "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" "-DCMAKE_BUILD_TYPE=Release" `
+  "-DCMAKE_BUILD_TYPE=Release" `
   "-DCMAKE_INSTALL_PREFIX=$PWD/third_party/cegui-install-release" `
   "-DCMAKE_TOOLCHAIN_FILE=$tc" "-DVCPKG_MANIFEST_DIR=$PWD/third_party/cegui-manifest" `
-  "-DCEGUI_BUILD_RENDERER_OPENGL3=ON" "-DCEGUI_BUILD_RENDERER_OPENGL=OFF" `
-  "-DCEGUI_BUILD_XMLPARSER_PUGIXML=ON" "-DCEGUI_BUILD_XMLPARSER_EXPAT=OFF" `
-  "-DCEGUI_BUILD_IMAGECODEC_STB=ON" "-DCEGUI_BUILD_IMAGECODEC_SILLY=OFF" `
-  "-DCEGUI_USE_FREETYPE=ON" "-DCEGUI_BUILD_SAMPLES=OFF" `
-  "-DCEGUI_BUILD_APPLICATION_TEMPLATES=OFF" "-DCEGUI_BUILD_LUA_MODULE=OFF" `
-  "-DCEGUI_STRING_CLASS=UTF-32"
+  <every option in $CeguiOptions in setup.ps1>
 cmake --build build/cegui-rel
 cmake --install build/cegui-rel
 ```
@@ -304,8 +300,8 @@ powershell -ExecutionPolicy Bypass -File tools\publish-wiki.ps1   # -DryRun to p
   OpenSSL, so the first configure after that change takes a while).
 - *CEGUI wasn't found* — run `setup.cmd` with that preset (or build and
   install CEGUI for that build type by hand, above).
-- *CMake 4 rejects CEGUI's `cmake_minimum_required`* — keep
-  `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` (quoted, in PowerShell).
+- *CMake 4 rejects CEGUI's `cmake_minimum_required`*: patch
+  `0008-cmake-minimum-3.5.patch` isn't applied; apply every patch first.
 - *Lua syntax check without running the app* — vcpkg's Lua has no `luac`;
   compile a tiny `luaL_loadfile` program against
   `build\release\vcpkg_installed\x64-windows\lib\lua.lib`.
