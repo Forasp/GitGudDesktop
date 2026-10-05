@@ -1,7 +1,7 @@
 # Building GitGud Desktop
 
-Windows + Visual Studio is the tested setup. Linux builds too (see
-[Linux](#linux)); it's newer and less tested.
+Windows + Visual Studio is the tested setup. Linux and macOS build too (see
+[Linux](#linux) and [macOS](#macos)); they're newer and less tested.
 
 ## Quick start: `setup.cmd`
 
@@ -74,6 +74,48 @@ The packages need at least the glibc they were built against, so build
 them on the oldest distribution you support (Ubuntu 22.04 covers Debian 12,
 Ubuntu 22.04+, and Fedora 36+). Linux builds don't update themselves: the
 package manager does, and Help > Check for Updates says so.
+
+## macOS
+
+Apple Silicon (arm64), macOS 12 or later. `setup.sh` works as on Linux. It
+needs the Xcode command-line tools (`xcode-select --install`), CMake, Ninja
+and pkg-config (Homebrew: `brew install cmake ninja pkg-config`), and a vcpkg
+checkout in `VCPKG_ROOT`:
+
+```bash
+git clone https://github.com/microsoft/vcpkg ~/vcpkg && ~/vcpkg/bootstrap-vcpkg.sh
+export VCPKG_ROOT=~/vcpkg
+./setup.sh --test               # release build and engine tests
+open build/release/bin/gitgud.app
+```
+
+vcpkg builds for macOS 12 through the overlay triplet in `triplets/`
+(`CMakePresets.json` and `setup.sh` point vcpkg at it). The build makes a
+runnable app bundle, `build/release/bin/gitgud.app`: `resources/`, `docs/`
+and `cegui-datafiles/` in `Contents/Resources` (hot-reload watches that
+copy), CEGUI's libraries and modules in `Contents/Frameworks`. Settings live
+in `~/Library/Application Support/Gitgud`, saved passwords in the login
+Keychain (service "GitGud"). At startup the app takes `PATH` from the login
+shell, so tools installed with Homebrew are found when it's opened from
+Finder. Run another copy with `open -n build/release/bin/gitgud.app`.
+
+The window uses the display's full resolution on Retina screens: the UI is
+laid out in points, and text and the commit graph are drawn at two pixels
+per point (CEGUI patch 0012).
+
+### macOS disk image: `package.sh`
+
+```bash
+./package.sh                  # or --skip-build after ./setup.sh
+```
+
+On macOS it makes `build/dist/GitGud-macOS-arm64.dmg` holding
+`GitGud Desktop.app`: the built bundle plus gh (the `GH_VERSION` release,
+checked against its published SHA-256) in `Contents/Resources/gh`. It
+checks that every binary needs only the system and the bundle (`otool -L`)
+and signs the app ad hoc. The app isn't notarized, so the first time
+right-click it in Applications and choose Open. It doesn't update itself:
+Help > Check for Updates points to the releases page.
 
 ## What setup does, by hand
 
@@ -272,6 +314,12 @@ through the last two. The latest one is always at
   throwaway repository — they stage, commit, branch, and push. They also save
   settings, open tabs, and recent repositories to `%APPDATA%\Gitgud`; set
   `$env:APPDATA` to a scratch folder first to keep your own untouched.
+  On macOS run `tests/ui/make-testrepo.sh` and start
+  `build/release/bin/gitgud.app/Contents/MacOS/gitgud <repo>` with the same
+  variables and `HOME` set to a scratch folder. The Keychain isn't per
+  `HOME`: scripts that can reach a sign-in must stub `gitgud.setCredential`
+  (see `tests/ui/signin.lua`), and the engine's Keychain test uses its own
+  service name ("GitGud tests") and deletes what it adds.
 - **Perforce**: the `[p4][server]` engine cases and the `p4.lua` /
   `depot-p4.lua` UI scripts need `p4.exe` and `p4d.exe` from Perforce's
   downloads. Point `GITGUD_P4` and `GITGUD_TEST_P4D` at them, or the server

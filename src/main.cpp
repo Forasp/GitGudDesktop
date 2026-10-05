@@ -67,6 +67,7 @@
 #include "lua/LuaEngine.h"
 #include "platform/CrashHandler.h"
 #include "platform/ICredentialStore.h"
+#include "platform/MacWindow.h"
 #include "platform/Process.h"
 #include "platform/Shell.h"
 #include "ui/IUiBackend.h"
@@ -295,8 +296,18 @@ namespace
         ;
 
     // Drawable pixels per window point: 2 on a Retina display, else 1.
+    // GITGUD_PIXEL_RATIO=2 draws as if it were 2 on any display (only the
+    // top-left quarter fits), to check Retina rendering without one.
     float PixelRatio(SDL_Window* _pWindow)
     {
+        if (const char* szforced = std::getenv("GITGUD_PIXEL_RATIO"))
+        {
+            const float fforced = static_cast<float>(std::atof(szforced));
+            if (fforced > 0.0f)
+            {
+                return fforced;
+            }
+        }
         int iw = 0;
         int ih = 0;
         int idw = 0;
@@ -535,6 +546,7 @@ namespace
             bool m_bResizePending = false;
             int m_iWidth = 0; // the size the UI was last laid out for
             int m_iHeight = 0;
+            float m_fRatio = 1.0f; // drawable pixels per point (PixelRatio)
         };
 
         AppShell(SDL_Window* _pMain, SDL_GLContext _Gl, gitgud::ui::IUiBackend* _pUi,
@@ -609,9 +621,10 @@ namespace
             int ih = 0;
             SDL_GetWindowSize(pwindow, &iw, &ih);
             const bool bcreated = m_pUi->CreateSurface(_Spec.m_Id, iw, ih, _Spec.m_Layout);
+            const float fratio = PixelRatio(pwindow);
             if (bcreated)
             {
-                m_pUi->SetPixelRatio(_Spec.m_Id, PixelRatio(pwindow));
+                m_pUi->SetPixelRatio(_Spec.m_Id, fratio);
             }
             SDL_GL_MakeCurrent(m_pMain, m_Gl);
             if (!bcreated)
@@ -621,7 +634,7 @@ namespace
                 return false;
             }
 
-            m_PopOuts[_Spec.m_Id] = PopOut{pwindow, true, false, iw, ih};
+            m_PopOuts[_Spec.m_Id] = PopOut{pwindow, true, false, iw, ih, fratio};
             UpdateSwapInterval();
             return true;
         }
@@ -673,6 +686,9 @@ namespace
             }
             m_bBordered = _bBordered;
             SDL_SetWindowBordered(m_pMain, _bBordered ? SDL_TRUE : SDL_FALSE);
+#if defined(__APPLE__)
+            gitgud::platform::AllowMinimize(m_pMain);
+#endif
             // A native frame does its own dragging and resizing.
             SDL_SetWindowHitTest(m_pMain, _bBordered ? nullptr : WindowHitTest, m_pUi);
         }
@@ -1071,6 +1087,10 @@ int main(int _iArgc, char* _aSzArgv[])
         return 1;
     }
     SDL_SetWindowMinimumSize(pwindow, 1140, 600);
+#if defined(__APPLE__)
+    gitgud::platform::AllowMinimize(pwindow);
+    gitgud::platform::ReleaseCloseShortcut();
+#endif
 
     SDL_GLContext gl = SDL_GL_CreateContext(pwindow);
     if (!gl)
@@ -1128,7 +1148,9 @@ int main(int _iArgc, char* _aSzArgv[])
     // a UI has been picked. Failing isn't fatal: the UI still comes up and
     // offers Open/Init/clone. Absolute so the UI can show a real name.
     std::string startRepo;
-    if (_iArgc > 1)
+    // Older macOS hands an app opened from Finder a "-psn_..." process serial
+    // number; that's not a path.
+    if (_iArgc > 1 && std::strncmp(_aSzArgv[1], "-psn_", 5) != 0)
     {
         std::error_code ec;
         startRepo = fs::absolute(fs::u8path(_aSzArgv[1]), ec).u8string();
@@ -1395,8 +1417,12 @@ int main(int _iArgc, char* _aSzArgv[])
             int iw = 0;
             int ih = 0;
             SDL_GetWindowSize(popOut.m_pWindow, &iw, &ih);
-            ui->SetPixelRatio(id, PixelRatio(popOut.m_pWindow));
-            popOut.m_bRedraw = true;
+            if (const float fratio = PixelRatio(popOut.m_pWindow); fratio != popOut.m_fRatio)
+            {
+                popOut.m_fRatio = fratio;
+                ui->SetPixelRatio(id, fratio);
+                popOut.m_bRedraw = true;
+            }
             if (iw == popOut.m_iWidth && ih == popOut.m_iHeight)
             {
                 continue;

@@ -140,7 +140,7 @@ a time, Escape closes, and what was underneath repaints afterwards.
 | `ui/dialog.lua` | `dialog.show{title, message, fields, checks, ok, onOk}`, `dialog.confirm`, `dialog.prompt`, `dialog.alert`, `dialog.showModal` / `hideModal` for your own modal windows |
 | `ui/popup.lua` | `popup.open(name, {anchor, focus, onClose})` — dropdowns that close on click-away / Escape |
 | `ui/placeholder.lua` | grey hint text in empty editboxes |
-| `core/keys.lua` | `keys.bind("ctrl+alt+x", fn)` (menu items with a `shortcut` bind automatically) |
+| `core/keys.lua` | `keys.bind("ctrl+alt+x", fn)` (menu items with a `shortcut` bind automatically), `keys.label(combo)` for showing one ("Ctrl+Alt+X", or "⌥⌘X" on macOS), `keys.text(s)` to show the shortcuts written in a text the macOS way, `keys.adaptTooltips(names)` for layout tooltips |
 | `core/status.lua` | `status.ok / info / warn / error(msg)`, `status.report(okMsg, gitgud.call(...))` |
 | `core/settings.lua` | `settings.get(key, default)` / `settings.set(key, value)`, persisted per user |
 | `core/text.lua` | `text.colour(C.cyan, s)`, `text.escape`, `text.plural`, `text.ago`, path helpers |

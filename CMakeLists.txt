@@ -161,9 +161,12 @@ if(WIN32)
     target_link_libraries(gitgud_core PUBLIC advapi32 shell32 ole32 dbghelp winhttp bcrypt)
 elseif(APPLE)
     # The shell helpers use SDL's clipboard; saved passwords live in the
-    # Keychain (Security.framework).
+    # Keychain (Security.framework); MacWindow.mm adjusts SDL's window and
+    # menu (AppKit).
+    enable_language(OBJCXX)
+    target_sources(gitgud_core PRIVATE src/platform/MacWindow.mm)
     target_link_libraries(gitgud_core PUBLIC SDL2::SDL2 "-framework Security"
-        "-framework CoreFoundation")
+        "-framework CoreFoundation" "-framework AppKit")
 else()
     # The shell helpers use SDL's clipboard; the Linux credential store loads
     # libsecret at run time.

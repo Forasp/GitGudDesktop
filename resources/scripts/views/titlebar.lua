@@ -14,24 +14,31 @@ local MAC = gitgud.platform == "macos"
 -- macOS: the window buttons sit on the left in the Mac's order and colours
 -- (close, minimize, zoom), and the mark and menus move right to make room.
 local MAC_BUTTONS = {
-    { "WindowCloseButton", "FFFF5F57", "FFFF8A84" },
-    { "WindowMinButton", "FFFEBC2E", "FFFFD06B" },
-    { "WindowMaxButton", "FF28C840", "FF5FD970" },
+    { "WindowCloseButton", "FFFF5F57" },
+    { "WindowMinButton", "FFFEBC2E" },
+    { "WindowMaxButton", "FF28C840" },
 }
 
 local function macLayout()
     for i, button in ipairs(MAC_BUTTONS) do
-        local name, colour, hover = button[1], button[2], button[3]
+        local name, colour = button[1], button[2]
         local left = 8 + (i - 1) * 20
+        -- The button is the click target; a label on it draws the dot (a
+        -- button's text is inset too far for a 20px button).
         gitgud.setProperty(name, "Area", string.format("{{0,%d},{0,6},{0,%d},{0,26}}", left, left + 20))
-        gitgud.setText(name, "●")
-        gitgud.setProperty(name, "Font", "Gitgud-UI-Title")
+        gitgud.setText(name, "")
         for _, fill in ipairs({ "NormalFillColour", "HoverFillColour", "PushedFillColour" }) do
             gitgud.setProperty(name, fill, "00000000")
         end
-        gitgud.setProperty(name, "NormalTextColour", colour)
-        gitgud.setProperty(name, "HoverTextColour", hover)
-        gitgud.setProperty(name, "PushedTextColour", colour)
+        local dot = name .. "Dot"
+        if gitgud.createWindow("Gitgud/Label", dot, name) then
+            gitgud.setProperty(dot, "Area", "{{0,0},{0,0},{1,0},{1,0}}")
+            gitgud.setProperty(dot, "Font", "Gitgud-UI-Title")
+            gitgud.setProperty(dot, "HorzFormatting", "CentreAligned")
+            gitgud.setProperty(dot, "NormalTextColour", colour)
+            gitgud.setProperty(dot, "CursorPassThroughEnabled", "true")
+            gitgud.setText(dot, "●")
+        end
     end
     gitgud.setProperty("WindowMaxButton", "TooltipText", "Zoom")
     gitgud.setProperty("AppTitleMark", "Area", "{{0,76},{0,7},{0,94},{0,25}}")

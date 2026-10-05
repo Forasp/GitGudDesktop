@@ -1,10 +1,11 @@
 # Builds, tests, and packages GitGud Desktop on every push and pull request.
 # Every run keeps the zip, the installer, and the update files as the
-# GitGud-win64 artifact, and the .deb and .rpm as GitGud-linux; pushing a tag
-# like v1.0 also publishes a release with all of them. Installed Windows
-# copies update themselves from a release's update files (update-manifest.txt,
-# signed with the GITGUD_UPDATE_SIGNING_KEY secret, and GitGud-win64.pack);
-# Linux packages are updated by the package manager.
+# GitGud-win64 artifact, the .deb and .rpm as GitGud-linux, and the .dmg as
+# GitGud-macos; pushing a tag like v1.0 also publishes a release with all of
+# them. Installed Windows copies update themselves from a release's update
+# files (update-manifest.txt, signed with the GITGUD_UPDATE_SIGNING_KEY
+# secret, and GitGud-win64.pack); Linux packages are updated by the package
+# manager, and Mac users download the new .dmg.
 #
 # The first run builds every vcpkg dependency (OpenSSL among them) and CEGUI,
 # which takes a while; both are cached, so later runs only build the app.
@@ -356,16 +357,24 @@ jobs:
           path: third_party/cegui-install-release
           key: ${{ steps.cegui-cache.outputs.cache-primary-key }}
 
-      # Start the built app bundle with a script that zooms the window and
-      # closes it once the UI is up; then two copies at once through `open -n`
-      # (several copies must run side by side); then the walkthrough on a
-      # scratch repository. Everything runs with a scratch HOME, and nothing
-      # here signs in, so the Keychain isn't touched.
+      - name: Package
+        run: ./package.sh --skip-build
+
+      # Install the app from the .dmg and start it with a script that zooms
+      # the window and closes it once the UI is up; then two copies at once
+      # through `open -n` (several copies must run side by side); then the
+      # walkthrough on a scratch repository. Everything runs with a scratch
+      # HOME, and nothing here signs in, so the Keychain isn't touched.
       - name: Smoke test and walkthrough
         run: |
-          bundle="$PWD/build/release/bin/gitgud.app"
           scratch="$RUNNER_TEMP/ui"
-          mkdir -p "$scratch/home" "$scratch/shots"
+          mkdir -p "$scratch/home" "$scratch/shots" "$scratch/Applications"
+          hdiutil attach -quiet -nobrowse -mountpoint "$scratch/dmg" build/dist/GitGud-macOS-arm64.dmg
+          ditto "$scratch/dmg/GitGud Desktop.app" "$scratch/Applications/GitGud Desktop.app"
+          hdiutil detach -quiet "$scratch/dmg"
+          bundle="$scratch/Applications/GitGud Desktop.app"
+          codesign --verify --strict "$bundle"
+          "$bundle/Contents/Resources/gh/gh" --version
           cat > "$scratch/smoke.lua" <<'LUA'
           gitgud.on("window.state", function(state) print("[smoke] window " .. state) end)
           gitgud.on("window.resized", function(size) print("[smoke] resized to " .. size) end)
@@ -406,6 +415,11 @@ jobs:
           echo "two copies ran side by side"
 
           tests/ui/make-testrepo.sh "$scratch/repo"
+          cat > "$scratch/retina.lua" <<'LUA'
+          gitgud.after(2500, function() gitgud.screenshot(os.getenv("GITGUD_SHOTS") .. "/00-retina.png") end)
+          gitgud.after(4000, function() gitgud.emit("window.close", "") end)
+          LUA
+          GITGUD_PIXEL_RATIO=2 run_app "$scratch/retina.lua" "$scratch/retina.log" "$scratch/repo"
           run_app "$PWD/tests/ui/walkthrough.lua" "$scratch/walk.log" "$scratch/repo"
           grep -i "error\|\[ui-test\]" "$scratch/walk.log" || true
           ls "$scratch/shots"
@@ -420,17 +434,26 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Upload disk image
+        uses: actions/upload-artifact@v7
+        with:
+          name: GitGud-macos
+          path: build/dist/GitGud-macOS-arm64.dmg
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Preview (temporary)
         if: always()
         run: |
-          f=$(ls "$RUNNER_TEMP/ui/shots"/*.png | head -1)
-          sips -s format jpeg -s formatOptions 55 --resampleWidth 700 "$f" --out "$RUNNER_TEMP/p.jpg" > /dev/null
-          echo "@@PREVIEW-BEGIN"; base64 -i "$RUNNER_TEMP/p.jpg" | fold -w 160; echo "@@PREVIEW-END"
+          for f in 00-retina 01-changes; do
+            sips -s format jpeg -s formatOptions 60 --cropToHeightWidth 300 560 --cropOffset 0 0 "$RUNNER_TEMP/ui/shots/$f.png" --out "$RUNNER_TEMP/$f.jpg" > /dev/null
+            echo "@@PREVIEW-BEGIN $f"; base64 -i "$RUNNER_TEMP/$f.jpg" | fold -w 160; echo "@@PREVIEW-END"
+          done
 
   # A tag publishes one release with every platform's files.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows, linux]
+    needs: [windows, linux, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write

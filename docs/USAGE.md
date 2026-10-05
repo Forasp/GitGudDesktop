@@ -316,6 +316,10 @@ checks shortly after starting and about once a day and offers each new
 version once. Every update is signed; GitGud refuses one that isn't. Builds
 you compile yourself don't update themselves.
 
+On macOS GitGud doesn't update itself: *Check for Updates…* opens the
+releases page, where you download the new `GitGud-macOS-arm64.dmg` and
+replace the app in Applications with the one inside.
+
 ## Switching interfaces
 
 The first time GitGud starts it asks which interface you'd like: this one,
@@ -327,6 +331,9 @@ interface"). Your repositories, tabs, and settings are shared by all of
 them; the choice is remembered for the next launch.
 
 ## Keyboard shortcuts
+
+On macOS, use Command wherever this says Ctrl (menus show the Mac's
+symbols), and Command+Q quits.
 
 | | |
 |---|---|
