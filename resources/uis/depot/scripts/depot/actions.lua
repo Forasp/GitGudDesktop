@@ -132,16 +132,30 @@ function actions.getRevision(paths, rev)
                 return false, "Enter a revision."
             end
             if #paths == 0 then
-                log.command("git checkout " .. q(revision))
-                local ok, err = gitgud.checkout(revision)
-                if not ok then
-                    ok, err = gitgud.checkoutCommit(revision)
+                local function get()
+                    log.command("git checkout " .. q(revision))
+                    local ok, err, inTheWay = gitgud.checkout(revision)
+                    if not ok and not inTheWay then
+                        ok, err, inTheWay = gitgud.checkoutCommit(revision)
+                    end
+                    if inTheWay then
+                        log.warn("Pending changes are in the way of " .. revision .. ".")
+                        require("views.localchanges").offer("Getting " .. revision, inTheWay, function()
+                            local done, getErr = get()
+                            if not done then
+                                log.error(getErr)
+                            end
+                        end)
+                        return true
+                    end
+                    if not ok then
+                        return false, err
+                    end
+                    log.info("Workspace is at " .. revision)
+                    app.requestRefresh()
+                    return true
                 end
-                if not ok then
-                    return false, err
-                end
-                log.info("Workspace is at " .. revision)
-                return true
+                return get()
             end
             for _, path in ipairs(paths) do
                 log.command("git show " .. q(revision .. ":" .. path) .. " > " .. q(path))

@@ -35,6 +35,8 @@ function depotStatus.init()
             if op == "pushBranch" then
                 local branch, remote = (detail or ""):match("^(.-)|(.*)$")
                 log.info("Shelf " .. (branch or "") .. " shared on " .. (remote or "the remote") .. ".")
+            elseif op == "pull" and (detail or ""):match("^blocked|") then
+                log.warn("Pull stopped: uncommitted changes are in the way.")
             elseif op == "pull" then
                 log.info((detail or ""):match("|(.*)$") or detail or "Pulled.")
             else

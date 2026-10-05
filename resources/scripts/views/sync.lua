@@ -24,6 +24,7 @@
 
 local app = require("core.app")
 local dialog = require("ui.dialog")
+local localchanges = require("views.localchanges")
 local menu = require("ui.menu")
 local repo = require("core.repo")
 local settings = require("core.settings")
@@ -399,7 +400,18 @@ function sync.init()
     gitgud.on("pull.done", function(detail)
         local kind, message = detail:match("^(%w+)|(.*)$")
         lastFetched[repo.state().path] = os.time()
-        if kind == "conflicts" then
+        if kind == "blocked" then
+            -- Fetched, but uncommitted changes stopped the merge.
+            local remote = busyTarget or repo.upstreamRemote()
+            local paths = {}
+            for path in message:gmatch("[^\n]+") do
+                paths[#paths + 1] = path
+            end
+            status.warn("Pull stopped: uncommitted changes are in the way.")
+            localchanges.offer("Pulling from " .. remote, paths, function()
+                sync.pullFrom(remote)
+            end)
+        elseif kind == "conflicts" then
             status.warn("Pull hit merge conflicts. Resolve the files, then commit the merge.")
         else
             status.ok(message or detail)

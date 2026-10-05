@@ -327,6 +327,23 @@ namespace gitgud::git
             return;
         }
 
+        // A branch checked out in another worktree can't become HEAD here.
+        // Refuse before the checkout writes its files, or they'd be left
+        // behind as changes on the current branch.
+        if (git_branch_is_checked_out(ref.m_pP) == 1 && git_branch_is_head(ref.m_pP) != 1)
+        {
+            std::string where;
+            for (const auto& wt : Worktrees())
+            {
+                if (wt.m_Branch == _Name)
+                {
+                    where = " (" + wt.m_Path + ")";
+                }
+            }
+            throw GitError("'" + _Name + "' is checked out in another worktree" + where +
+                           "; open it there instead");
+        }
+
         ObjectPtr treeish;
         if (git_reference_peel(&treeish.m_pP, ref.m_pP, GIT_OBJECT_TREE) < 0)
         {
@@ -335,9 +352,14 @@ namespace gitgud::git
 
         git_checkout_options opts = GIT_CHECKOUT_OPTIONS_INIT;
         opts.checkout_strategy = GIT_CHECKOUT_SAFE;
-        if (git_checkout_tree(m_pRepo, treeish.m_pP, &opts) < 0)
+        if (const int ierr = git_checkout_tree(m_pRepo, treeish.m_pP, &opts); ierr < 0)
         {
-            RaiseLastError("Checkout of '" + _Name + "' failed");
+            RaiseUpdateFailure(ierr, "Checkout of '" + _Name + "' failed", m_pRepo,
+                [&]
+                {
+                    return std::make_pair(HeadTree(m_pRepo),
+                        DupTree(reinterpret_cast<git_tree*>(treeish.m_pP)));
+                });
         }
         if (git_repository_set_head(m_pRepo, localRefName.c_str()) < 0)
         {
@@ -1032,9 +1054,12 @@ namespace gitgud::git
             }
             git_checkout_options co = GIT_CHECKOUT_OPTIONS_INIT;
             co.checkout_strategy = GIT_CHECKOUT_SAFE;
-            if (git_checkout_tree(m_pRepo, reinterpret_cast<git_object*>(tree.m_pP), &co) < 0)
+            if (const int ierr =
+                    git_checkout_tree(m_pRepo, reinterpret_cast<git_object*>(tree.m_pP), &co);
+                ierr < 0)
             {
-                RaiseLastError("Checkout during fast-forward failed");
+                RaiseUpdateFailure(ierr, "Checkout during fast-forward failed", m_pRepo,
+                    [&] { return std::make_pair(HeadTree(m_pRepo), DupTree(tree.m_pP)); });
             }
 
             if (analysis & GIT_MERGE_ANALYSIS_UNBORN)
@@ -1079,9 +1104,10 @@ namespace gitgud::git
         git_merge_options mo = GIT_MERGE_OPTIONS_INIT;
         git_checkout_options co = GIT_CHECKOUT_OPTIONS_INIT;
         co.checkout_strategy = GIT_CHECKOUT_SAFE | GIT_CHECKOUT_ALLOW_CONFLICTS;
-        if (git_merge(m_pRepo, paheads, 1, &mo, &co) < 0)
+        if (const int ierr = git_merge(m_pRepo, paheads, 1, &mo, &co); ierr < 0)
         {
-            RaiseLastError("git_merge failed");
+            RaiseUpdateFailure(ierr, "git_merge failed", m_pRepo,
+                [&] { return MergeTrees(m_pRepo, ptargetOid); });
         }
 
         result.m_ConflictedPaths = ConflictedPaths();

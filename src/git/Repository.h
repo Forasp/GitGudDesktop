@@ -19,6 +19,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 struct git_repository; // fwd-decl; avoids leaking <git2.h> into the whole app
@@ -38,6 +39,25 @@ namespace gitgud::git
         explicit GitError(const std::string& _What) : std::runtime_error(_What)
         {
         }
+    };
+
+    // Thrown when a checkout, fast-forward, or merge stops because it would
+    // overwrite uncommitted changes; carries the paths in the way.
+    class LocalChangesError : public GitError
+    {
+      public:
+        LocalChangesError(const std::string& _What, std::vector<std::string> _Paths)
+            : GitError(_What), m_Paths(std::move(_Paths))
+        {
+        }
+
+        const std::vector<std::string>& Paths() const
+        {
+            return m_Paths;
+        }
+
+      private:
+        std::vector<std::string> m_Paths;
     };
 
     // Call once at startup / shutdown (wraps git_libgit2_init / _shutdown).

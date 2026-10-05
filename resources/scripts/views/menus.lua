@@ -133,7 +133,7 @@ local function editMenu()
                 for _, file in ipairs(repo.state().files) do
                     paths[#paths + 1] = file.path
                 end
-                status.report(nil, gitgud.stage(paths))
+                status.report(nil, require("core.staging").stage(paths))
             end,
         },
         { separator = true },
@@ -196,38 +196,7 @@ local function viewMenu()
         { label = "Repository list", shortcut = "ctrl+t", action = repositories.show },
         { label = "Branches list", shortcut = "ctrl+b", enabled = isOpen, action = branches.show },
         { separator = true },
-        {
-            label = "Split diff",
-            checked = function()
-                return diff.mode() == "split"
-            end,
-            action = function()
-                diff.setMode("split")
-            end,
-        },
-        {
-            label = "Unified diff",
-            checked = function()
-                return diff.mode() == "unified"
-            end,
-            action = function()
-                diff.setMode("unified")
-            end,
-        },
-        {
-            label = "Hide whitespace changes",
-            checked = diff.ignoreWhitespace,
-            action = function()
-                diff.setIgnoreWhitespace(not diff.ignoreWhitespace())
-            end,
-        },
-        {
-            label = "Highlight changed words",
-            checked = diff.wordDiff,
-            action = function()
-                diff.setWordDiff(not diff.wordDiff())
-            end,
-        },
+        { expand = diff.menuItems },
         { separator = true },
         {
             label = "Toggle maximized",

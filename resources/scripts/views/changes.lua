@@ -172,7 +172,7 @@ local function setIncluded(file, include)
     local err = nil
 
     if include then
-        ok, err = gitgud.stage(file.path)
+        ok, err = require("core.staging").stage(file.path)
     else
         ok, err = gitgud.unstage(file.path)
     end
@@ -799,7 +799,7 @@ function changes.init()
             paths[#paths + 1] = file.path
         end
         if value == "1" then
-            status.report(nil, gitgud.stage(paths))
+            status.report(nil, require("core.staging").stage(paths))
         else
             status.report(nil, gitgud.unstage(paths))
         end

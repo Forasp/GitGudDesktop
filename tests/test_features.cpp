@@ -414,6 +414,36 @@ TEST_CASE("Worktrees can be added, listed, and removed", "[worktree]")
     CHECK_FALSE(fs::exists(wtPath));
 }
 
+TEST_CASE("Checking out a branch held by another worktree changes nothing", "[worktree]")
+{
+    TempRepo t;
+    t.CommitFile("f.txt", "1\n", "one");
+    const std::string start = t.m_Repo.CurrentBranch();
+    const std::string wtPath = t.m_Dir.string() + "-wt";
+    fs::remove_all(wtPath);
+
+    // "held" differs from the current branch in f.txt.
+    t.m_Repo.CreateBranch("held");
+    t.m_Repo.Checkout("held");
+    t.CommitFile("f.txt", "2\n", "two");
+    t.m_Repo.Checkout(start);
+    t.m_Repo.AddWorktree("held", wtPath, "held");
+
+    try
+    {
+        t.m_Repo.Checkout("held");
+        FAIL("the checkout should have been refused");
+    }
+    catch (const GitError& e)
+    {
+        CHECK(std::string(e.what()).find("another worktree") != std::string::npos);
+    }
+    CHECK(t.m_Repo.CurrentBranch() == start);
+    CHECK(t.m_Repo.Status().empty());
+
+    t.m_Repo.RemoveWorktree("held");
+}
+
 TEST_CASE("Submodules lists nothing for a plain repository", "[submodule]")
 {
     TempRepo t;

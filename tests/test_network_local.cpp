@@ -10,7 +10,9 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 using namespace gitgud::git;
@@ -158,6 +160,94 @@ TEST_CASE("pull fast-forwards a clone after upstream moves", "[network]")
     CHECK(result.m_Kind == MergeResult::Kind::FastForward);
     CHECK(fs::exists(t.root / "bob" / "b.txt"));
     CHECK(bob.Log().size() == 2);
+}
+
+TEST_CASE("pull stopped by uncommitted changes names the files in the way", "[network]")
+{
+    TempNet t;
+    Repository::InitBare(t.path("server.git"));
+
+    auto alice = Repository::Init(t.path("alice"));
+    t.write("alice", "a.txt", "v1\n");
+    t.write("alice", "b.txt", "v1\n");
+    t.write("alice", "keep.txt", "v1\n");
+    alice.Stage("a.txt");
+    alice.Stage("b.txt");
+    alice.Stage("keep.txt");
+    t.Commit(alice, "c1");
+    alice.AddRemote("origin", t.path("server.git"));
+    alice.Push("origin");
+
+    auto bob = Repository::Clone(t.path("server.git"), t.path("bob"));
+
+    t.write("alice", "a.txt", "v2\n");
+    t.write("alice", "b.txt", "v2\n");
+    t.write("alice", "new.txt", "theirs\n");
+    alice.Stage("a.txt");
+    alice.Stage("b.txt");
+    alice.Stage("new.txt");
+    t.Commit(alice, "c2");
+    alice.Push("origin");
+
+    SECTION("fast-forward")
+    {
+    }
+    SECTION("three-way merge")
+    {
+        t.write("bob", "other.txt", "bob's work\n");
+        bob.Stage("other.txt");
+        t.Commit(bob, "bob's commit");
+    }
+
+    // a.txt staged, b.txt unstaged, new.txt untracked: all in the way.
+    // keep.txt is edited too, but the pull doesn't touch it.
+    t.write("bob", "a.txt", "mine\n");
+    bob.Stage("a.txt");
+    t.write("bob", "b.txt", "mine\n");
+    t.write("bob", "new.txt", "mine\n");
+    t.write("bob", "keep.txt", "mine\n");
+
+    try
+    {
+        bob.Pull("origin");
+        FAIL("the pull should have stopped");
+    }
+    catch (const LocalChangesError& e)
+    {
+        CHECK(e.Paths() == std::vector<std::string>{"a.txt", "b.txt", "new.txt"});
+    }
+
+    // Nothing was overwritten.
+    std::ifstream in(t.root / "bob" / "b.txt");
+    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    CHECK(content == "mine\n");
+}
+
+TEST_CASE("switching branches over uncommitted changes names the files in the way", "[network]")
+{
+    TempNet t;
+    auto r = Repository::Init(t.path("work"));
+    t.write("work", "a.txt", "v1\n");
+    r.Stage("a.txt");
+    t.Commit(r, "c1");
+    const std::string start = r.CurrentBranch();
+    r.CreateBranch("topic");
+    r.Checkout("topic");
+    t.write("work", "a.txt", "topic\n");
+    r.Stage("a.txt");
+    t.Commit(r, "on topic");
+    r.Checkout(start);
+
+    t.write("work", "a.txt", "mine\n");
+    try
+    {
+        r.Checkout("topic");
+        FAIL("the checkout should have stopped");
+    }
+    catch (const LocalChangesError& e)
+    {
+        CHECK(e.Paths() == std::vector<std::string>{"a.txt"});
+    }
 }
 
 TEST_CASE("fetch updates remote-tracking refs without touching the worktree", "[network]")

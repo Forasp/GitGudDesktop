@@ -20,6 +20,7 @@ local C = require("core.palette")
 local diff = require("views.diff")
 local geometry = require("ui.geometry")
 local imagediff = require("views.imagediff")
+local linestaging = require("core.staging")
 local repo = require("core.repo")
 local status = require("core.status")
 local text = require("core.text")
@@ -270,20 +271,40 @@ function content.showWorkingFile(path, force)
         return
     end
 
-    -- Line staging needs byte-exact line numbering, which whitespace
-    -- filtering and conflict markers break. Perforce opens whole files only.
+    -- Line staging indexes the exact diff. With whitespace hidden the shown
+    -- lines are mapped onto it (core/staging.lua), so whitespace-only
+    -- changes are never staged from here. Conflicted files can't be staged
+    -- by line; p4 workspaces open whole files only.
     local staging = nil
-    local canStage = not diff.ignoreWhitespace() and entry.code ~= "U" and gitgud.supports("lineStaging")
+    local canStage = entry.code ~= "U" and gitgud.supports("lineStaging")
+    local map = nil
+    if canStage and diff.ignoreWhitespace() then
+        map = linestaging.lineMap(path, fileDiff)
+        canStage = map ~= nil
+    end
     if canStage then
         local staged = {}
         for _, idx in ipairs(gitgud.stagedLines(path)) do
-            staged[idx] = true
+            local shown = map and map.shownOf[idx] or (not map and idx)
+            if shown then
+                staged[shown] = true
+            end
         end
 
         staging = {
             staged = staged,
             onChange = function(indices)
-                local ok, stageErr = gitgud.setStagedLines(path, indices, lineCount)
+                local ok, stageErr
+                if map then
+                    local exact = {}
+                    for _, idx in ipairs(indices) do
+                        exact[#exact + 1] = map.exactOf[idx]
+                    end
+                    table.sort(exact)
+                    ok, stageErr = gitgud.setStagedLines(path, exact, map.lineCount)
+                else
+                    ok, stageErr = gitgud.setStagedLines(path, indices, lineCount)
+                end
                 if not ok then
                     status.error(stageErr or "Could not update the staged lines.")
                     content.showWorkingFile(path, true)

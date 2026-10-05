@@ -28,6 +28,7 @@
 --   diff.clear()                     diff.lineCount(fileDiff)
 --   diff.mode() / diff.setMode(m)    diff.ignoreWhitespace() / diff.setIgnoreWhitespace(b)
 --   diff.wordDiff() / diff.setWordDiff(b)   diff.unifiedRows(fileDiff)
+--   diff.menuItems()                 the display options as menu items
 
 local C = require("core.palette")
 local app = require("core.app")
@@ -313,7 +314,8 @@ local function buildModel(fileDiff)
         unified = {},
         hunks = {},
         blocks = {},
-        pad = 0,
+        widest = 0,         -- longest line, in characters
+        pad = 0,            -- what lines are padded to (fitPad)
         rowsOfIndex = {},   -- flat idx -> { split = rowNo, unified = rowNo }
         blockOfIndex = {},  -- flat idx -> block { changes, splitRow, unifiedRow }
     }
@@ -321,10 +323,9 @@ local function buildModel(fileDiff)
     local idx = 0
     for _, hunk in ipairs(fileDiff.hunks) do
         for _, line in ipairs(hunk.lines) do
-            model.pad = math.max(model.pad, #expand(line.content))
+            model.widest = math.max(model.widest, #expand(line.content))
         end
     end
-    model.pad = math.min(math.max(model.pad, visibleColumns()), MAX_PAD)
 
     for _, hunk in ipairs(fileDiff.hunks) do
         local h = { header = hunk.header, changes = {}, splitRow = 0, unifiedRow = 0 }
@@ -430,6 +431,13 @@ local function showMode()
     else
         placeSplit(current ~= nil and current.staging ~= nil)
     end
+end
+
+--- Pad lines to the widest one or to the visible width, whichever is more.
+-- Asked after the lists are placed for the current mode: the width depends
+-- on the mode and on whether the staging gutter shows.
+local function fitPad()
+    current.pad = math.min(math.max(current.widest, visibleColumns()), MAX_PAD)
 end
 
 --- Fill the lists from the current model.
@@ -621,6 +629,7 @@ function diff.render(fileDiff, staging)
     current.staging = staging
 
     showMode()
+    fitPad()
     fillLists()
 end
 
@@ -632,6 +641,7 @@ function diff.unifiedRows(fileDiff)
     local saved = current
     current = buildModel(fileDiff)
     current.staging = nil
+    fitPad()
 
     local rows = {}
     for i, row in ipairs(current.unified) do
@@ -686,6 +696,7 @@ function diff.setMode(mode)
 
     if current then
         showMode()
+        fitPad()
         fillLists()
     end
 end
@@ -725,7 +736,67 @@ function diff.queryOptions()
 end
 
 --- Wire list clicks and scroll linking.
+--- The display options, as menu items: the View menu and the diff header's
+-- View button both show them.
+-- @return item list for ui/menu.lua
+function diff.menuItems()
+    return {
+        {
+            label = "Split diff",
+            checked = function()
+                return diff.mode() == "split"
+            end,
+            action = function()
+                diff.setMode("split")
+            end,
+        },
+        {
+            label = "Unified diff",
+            checked = function()
+                return diff.mode() == "unified"
+            end,
+            action = function()
+                diff.setMode("unified")
+            end,
+        },
+        {
+            label = "Hide whitespace changes",
+            checked = diff.ignoreWhitespace,
+            action = function()
+                diff.setIgnoreWhitespace(not diff.ignoreWhitespace())
+            end,
+        },
+        {
+            label = "Highlight changed words",
+            checked = diff.wordDiff,
+            action = function()
+                diff.setWordDiff(not diff.wordDiff())
+            end,
+        },
+    }
+end
+
 function diff.init()
+    -- The window or a splitter changed the lists' width: re-pad so row
+    -- tints still run the full width.
+    app.subscribe("frame.changed", function()
+        if not current then
+            return
+        end
+        local before = current.pad
+        fitPad()
+        if current.pad ~= before then
+            fillLists()
+        end
+    end)
+
+    gitgud.on("DiffViewButton.clicked", function()
+        local x, y, _, h = gitgud.getRect("DiffViewButton")
+        if x then
+            require("ui.menu").popup(diff.menuItems(), x, y + h)
+        end
+    end)
+
     local lists = {
         { name = "DiffListOld", kind = "old" },
         { name = "DiffListNew", kind = "new" },

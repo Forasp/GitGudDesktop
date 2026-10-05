@@ -55,16 +55,10 @@ function commands.newBranch(from)
             if not ok then
                 return false, err
             end
-            if v.checks[1] then
-                log.command("git switch " .. q(name))
-                local switched, switchErr = undo.track("Switch to " .. name, function()
-                    return gitgud.checkout(name)
-                end)
-                if not switched then
-                    log.error(switchErr)
-                end
-            end
             log.info("Branch " .. name .. " created.")
+            if v.checks[1] then
+                commands.switchBranch(name)
+            end
             app.requestRefresh()
             return true
         end,
