@@ -309,16 +309,13 @@ function history.commitMenu(commit)
                             return false, "Enter a branch name."
                         end
                         local ok, err = undo.track("Create branch " .. name, function()
-                            local created, createErr = gitgud.createBranch(name, commit.oid)
-                            if not created then
-                                return created, createErr
-                            end
-                            status.report("Created and switched to " .. name .. ".", gitgud.checkout(name))
-                            return true
+                            return gitgud.createBranch(name, commit.oid)
                         end)
                         if not ok then
                             return false, err
                         end
+                        -- Switching offers to stash changes that are in the way.
+                        require("views.branches").checkoutByName(name)
                         app.requestRefresh()
                         return true
                     end)

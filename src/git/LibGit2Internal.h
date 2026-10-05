@@ -7,9 +7,12 @@
 // -----------------------------------------------------------------------------
 
 #include <git2.h>
+#include <git2/sys/errors.h>
 
 #include <filesystem>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "git/Repository.h"
@@ -97,6 +100,119 @@ namespace gitgud::git::internal
     using SubmodulePtr = Handle<git_submodule, git_submodule_free>;
     using WorktreePtr = Handle<git_worktree, git_worktree_free>;
     using RepositoryPtr = Handle<git_repository, git_repository_free>;
+
+    // Paths that differ between two trees (either may be null: empty).
+    inline std::set<std::string> ChangedPaths(
+        git_repository* _pRepo, git_tree* _pFrom, git_tree* _pTo)
+    {
+        std::set<std::string> paths;
+        DiffPtr diff;
+        if (git_diff_tree_to_tree(&diff.m_pP, _pRepo, _pFrom, _pTo, nullptr) < 0)
+        {
+            return paths;
+        }
+        const size_t ncount = git_diff_num_deltas(diff.m_pP);
+        for (size_t ni = 0; ni < ncount; ++ni)
+        {
+            const git_diff_delta* pd = git_diff_get_delta(diff.m_pP, ni);
+            paths.insert(pd->old_file.path);
+            paths.insert(pd->new_file.path);
+        }
+        return paths;
+    }
+
+    // A SAFE checkout or a merge failed with _iErr. When it refused
+    // because of uncommitted changes (GIT_ECONFLICT), raise a
+    // LocalChangesError naming them: paths with local changes (staged,
+    // unstaged, or untracked) that the update would write, i.e. that
+    // differ between the two trees _Trees() returns (from, to). Anything
+    // else is raised as the libgit2 error it is.
+    template <typename TreesFn>
+    [[noreturn]] void RaiseUpdateFailure(
+        int _iErr, const std::string& _Context, git_repository* _pRepo, TreesFn&& _Trees)
+    {
+        if (_iErr != GIT_ECONFLICT)
+        {
+            RaiseLastError(_Context);
+        }
+        const git_error* pe = git_error_last();
+        const std::string original =
+            _Context + (pe && pe->message ? std::string(": ") + pe->message : "");
+
+        const std::pair<TreePtr, TreePtr> trees = _Trees();
+        const std::set<std::string> touched =
+            ChangedPaths(_pRepo, trees.first.m_pP, trees.second.m_pP);
+        std::vector<std::string> blocking;
+
+        git_status_options opts = GIT_STATUS_OPTIONS_INIT;
+        opts.show = GIT_STATUS_SHOW_INDEX_AND_WORKDIR;
+        opts.flags = GIT_STATUS_OPT_INCLUDE_UNTRACKED | GIT_STATUS_OPT_RECURSE_UNTRACKED_DIRS;
+        git_status_list* plist = nullptr;
+        if (git_status_list_new(&plist, _pRepo, &opts) == 0)
+        {
+            const size_t ncount = git_status_list_entrycount(plist);
+            for (size_t ni = 0; ni < ncount; ++ni)
+            {
+                const git_status_entry* ps = git_status_byindex(plist, ni);
+                const git_diff_delta* pd =
+                    ps->index_to_workdir ? ps->index_to_workdir : ps->head_to_index;
+                if (!pd || (ps->status & GIT_STATUS_IGNORED))
+                {
+                    continue;
+                }
+                const char* szpath = pd->new_file.path ? pd->new_file.path : pd->old_file.path;
+                if (szpath && touched.count(szpath))
+                {
+                    blocking.emplace_back(szpath);
+                }
+            }
+            git_status_list_free(plist);
+        }
+        git_error_clear();
+
+        if (blocking.empty())
+        {
+            throw GitError(original);
+        }
+        const std::size_t n = blocking.size();
+        throw LocalChangesError("Uncommitted changes to " + std::to_string(n) +
+                                    (n == 1 ? " file" : " files") + " would be overwritten",
+            std::move(blocking));
+    }
+
+    // The tree of commit _pOid, or an empty holder when it can't be read.
+    inline TreePtr CommitTree(git_repository* _pRepo, const git_oid* _pOid)
+    {
+        TreePtr tree;
+        CommitPtr commit;
+        if (git_commit_lookup(&commit.m_pP, _pRepo, _pOid) < 0 ||
+            git_commit_tree(&tree.m_pP, commit.m_pP) < 0)
+        {
+            git_error_clear();
+        }
+        return tree;
+    }
+
+    // The trees a merge of _pTheirs into HEAD writes between: the merge
+    // base's (empty when there's none) and theirs.
+    inline std::pair<TreePtr, TreePtr> MergeTrees(git_repository* _pRepo, const git_oid* _pTheirs)
+    {
+        git_oid headOid;
+        git_oid baseOid;
+        const bool bbase = git_reference_name_to_id(&headOid, _pRepo, "HEAD") == 0 &&
+                           git_merge_base(&baseOid, _pRepo, &headOid, _pTheirs) == 0;
+        git_error_clear();
+        return std::make_pair(
+            bbase ? CommitTree(_pRepo, &baseOid) : TreePtr(), CommitTree(_pRepo, _pTheirs));
+    }
+
+    // A second handle on _pTree.
+    inline TreePtr DupTree(git_tree* _pTree)
+    {
+        TreePtr tree;
+        git_tree_dup(&tree.m_pP, _pTree);
+        return tree;
+    }
 
     struct StrArray
     {

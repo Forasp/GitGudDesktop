@@ -30,6 +30,7 @@ namespace gitgud::lua::bindings
     {
 
         using gitgud::git::GitError;
+        using gitgud::git::LocalChangesError;
         using gitgud::git::Repository;
 
         void PublishStatusChanged(LuaEngine* _pEngine, const std::string& _Detail = "")
@@ -42,6 +43,15 @@ namespace gitgud::lua::bindings
 
         // Wrap a void Repository call with the true | (nil, msg) convention and a
         // "status.changed" publish on success.
+        // (nil, message, paths) for an update stopped by uncommitted changes.
+        int FailWithLocalChanges(lua_State* _pL, const LocalChangesError& _E)
+        {
+            lua_pushnil(_pL);
+            lua_pushstring(_pL, _E.what());
+            PushStringArray(_pL, _E.Paths());
+            return 3;
+        }
+
         template <typename Fn> int RepoAction(lua_State* _pL, Fn&& _Fn)
         {
             LuaEngine* pengine = Self(_pL);
@@ -56,6 +66,10 @@ namespace gitgud::lua::bindings
                 PublishStatusChanged(pengine);
                 lua_pushboolean(_pL, 1);
                 return 1;
+            }
+            catch (const LocalChangesError& e)
+            {
+                return FailWithLocalChanges(_pL, e);
             }
             catch (const GitError& e)
             {
@@ -856,6 +870,10 @@ namespace gitgud::lua::bindings
                 PushMergeResult(_pL, result);
                 return 1;
             }
+            catch (const LocalChangesError& e)
+            {
+                return FailWithLocalChanges(_pL, e);
+            }
             catch (const GitError& e)
             {
                 return FailWith(_pL, e.what());
@@ -1164,9 +1182,23 @@ namespace gitgud::lua::bindings
             return RunRemoteJob(_pL, "pull",
                 [remote](Repository& _R)
                 {
-                    // Encode the merge outcome as "kind|message" for Lua.
-                    const auto result = _R.Pull(remote);
-                    return std::string(MergeKindName(result.m_Kind)) + "|" + result.m_Message;
+                    // Encode the merge outcome as "kind|message" for Lua; when
+                    // uncommitted changes are in the way, "blocked|" and the
+                    // paths, one per line.
+                    try
+                    {
+                        const auto result = _R.Pull(remote);
+                        return std::string(MergeKindName(result.m_Kind)) + "|" + result.m_Message;
+                    }
+                    catch (const LocalChangesError& e)
+                    {
+                        std::string paths;
+                        for (const auto& path : e.Paths())
+                        {
+                            paths += (paths.empty() ? "" : "\n") + path;
+                        }
+                        return "blocked|" + paths;
+                    }
                 });
         }
 

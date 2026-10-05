@@ -28,6 +28,7 @@
 --   diff.clear()                     diff.lineCount(fileDiff)
 --   diff.mode() / diff.setMode(m)    diff.ignoreWhitespace() / diff.setIgnoreWhitespace(b)
 --   diff.wordDiff() / diff.setWordDiff(b)   diff.unifiedRows(fileDiff)
+--   diff.menuItems()                 the display options as menu items
 
 local C = require("core.palette")
 local app = require("core.app")
@@ -725,7 +726,54 @@ function diff.queryOptions()
 end
 
 --- Wire list clicks and scroll linking.
+--- The display options, as menu items: the View menu and the diff header's
+-- View button both show them.
+-- @return item list for ui/menu.lua
+function diff.menuItems()
+    return {
+        {
+            label = "Split diff",
+            checked = function()
+                return diff.mode() == "split"
+            end,
+            action = function()
+                diff.setMode("split")
+            end,
+        },
+        {
+            label = "Unified diff",
+            checked = function()
+                return diff.mode() == "unified"
+            end,
+            action = function()
+                diff.setMode("unified")
+            end,
+        },
+        {
+            label = "Hide whitespace changes",
+            checked = diff.ignoreWhitespace,
+            action = function()
+                diff.setIgnoreWhitespace(not diff.ignoreWhitespace())
+            end,
+        },
+        {
+            label = "Highlight changed words",
+            checked = diff.wordDiff,
+            action = function()
+                diff.setWordDiff(not diff.wordDiff())
+            end,
+        },
+    }
+end
+
 function diff.init()
+    gitgud.on("DiffViewButton.clicked", function()
+        local x, y, _, h = gitgud.getRect("DiffViewButton")
+        if x then
+            require("ui.menu").popup(diff.menuItems(), x, y + h)
+        end
+    end)
+
     local lists = {
         { name = "DiffListOld", kind = "old" },
         { name = "DiffListNew", kind = "new" },

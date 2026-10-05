@@ -350,9 +350,16 @@ namespace gitgud::git
         CommitPtr commit = ResolveCommit(m_pRepo, _Oid);
         git_checkout_options opts = GIT_CHECKOUT_OPTIONS_INIT;
         opts.checkout_strategy = GIT_CHECKOUT_SAFE;
-        if (git_checkout_tree(m_pRepo, reinterpret_cast<git_object*>(commit.m_pP), &opts) < 0)
+        if (const int ierr =
+                git_checkout_tree(m_pRepo, reinterpret_cast<git_object*>(commit.m_pP), &opts);
+            ierr < 0)
         {
-            RaiseLastError("Checkout of " + _Oid.substr(0, 7) + " failed");
+            RaiseUpdateFailure(ierr, "Checkout of " + _Oid.substr(0, 7) + " failed", m_pRepo,
+                [&]
+                {
+                    return std::make_pair(
+                        HeadTree(m_pRepo), CommitTree(m_pRepo, git_commit_id(commit.m_pP)));
+                });
         }
         if (git_repository_set_head_detached(m_pRepo, git_commit_id(commit.m_pP)) < 0)
         {
@@ -828,9 +835,10 @@ namespace gitgud::git
         git_merge_options mo = GIT_MERGE_OPTIONS_INIT;
         git_checkout_options co = GIT_CHECKOUT_OPTIONS_INIT;
         co.checkout_strategy = GIT_CHECKOUT_SAFE | GIT_CHECKOUT_ALLOW_CONFLICTS;
-        if (git_merge(m_pRepo, pheads, 1, &mo, &co) < 0)
+        if (const int ierr = git_merge(m_pRepo, pheads, 1, &mo, &co); ierr < 0)
         {
-            RaiseLastError("git_merge failed");
+            RaiseUpdateFailure(ierr, "git_merge failed", m_pRepo,
+                [&] { return MergeTrees(m_pRepo, git_commit_id(theirs.m_pP)); });
         }
 
         // Forget MERGE_HEAD: the result must be a single-parent commit.

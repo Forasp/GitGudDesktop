@@ -44,6 +44,7 @@ function stash.close()
 end
 
 --- Save every change (including untracked files) into a stash.
+-- @return true when they were stashed
 function stash.stashAll()
     local state = repo.state()
     if #state.files == 0 then
@@ -55,7 +56,9 @@ function stash.stashAll()
     local ok, err = gitgud.stashSave(message)
     if status.report("Stashed your changes.", ok, err) then
         app.requestRefresh()
+        return true
     end
+    return false
 end
 
 --- Apply and drop the newest branch stash.

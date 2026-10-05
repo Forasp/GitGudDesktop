@@ -20,6 +20,7 @@
 local C = require("core.palette")
 local app = require("core.app")
 local dialog = require("ui.dialog")
+local localchanges = require("views.localchanges")
 local menu = require("ui.menu")
 local placeholder = require("ui.placeholder")
 local popup = require("ui.popup")
@@ -252,11 +253,17 @@ function branches.pick(title, callback)
     openIn("pick")
 end
 
---- Report a merge/squash result.
--- @param result  gitgud.merge() table (or nil)
--- @param err     error message
-local function reportMerge(result, err)
-    if not result then
+--- Run a merge or squash-merge and report it, offering to stash when
+-- uncommitted changes are in the way.
+-- @param what  e.g. "Merging topic", for the stash offer
+-- @param fn    function() -> gitgud.merge()-style results, under undo
+local function runMerge(what, fn)
+    local result, err, inTheWay = fn()
+    if inTheWay then
+        localchanges.offer(what, inTheWay, function()
+            runMerge(what, fn)
+        end)
+    elseif not result then
         status.error(err or "Merge failed.")
     elseif result.kind == "conflicts" then
         status.warn(result.message .. " (" .. text.plural(#result.conflicts, "conflicted file") .. ")")
@@ -269,17 +276,21 @@ end
 --- Merge a branch into the current one.
 -- @param name  branch to merge
 function branches.merge(name)
-    reportMerge(undo.track("Merge " .. name, function()
-        return gitgud.merge(name)
-    end))
+    runMerge("Merging " .. name, function()
+        return undo.track("Merge " .. name, function()
+            return gitgud.merge(name)
+        end)
+    end)
 end
 
 --- Squash-merge a branch into the current one.
 -- @param name  branch to fold in
 function branches.squash(name)
-    reportMerge(undo.track("Squash-merge " .. name, function()
-        return gitgud.squashMerge(name)
-    end))
+    runMerge("Squash-merging " .. name, function()
+        return undo.track("Squash-merge " .. name, function()
+            return gitgud.squashMerge(name)
+        end)
+    end)
 end
 
 --- Rebase the current branch onto another, after confirming.
@@ -310,7 +321,7 @@ end
 -- @param branch  gitgud.branches() row
 -- @return true when the branch is now checked out
 local function checkout(branch)
-    local ok, err = undo.track("Checkout " .. branch.name, function()
+    local ok, err, inTheWay = undo.track("Checkout " .. branch.name, function()
         return gitgud.checkout(branch.name)
     end)
     if ok then
@@ -319,23 +330,14 @@ local function checkout(branch)
         return true
     end
 
-    if err and err:lower():find("conflict") then
-        dialog.show({
-            title = "Your changes would be overwritten",
-            message = "Switching to " .. branch.name .. " would overwrite uncommitted changes. "
-                .. "Stash them on " .. repo.state().branch .. " first? You can restore them when you come back.",
-            ok = "Stash and switch",
-            onOk = function()
-                local stash = require("views.stash")
-                stash.stashAll()
-                status.report("Stashed your changes and switched to " .. branch.name .. ".",
-                    undo.track("Checkout " .. branch.name, function()
-                        return gitgud.checkout(branch.name)
-                    end))
-                app.requestRefresh()
-                return true
-            end,
-        })
+    if inTheWay then
+        localchanges.offer("Switching to " .. branch.name, inTheWay, function()
+            status.report("Stashed your changes and switched to " .. branch.name .. ".",
+                undo.track("Checkout " .. branch.name, function()
+                    return gitgud.checkout(branch.name)
+                end))
+            app.requestRefresh()
+        end)
         return false
     end
 

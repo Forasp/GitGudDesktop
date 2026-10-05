@@ -78,11 +78,11 @@ fails the commit with the tool's message.
 | Function | Effect |
 |---|---|
 | `createBranch(name, start?)` | from HEAD or any revision |
-| `checkout(name)` | switch (a remote branch creates a local tracking branch) |
-| `checkoutCommit(oid)` | detached HEAD |
+| `checkout(name)` | switch (a remote branch creates a local tracking branch). When uncommitted changes would be overwritten it changes nothing and returns `nil, message, paths` (the files in the way) |
+| `checkoutCommit(oid)` | detached HEAD; `nil, message, paths` as for `checkout` |
 | `renameBranch(old, new)` / `deleteBranch(name)` | local branches |
 | `createTag(name, target?, message?)` / `deleteTag(name)` | annotated when a message is given |
-| `merge(branch)` / `squashMerge(branch)` | `{kind, message, conflicts}` — kind `uptodate`, `fastforward`, `merged`, `conflicts` |
+| `merge(branch)` / `squashMerge(branch)` | `{kind, message, conflicts}`, kind `uptodate`, `fastforward`, `merged`, `conflicts`; `nil, message, paths` as for `checkout` |
 | `rebase(branch)` / `continueRebase()` | `{kind, message, conflicts}` — kind `uptodate`, `done`, `conflicts` |
 | `resolveConflict(path, "ours" \| "theirs")` | take one side and stage it |
 | `abortOperation()` | abort a merge / rebase / cherry-pick / revert |
@@ -101,7 +101,7 @@ fails the commit with the tool's message.
 |---|---|
 | `fetch(remote)` | `fetch.*` |
 | `fetchAll()` | `fetch.*` — every remote; `error` names the ones that failed (the rest are still fetched) |
-| `pull(remote)` | `pull.*` — merges the upstream when it lives on `remote`, else `remote/<branch>`; `done` detail is `"kind\|message"` (kind as for `merge`) |
+| `pull(remote)` | `pull.*`: merges the upstream when it lives on `remote`, else `remote/<branch>`; `done` detail is `"kind\|message"` (kind as for `merge`), or `"blocked\|"` and the paths in the way, one per line, when uncommitted changes stopped the merge (the fetch still happened) |
 | `push(remote, {force = bool, setUpstream = bool})` | `push.*` — goes to the upstream branch when it lives on `remote` (else the same name); sets the upstream on first push, or always with `setUpstream` |
 | `pushTags(remote)` | `pushTags.*` |
 | `deleteRemoteBranch(remote, branch)` | `deleteRemoteBranch.*` |

@@ -163,7 +163,8 @@ commit* / *before this commit*. Escape closes the view.
 
 *Current branch ▾* lists the default branch, your most recent branches, the
 rest, and remote-only branches. Click one to switch; if uncommitted changes
-would be overwritten, GitGud offers to stash them first. **New branch**
+would be overwritten, GitGud names the files and offers to stash them first
+(merging does the same). **New branch**
 branches from the current one (your changes come along).
 
 *Merge into current…* and *Rebase current…* switch the list into a pick-a-
@@ -242,7 +243,9 @@ The sync button (or Repository ▸ Push / Pull / Fetch all) pushes and pulls
 the current branch through the remote its upstream lives on, and fetches
 every remote. A branch that isn't published yet goes to `origin`; when the
 repository has several remotes, GitGud asks which one (and tracks it from
-then on). GitGud fetches in the background every 15 minutes. *Force push…*
+then on). If uncommitted changes are in the way of a pull, GitGud names the
+files and offers to stash them and pull. GitGud fetches in the background
+every 15 minutes. *Force push…*
 overwrites the remote branch after you've rewritten history; *Push tags*
 publishes tags.
 
