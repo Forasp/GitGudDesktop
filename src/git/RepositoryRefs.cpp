@@ -327,6 +327,23 @@ namespace gitgud::git
             return;
         }
 
+        // A branch checked out in another worktree can't become HEAD here.
+        // Refuse before the checkout writes its files, or they'd be left
+        // behind as changes on the current branch.
+        if (git_branch_is_checked_out(ref.m_pP) == 1 && git_branch_is_head(ref.m_pP) != 1)
+        {
+            std::string where;
+            for (const auto& wt : Worktrees())
+            {
+                if (wt.m_Branch == _Name)
+                {
+                    where = " (" + wt.m_Path + ")";
+                }
+            }
+            throw GitError("'" + _Name + "' is checked out in another worktree" + where +
+                           "; open it there instead");
+        }
+
         ObjectPtr treeish;
         if (git_reference_peel(&treeish.m_pP, ref.m_pP, GIT_OBJECT_TREE) < 0)
         {

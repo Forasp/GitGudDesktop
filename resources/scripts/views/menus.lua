@@ -133,7 +133,7 @@ local function editMenu()
                 for _, file in ipairs(repo.state().files) do
                     paths[#paths + 1] = file.path
                 end
-                status.report(nil, gitgud.stage(paths))
+                status.report(nil, require("core.staging").stage(paths))
             end,
         },
         { separator = true },

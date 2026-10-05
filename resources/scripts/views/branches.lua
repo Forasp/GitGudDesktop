@@ -342,6 +342,7 @@ local function checkout(branch)
     end
 
     status.error(err or "Checkout failed.")
+    app.requestRefresh()
     return false
 end
 

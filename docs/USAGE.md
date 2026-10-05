@@ -107,7 +107,9 @@ signed — with gpg, or with an SSH key.
 ## Diffs
 
 - **View ▾** switches between split and unified diffs and can hide
-  whitespace-only changes.
+  whitespace-only changes. While they're hidden they're also left out of
+  what you include: a file's box and the line boxes include every other
+  change, and whitespace-only changes stay uncommitted.
 - **Changed words** inside a modified line are highlighted more strongly than
   the rest of the line (View ▸ Highlight changed words turns it off).
 - Files stored with **Git LFS** show "Git LFS file" with the old and new
