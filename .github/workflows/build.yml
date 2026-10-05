@@ -341,10 +341,6 @@ jobs:
           fi
           echo "--- warnings in src/ and from the linker"
           grep -E "/src/[^ ]*: warning:|^ld: warning" "$log" | grep -v third_party | sort -u | head -80
-          echo "--- zlib on the link line (temporary)"
-          cmake --version | head -1
-          ninja -C build/release -t commands bin/gitgud_tests | tail -1 | tr ' ' '\n' | grep -n 'libz\|libgit2\|ssh2\|lua\|ssl\|crypto\|rsp' || true
-          grep -h "INTERFACE_LINK_LIBRARIES" build/release/vcpkg_installed/arm64-osx/share/libgit2/*.cmake build/release/vcpkg_installed/arm64-osx/share/libssh2/*.cmake 2>/dev/null | cut -c1-400 || true
           exit $status
 
       - name: Save vcpkg packages
@@ -419,13 +415,14 @@ jobs:
           echo "two copies ran side by side"
 
           tests/ui/make-testrepo.sh "$scratch/repo"
+          # A screenshot as a Retina display draws it (GITGUD_PIXEL_RATIO).
           cat > "$scratch/retina.lua" <<'LUA'
           gitgud.after(2500, function() gitgud.screenshot(os.getenv("GITGUD_SHOTS") .. "/00-retina.png") end)
           gitgud.after(4000, function() gitgud.emit("window.close", "") end)
           LUA
           GITGUD_PIXEL_RATIO=2 run_app "$scratch/retina.lua" "$scratch/retina.log" "$scratch/repo"
           run_app "$PWD/tests/ui/walkthrough.lua" "$scratch/walk.log" "$scratch/repo"
-          grep -i "error\|\[ui-test\]" "$scratch/walk.log" || true
+          grep -i "error\|failed\|\[ui-test\] finished" "$scratch/walk.log" || true
           ls "$scratch/shots"
           [ -n "$(ls "$scratch/shots")" ] || fail "the walkthrough took no screenshots" "$scratch/walk.log"
 
@@ -445,27 +442,6 @@ jobs:
           path: build/dist/GitGud-macOS-arm64.dmg
           if-no-files-found: error
           retention-days: 14
-
-      - name: Preview (temporary)
-        if: always()
-        run: |
-          cat > "$RUNNER_TEMP/crop.swift" <<'SWIFT'
-          import AppKit
-          let a = CommandLine.arguments
-          let img = NSImage(contentsOfFile: a[1])!
-          var r = NSRect.zero
-          let cg = img.cgImage(forProposedRect: &r, context: nil, hints: nil)!
-          let c = cg.cropping(to: CGRect(x: Int(a[3])!, y: Int(a[4])!, width: Int(a[5])!, height: Int(a[6])!))!
-          let data = NSBitmapImageRep(cgImage: c).representation(using: .jpeg, properties: [.compressionFactor: 0.7])!
-          try! data.write(to: URL(fileURLWithPath: a[2]))
-          SWIFT
-          shots="$RUNNER_TEMP/ui/shots"
-          swift "$RUNNER_TEMP/crop.swift" "$shots/00-retina.png" "$RUNNER_TEMP/a.jpg" 0 0 600 320
-          swift "$RUNNER_TEMP/crop.swift" "$shots/01-changes.png" "$RUNNER_TEMP/b.jpg" 0 0 600 320
-          sips -s format jpeg -s formatOptions 50 --resampleWidth 640 "$shots/00-retina.png" --out "$RUNNER_TEMP/c.jpg" > /dev/null
-          for f in a b c; do
-            echo "@@PREVIEW-BEGIN $f"; base64 -i "$RUNNER_TEMP/$f.jpg" | fold -w 160; echo "@@PREVIEW-END"
-          done
 
   # A tag publishes one release with every platform's files.
   release:
