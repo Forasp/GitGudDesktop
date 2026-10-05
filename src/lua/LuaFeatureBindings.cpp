@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -290,30 +291,41 @@ namespace gitgud::lua::bindings
             }
             style.m_iLanes = std::min(ilanes, std::max(1, imaxLanes));
 
-            // Render into atlas textures of at most ~8K pixels high.
+            // Render into atlas textures of at most ~8K pixels high, at the
+            // display's pixel density (twice the style's size on a Retina
+            // display; the images still show at the style's size).
             auto* pui = pengine->UiBackend();
+            const float fdensity = pui ? pui->PixelRatio() : 1.0f;
+            gitgud::imaging::GraphStyle drawn = style;
+            const auto scaled = [fdensity](int _iValue)
+            { return static_cast<int>(std::lround(static_cast<float>(_iValue) * fdensity)); };
+            drawn.m_iLaneWidth = scaled(style.m_iLaneWidth);
+            drawn.m_iRowHeight = scaled(style.m_iRowHeight);
+            drawn.m_iPadding = scaled(style.m_iPadding);
+            drawn.m_fLineWidth = style.m_fLineWidth * fdensity;
+            drawn.m_fNodeRadius = style.m_fNodeRadius * fdensity;
             const std::size_t nperTexture =
-                std::max<std::size_t>(1, static_cast<std::size_t>(8192 / style.m_iRowHeight));
+                std::max<std::size_t>(1, static_cast<std::size_t>(8192 / drawn.m_iRowHeight));
             if (pui)
             {
                 for (std::size_t nfirst = 0; nfirst < rows.size(); nfirst += nperTexture)
                 {
                     const std::size_t ncount = std::min(nperTexture, rows.size() - nfirst);
                     const gitgud::imaging::Image img =
-                        gitgud::imaging::RenderGraphRows(rows, flags, nfirst, ncount, style);
+                        gitgud::imaging::RenderGraphRows(rows, flags, nfirst, ncount, drawn);
                     std::vector<gitgud::ui::ImageRegion> regions;
                     for (std::size_t i = 0; i < ncount; ++i)
                     {
                         gitgud::ui::ImageRegion region;
                         region.m_Name = prefix + "/" + std::to_string(nfirst + i + 1);
                         region.m_iX = 0;
-                        region.m_iY = static_cast<int>(i) * style.m_iRowHeight;
+                        region.m_iY = static_cast<int>(i) * drawn.m_iRowHeight;
                         region.m_iWidth = img.m_iWidth;
-                        region.m_iHeight = style.m_iRowHeight;
+                        region.m_iHeight = drawn.m_iRowHeight;
                         regions.push_back(std::move(region));
                     }
                     pui->DefineImageAtlas(prefix + "#" + std::to_string(nfirst / nperTexture),
-                        img.m_iWidth, img.m_iHeight, img.m_Rgba, regions);
+                        img.m_iWidth, img.m_iHeight, img.m_Rgba, regions, fdensity);
                 }
             }
 

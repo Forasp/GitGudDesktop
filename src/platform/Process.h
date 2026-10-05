@@ -58,4 +58,13 @@ namespace gitgud::platform
     // Quote one argument for a Windows command line (CommandLineToArgvW rules).
     std::string QuoteArgument(const std::string& _Arg);
 
+#if defined(__APPLE__)
+    // Apps opened from Finder or the Dock get a minimal PATH, without what the
+    // user's shell profile adds (Homebrew, gpg, git-lfs, p4, editors). Ask the
+    // login shell for its PATH once (giving up after a few seconds) and put
+    // its folders first in this process's PATH. Call at startup, before any
+    // threads run.
+    void AdoptLoginShellPath();
+#endif
+
 } // namespace gitgud::platform

@@ -255,10 +255,16 @@ namespace gitgud::ui
 #if !defined(_WIN32)
         // CEGUI loads its XML parser, image codec and window renderers at run
         // time, by default from the folder it was installed to on the build
-        // machine. An installed GitGud carries them in <app>/lib/cegui-9999.0.
+        // machine. An installed GitGud carries them in <app>/lib/cegui-9999.0,
+        // or on macOS in the app bundle's Frameworks folder (resources/ is in
+        // Contents/Resources).
         {
             const std::string exeDir = _ResourceRoot.substr(0, _ResourceRoot.find_last_of('/'));
+#if defined(__APPLE__)
+            const std::string moduleDir = exeDir + "/../Frameworks";
+#else
             const std::string moduleDir = exeDir + "/lib/cegui-9999.0";
+#endif
             std::error_code ec;
             if (!std::getenv("CEGUI_MODULE_DIR") &&
                 std::filesystem::is_directory(std::filesystem::u8path(moduleDir), ec))
@@ -868,6 +874,43 @@ namespace gitgud::ui
         {
             pcontext->setCursorVisible(_bVisible);
         }
+    }
+
+    void CeguiBackend::SetPixelRatio(const std::string& _SurfaceId, float _fRatio)
+    {
+        if (!_SurfaceId.empty())
+        {
+            const auto it = m_Surfaces.find(_SurfaceId);
+            if (it != m_Surfaces.end())
+            {
+                it->second.m_pTarget->setPixelRatio(_fRatio);
+                it->second.m_bForceRedraw = true;
+            }
+            return;
+        }
+        m_pRenderer->getDefaultRenderTarget().setPixelRatio(_fRatio);
+        m_bForceRedraw = true;
+        if (m_pRenderer->getDisplayPixelRatio() == _fRatio)
+        {
+            return;
+        }
+        // The fonts rasterise their glyphs again for the new density; every
+        // window's cached geometry still uses the old glyph textures.
+        m_pRenderer->setDisplayPixelRatio(_fRatio);
+        if (m_pRootWindow)
+        {
+            m_pRootWindow->invalidate(true);
+        }
+        for (auto& [id, surface] : m_Surfaces)
+        {
+            surface.m_pRoot->invalidate(true);
+            surface.m_bForceRedraw = true;
+        }
+    }
+
+    float CeguiBackend::PixelRatio() const
+    {
+        return m_pRenderer ? m_pRenderer->getDisplayPixelRatio() : 1.0f;
     }
 
     void CeguiBackend::SubscribeWidgetEvents(CEGUI::Window* _pWindow)
@@ -1869,7 +1912,8 @@ namespace gitgud::ui
     }
 
     bool CeguiBackend::DefineImageAtlas(const std::string& _TextureName, int _iWidth, int _iHeight,
-        const std::vector<std::uint8_t>& _Rgba, const std::vector<ImageRegion>& _Regions)
+        const std::vector<std::uint8_t>& _Rgba, const std::vector<ImageRegion>& _Regions,
+        float _fDensity)
     {
         if (_iWidth <= 0 || _iHeight <= 0 ||
             _Rgba.size() < static_cast<size_t>(_iWidth) * static_cast<size_t>(_iHeight) * 4)
@@ -1900,6 +1944,7 @@ namespace gitgud::ui
                 image.setImageArea(CEGUI::Rectf(fx, fy, fx + static_cast<float>(region.m_iWidth),
                     fy + static_cast<float>(region.m_iHeight)));
                 image.setAutoScaled(CEGUI::AutoScaledMode::Disabled);
+                image.setTexelDensity(_fDensity);
             }
         }
         catch (const CEGUI::Exception& e)

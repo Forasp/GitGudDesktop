@@ -66,11 +66,16 @@ end
 
 --- Explain that git-lfs is missing.
 local function missing()
-    dialog.alert("Git LFS isn't installed", gitgud.platform == "windows"
-        and ("This needs git-lfs, which comes with Git for Windows (https://git-scm.com) or from "
-            .. "https://git-lfs.com. Install it and restart GitGud.")
-        or ("This needs git-lfs. Install your system's git-lfs package (or get it from "
-            .. "https://git-lfs.com) and restart GitGud."))
+    local how = "This needs git-lfs. Install your system's git-lfs package (or get it from "
+        .. "https://git-lfs.com) and restart GitGud."
+    if gitgud.platform == "windows" then
+        how = "This needs git-lfs, which comes with Git for Windows (https://git-scm.com) or from "
+            .. "https://git-lfs.com. Install it and restart GitGud."
+    elseif gitgud.platform == "macos" then
+        how = "This needs git-lfs. Install it with Homebrew (brew install git-lfs) or from "
+            .. "https://git-lfs.com, then restart GitGud."
+    end
+    dialog.alert("Git LFS isn't installed", how)
 end
 
 --- Track a pattern with LFS (appends it to .gitattributes).

@@ -80,11 +80,15 @@ end
 --- Generate a new ed25519 key with ssh-keygen.
 function ssh.generate()
     if not gitgud.findProgram("ssh-keygen") then
-        dialog.alert("ssh-keygen not found", gitgud.platform == "windows"
-            and ("Generating a key needs ssh-keygen, part of Windows' OpenSSH client (Settings > "
-                .. "Apps > Optional features > OpenSSH Client) or Git for Windows.")
-            or ("Generating a key needs ssh-keygen. Install your system's OpenSSH client "
-                .. "(the openssh-client package on Debian and Ubuntu, openssh-clients on Fedora)."))
+        local how = "Generating a key needs ssh-keygen. Install your system's OpenSSH client "
+            .. "(the openssh-client package on Debian and Ubuntu, openssh-clients on Fedora)."
+        if gitgud.platform == "windows" then
+            how = "Generating a key needs ssh-keygen, part of Windows' OpenSSH client (Settings > "
+                .. "Apps > Optional features > OpenSSH Client) or Git for Windows."
+        elseif gitgud.platform == "macos" then
+            how = "Generating a key needs ssh-keygen, which comes with macOS in /usr/bin."
+        end
+        dialog.alert("ssh-keygen not found", how)
         return
     end
 

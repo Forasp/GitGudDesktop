@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sets up the GitGud Desktop build on Linux (and macOS): fetches and patches
+# Sets up the GitGud Desktop build on Linux and macOS: fetches and patches
 # CEGUI, builds it, then builds the app. The Unix twin of setup.ps1.
 #
 # Safe to run again at any time: every step checks what's already done.
@@ -72,9 +72,22 @@ cegui_options=(
     # GLVND is the OpenGL library to link on current Linux.
     -DOpenGL_GL_PREFERENCE=GLVND
 )
+if [ "$(uname -s)" = Darwin ]; then
+    # Apple Silicon only, for the oldest macOS the app supports (the same
+    # target as CMakeLists.txt and triplets/arm64-osx.cmake).
+    cegui_options+=(-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0)
+fi
 
 step() { printf '\n==> %s\n' "$1"; }
 note() { printf '    %s\n' "$1"; }
+# SHA-256 of a file (macOS has shasum but no sha256sum).
+sha256() {
+    if command -v sha256sum >/dev/null; then
+        sha256sum "$1" | awk '{print $1}'
+    else
+        shasum -a 256 "$1" | awk '{print $1}'
+    fi
+}
 
 if [ -z "${VCPKG_ROOT:-}" ] || [ ! -f "$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" ]; then
     echo "Set VCPKG_ROOT to a vcpkg checkout (git clone https://github.com/microsoft/vcpkg && vcpkg/bootstrap-vcpkg.sh)." >&2
@@ -131,7 +144,7 @@ cegui_fingerprint() {
     printf 'options %s\n' "${cegui_options[*]}"
     local patch
     for patch in "$patch_dir"/*.patch; do
-        printf '%s %s\n' "$(basename "$patch")" "$(sha256sum "$patch" | awk '{print $1}')"
+        printf '%s %s\n' "$(basename "$patch")" "$(sha256 "$patch")"
     done
 }
 
@@ -153,6 +166,7 @@ build_cegui() {
         -DCMAKE_INSTALL_PREFIX="$install_dir" \
         -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
         -DVCPKG_MANIFEST_DIR="$root/third_party/cegui-manifest" \
+        -DVCPKG_OVERLAY_TRIPLETS="$root/triplets" \
         "${cegui_options[@]}"
     cmake --build "$build_dir"
     cmake --install "$build_dir"

@@ -9,6 +9,7 @@ local app = require("core.app")
 local commands = require("depot.commands")
 local dialog = require("ui.dialog")
 local frame = require("depot.frame")
+local keys = require("core.keys")
 local menu = require("ui.menu")
 local panes = require("depot.views.panes")
 local repo = require("core.repo")
@@ -61,7 +62,8 @@ function menus.preferences()
             { label = "Show new (untracked) files in the default changelist", value = settings.get("depot.untrackedInPending", false) },
             { label = "Share shelves by default (push the shelf branch)", value = settings.get("depot.pushShelves", true) },
             { label = "Ask before reverting files", value = settings.get("confirmDiscard", true) },
-            -- Only Windows updates itself; elsewhere the package manager does.
+            -- Only Windows updates itself (elsewhere the package manager does, or a
+            -- new download on macOS).
             gitgud.platform == "windows"
                 and { label = "Check for updates automatically", value = settings.get("updateCheck", true) }
                 or nil,
@@ -136,7 +138,8 @@ local function fileMenu()
             require("views.settings").switchInterface()
         end },
         { separator = true },
-        { label = "Exit", shortcut = "alt+f4", action = function()
+        -- Command+Q on macOS (the app menu SDL provides quits).
+        { label = "Exit", shortcut = gitgud.platform == "macos" and "ctrl+q" or "alt+f4", action = function()
             gitgud.emit("window.close", "")
         end },
     })
@@ -426,7 +429,7 @@ local function windowMenu()
                 gitgud.closeWindow(id)
             end
         end },
-        { label = "Toggle Maximized", shortcut = "f11", action = function()
+        { label = gitgud.platform == "macos" and "Zoom" or "Toggle Maximized", shortcut = "f11", action = function()
             gitgud.emit("window.toggleMaximize", "")
         end },
     })
@@ -438,7 +441,7 @@ local function helpMenu()
         { expand = require("views.about").docItems },
         { separator = true },
         { label = "Keyboard Shortcuts", action = function()
-            dialog.alert("Keyboard shortcuts",
+            dialog.alert("Keyboard shortcuts", keys.text(
                 "Ctrl+Shift+G  Get Latest      Ctrl+E  Check Out      Ctrl+R  Revert\n"
                     .. "Ctrl+S  Submit      Ctrl+N  New Pending Changelist\n"
                     .. "Ctrl+D  Diff Against Have      Ctrl+Shift+D  Diff Against…\n"
@@ -447,7 +450,7 @@ local function helpMenu()
                     .. "Ctrl+F  Find File      Ctrl+L  Go to Depot Path      Ctrl+G  Go to Changelist\n"
                     .. "Ctrl+1 / Ctrl+2  Depot / Workspace tree      Ctrl+J  Log pane\n"
                     .. "Ctrl+K  Command palette      Ctrl+,  Preferences      F5  Refresh\n"
-                    .. "Ctrl+Z / Ctrl+Y  Undo / Redo branch moves")
+                    .. "Ctrl+Z / Ctrl+Y  Undo / Redo branch moves"))
         end },
         require("views.updates").menuItem(),
         { label = "About GitGud Desktop", action = require("views.about").show },

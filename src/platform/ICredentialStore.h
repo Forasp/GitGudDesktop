@@ -6,7 +6,7 @@
 // libgit2 handles the auth handshake but NOT storage (docs/PRINCIPLES.md,
 // principle 8): secrets must never land in plaintext config. Each OS gets a backend:
 //   * Windows: Credential Manager (CredRead/CredWrite)   — implemented
-//   * macOS:   Keychain                                   — future
+//   * macOS:   Keychain (generic passwords, service "GitGud")
 //   * Linux:   Secret Service through libsecret (loaded at run time)
 //
 // Keys are the remote host name (e.g. "git.example.com"), so one credential
@@ -43,6 +43,12 @@ namespace gitgud::platform
     // Factory for the current platform's backend; returns nullptr where no secure
     // backend is implemented yet (callers must handle that gracefully).
     std::unique_ptr<ICredentialStore> MakeCredentialStore();
+
+#if defined(__APPLE__)
+    // A Keychain store under another service name than the app's ("GitGud"),
+    // so tests never touch the user's real entries.
+    std::unique_ptr<ICredentialStore> MakeKeychainStore(const std::string& _Service);
+#endif
 
     // Extract the host from a remote URL ("https://git.example.com/r.git" ->
     // "git.example.com"; "git@host:path" -> "host"). Local paths return "".

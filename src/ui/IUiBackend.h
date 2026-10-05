@@ -108,6 +108,13 @@ namespace gitgud::ui
         virtual void SetInputSurface(const std::string& _SurfaceId) = 0;
         // Draw a surface's cursor or not (the mouse entered / left its window).
         virtual void SetCursorVisible(const std::string& _SurfaceId, bool _bVisible) = 0;
+        // Device pixels per layout unit in a window ("" = the main one): 2 on
+        // a Retina display, 1 elsewhere. Sizes, layout and input stay in units
+        // (window points); text is rasterised for the main window's ratio.
+        virtual void SetPixelRatio(const std::string& _SurfaceId, float _fRatio) = 0;
+        // The main window's pixel ratio (SetPixelRatio), for pictures drawn at
+        // full resolution (see DefineImageAtlas).
+        virtual float PixelRatio() const = 0;
 
         // Per-frame ------------------------------------------------------------
         // Resize / NeedsRedraw / Render act on the main window.
@@ -191,9 +198,12 @@ namespace gitgud::ui
             const std::vector<std::uint8_t>& _Rgba) = 0;
         // Upload ONE texture and publish several images cut from it (the
         // commit graph: hundreds of row pictures, one texture). Region names
-        // are image names like DefineImage's; re-defining replaces them.
+        // are image names like DefineImage's; re-defining replaces them. The
+        // pixels were drawn `_fDensity` times larger than the images show
+        // (PixelRatio(), for a sharp picture on a Retina display).
         virtual bool DefineImageAtlas(const std::string& _TextureName, int _iWidth, int _iHeight,
-            const std::vector<std::uint8_t>& _Rgba, const std::vector<ImageRegion>& _Regions) = 0;
+            const std::vector<std::uint8_t>& _Rgba, const std::vector<ImageRegion>& _Regions,
+            float _fDensity) = 0;
 
         // Dynamic widgets ---------------------------------------------------------
         // Create a widget of a layout type (e.g. "Gitgud/Button") named `widgetId`

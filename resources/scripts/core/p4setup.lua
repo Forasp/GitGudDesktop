@@ -110,6 +110,11 @@ function p4setup.missingP4()
         return "Install the p4 command-line client first (" .. P4_DOWNLOAD .. "), or set "
             .. "GITGUD_P4 to the full path of p4.exe."
     end
+    if gitgud.platform == "macos" then
+        return "Install the p4 command-line client first: download p4 from " .. P4_DOWNLOAD
+            .. " and put it on your PATH (for example /usr/local/bin). GITGUD_P4 can also name "
+            .. "its full path."
+    end
     return "Install the p4 command-line client first: download p4 from " .. P4_DOWNLOAD
         .. " and put it on your PATH (for example ~/.local/bin), or install the helix-cli "
         .. "package from Perforce's package repository. GITGUD_P4 can also name its full path."

@@ -1,0 +1,18 @@
+diff --git a/cegui/src/RendererModules/OpenGL/ViewportTarget.cpp b/cegui/src/RendererModules/OpenGL/ViewportTarget.cpp
+index 3900d3869..3a006fd5e 100644
+--- a/cegui/src/RendererModules/OpenGL/ViewportTarget.cpp
++++ b/cegui/src/RendererModules/OpenGL/ViewportTarget.cpp
+@@ -73,9 +73,7 @@ bool OpenGLViewportTarget::isImageryCache() const
+ 
+ } // End of  CEGUI namespace section
+ 
+-#ifdef __APPLE__
+-
+-template class CEGUI::OpenGLRenderTarget<CEGUI::RenderTarget>;
+-template class CEGUI::OpenGLRenderTarget<CEGUI::TextureTarget>;
+-
+-#endif
++// Gitgud patch: removed the explicit instantiations of
++// OpenGLRenderTarget<RenderTarget> and <TextureTarget> that were compiled on
++// Apple only. OpenGLRenderTarget isn't a template any more, so they no
++// longer compiled.

@@ -1,9 +1,21 @@
 cmake_minimum_required(VERSION 3.20)
 
+# macOS: Apple Silicon, macOS 12 and later (vcpkg's libraries are built for
+# the same target, see triplets/arm64-osx.cmake). Ignored elsewhere.
+set(CMAKE_OSX_ARCHITECTURES arm64 CACHE STRING "macOS architectures to build")
+set(CMAKE_OSX_DEPLOYMENT_TARGET 12.0 CACHE STRING "Oldest macOS to support")
+
 project(Gitgud
     VERSION 1.5.1
     DESCRIPTION "A moddable Git client with an XML+Lua GUI"
     LANGUAGES CXX)
+
+# Apple's linker doesn't need a static library repeated on the link line
+# (CMake repeats them for linkers that do) and warns about duplicates; let
+# CMake list each library once where the linker allows it (CMake 3.29+).
+if(APPLE AND POLICY CMP0156)
+    cmake_policy(SET CMP0156 NEW)
+endif()
 
 # ---- Standard ------------------------------------------------------------
 set(CMAKE_CXX_STANDARD 17)
@@ -12,6 +24,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Put binaries in a predictable place so resources/ can be found at runtime.
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+# Where the app's files (resources/, docs/, cegui-datafiles/) go: next to the
+# exe, or on macOS in the app bundle's Resources folder.
+if(APPLE)
+    set(GITGUD_APP_DATA_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/gitgud.app/Contents/Resources)
+else()
+    set(GITGUD_APP_DATA_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+endif()
 
 # ---- Options -------------------------------------------------------------
 option(GITGUD_UI_CEGUI  "Build the CEGUI UI backend" ON)
@@ -32,6 +52,19 @@ find_package(Lua REQUIRED)
 
 # zlib (already shipped for libgit2) inflates downloaded update files.
 find_package(ZLIB REQUIRED)
+
+# vcpkg's libgit2 target names zlib by its file, while libssh2's (and ours)
+# use ZLIB::ZLIB, so the link line had zlib twice and Apple's linker warned.
+# Name it ZLIB::ZLIB there too, so it's listed once (see CMP0156 above).
+if(APPLE)
+    get_target_property(_git2_deps libgit2::libgit2package INTERFACE_LINK_LIBRARIES)
+    set(_git2_deps_without_zlib ${_git2_deps})
+    list(FILTER _git2_deps_without_zlib EXCLUDE REGEX "/libz\\.a>?$")
+    if(NOT _git2_deps_without_zlib STREQUAL _git2_deps)
+        set_target_properties(libgit2::libgit2package PROPERTIES
+            INTERFACE_LINK_LIBRARIES "${_git2_deps_without_zlib};ZLIB::ZLIB")
+    endif()
+endif()
 
 # stb (header-only) decodes PNG/JPEG/GIF/BMP/TGA for the image diff.
 find_path(STB_INCLUDE_DIRS "stb_image.h" REQUIRED)
@@ -146,6 +179,14 @@ if(WIN32)
     # the shell helpers (recycle bin, folder picker) need shell32/ole32;
     # downloads use winhttp, checksums bcrypt.
     target_link_libraries(gitgud_core PUBLIC advapi32 shell32 ole32 dbghelp winhttp bcrypt)
+elseif(APPLE)
+    # The shell helpers use SDL's clipboard; saved passwords live in the
+    # Keychain (Security.framework); MacWindow.mm adjusts SDL's window and
+    # menu (AppKit).
+    enable_language(OBJCXX)
+    target_sources(gitgud_core PRIVATE src/platform/MacWindow.mm)
+    target_link_libraries(gitgud_core PUBLIC SDL2::SDL2 "-framework Security"
+        "-framework CoreFoundation" "-framework AppKit")
 else()
     # The shell helpers use SDL's clipboard; the Linux credential store loads
     # libsecret at run time.
@@ -191,7 +232,7 @@ endif()
 # provides the WinMain shim that forwards to our regular main(). Dev logging
 # survives: main.cpp re-attaches to the parent shell's console when launched
 # from one, and GITGUD_CONSOLE=1 forces a dedicated console window.
-add_executable(gitgud WIN32 src/main.cpp)
+add_executable(gitgud WIN32 MACOSX_BUNDLE src/main.cpp)
 
 # Windows: embed the Jera-rune app icon (Explorer / taskbar / Alt-Tab).
 if(WIN32)
@@ -225,13 +266,13 @@ if(GITGUD_UI_CEGUI AND CEGUI_FOUND)
     # we don't vendor a copy of the TaharezLook skin in resources/. Relative to
     # the exe's folder, so the build machine's absolute path isn't baked in.
     file(RELATIVE_PATH _cegui_data_rel
-        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} ${CEGUI_DATAFILES_DIR})
+        ${GITGUD_APP_DATA_DIR} ${CEGUI_DATAFILES_DIR})
     target_compile_definitions(gitgud PRIVATE
         GITGUD_CEGUI_DATAFILES_REL="${_cegui_data_rel}")
 
-    # Elsewhere CEGUI's shared libraries stay in its install's lib folder and
-    # the build finds them through its RPATH.
-    if(NOT WIN32)
+    # On Linux CEGUI's shared libraries stay in its install's lib folder and
+    # the build finds them through its RPATH. (macOS: see the app bundle.)
+    if(NOT WIN32 AND NOT APPLE)
         set_target_properties(gitgud PROPERTIES
             BUILD_RPATH "${CEGUI_LIB_DIR};${CEGUI_LIB_DIR}/cegui-9999.0")
     endif()
@@ -270,12 +311,12 @@ endif()
 # source tree. The running app hot-reloads from this copy. (docs/ ships so
 # the Help menu can list and open them - see gitgud.docs().)
 add_custom_target(gitgud_resources ALL
-    COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/resources
+    COMMAND ${CMAKE_COMMAND} -E rm -rf ${GITGUD_APP_DATA_DIR}/resources
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/resources ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/resources
-    COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/docs
+        ${CMAKE_SOURCE_DIR}/resources ${GITGUD_APP_DATA_DIR}/resources
+    COMMAND ${CMAKE_COMMAND} -E rm -rf ${GITGUD_APP_DATA_DIR}/docs
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/docs ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/docs
+        ${CMAKE_SOURCE_DIR}/docs ${GITGUD_APP_DATA_DIR}/docs
     COMMENT "Syncing resources/ and docs/ to the build output")
 add_dependencies(gitgud gitgud_resources)
 if(TARGET gitgud-patcher)
@@ -287,7 +328,7 @@ endif()
 # folder copied to another machine still runs; the app prefers this copy over
 # the CEGUI install it was built against (see CeguiBackend::Initialize).
 if(GITGUD_UI_CEGUI AND CEGUI_FOUND)
-    set(_cegui_data_out ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/cegui-datafiles)
+    set(_cegui_data_out ${GITGUD_APP_DATA_DIR}/cegui-datafiles)
     add_custom_command(TARGET gitgud_resources POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
             ${_cegui_data_out}/imagesets ${_cegui_data_out}/fonts ${_cegui_data_out}/xml_schemas
@@ -302,6 +343,52 @@ if(GITGUD_UI_CEGUI AND CEGUI_FOUND)
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CEGUI_DATAFILES_DIR}/xml_schemas ${_cegui_data_out}/xml_schemas
         COMMENT "Copying the CEGUI data files GitGud uses")
+endif()
+
+# ---- macOS app bundle ----------------------------------------------------
+# The build makes bin/gitgud.app, a runnable bundle: Info.plist, the icon,
+# the app's files in Contents/Resources (see GITGUD_APP_DATA_DIR), and
+# CEGUI's libraries and run-time modules in Contents/Frameworks. CEGUI names
+# its libraries @executable_path/../Frameworks/<file> on macOS, so the app
+# finds them there with no absolute path; CeguiBackend points
+# CEGUI_MODULE_DIR at the same folder. package-mac.sh adds gh, signs it, and
+# makes the .dmg.
+if(APPLE)
+    set_target_properties(gitgud PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/installer/macos/Info.plist.in
+        BUILD_RPATH "@executable_path/../Frameworks"
+        INSTALL_RPATH "@executable_path/../Frameworks")
+
+    # gitgud.icns from the Linux icon PNGs (sips and iconutil come with macOS).
+    set(_iconset ${CMAKE_BINARY_DIR}/gitgud.iconset)
+    set(_icons ${CMAKE_SOURCE_DIR}/installer/linux/icons)
+    add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/gitgud.icns
+        COMMAND ${CMAKE_COMMAND} -E rm -rf ${_iconset}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${_iconset}
+        COMMAND ${CMAKE_COMMAND} -E copy ${_icons}/16x16/gitgud.png ${_iconset}/icon_16x16.png
+        COMMAND ${CMAKE_COMMAND} -E copy ${_icons}/32x32/gitgud.png ${_iconset}/icon_16x16@2x.png
+        COMMAND ${CMAKE_COMMAND} -E copy ${_icons}/32x32/gitgud.png ${_iconset}/icon_32x32.png
+        COMMAND ${CMAKE_COMMAND} -E copy ${_icons}/64x64/gitgud.png ${_iconset}/icon_32x32@2x.png
+        COMMAND sips -z 128 128 ${_icons}/256x256/gitgud.png --out ${_iconset}/icon_128x128.png
+        COMMAND ${CMAKE_COMMAND} -E copy ${_icons}/256x256/gitgud.png ${_iconset}/icon_128x128@2x.png
+        COMMAND ${CMAKE_COMMAND} -E copy ${_icons}/256x256/gitgud.png ${_iconset}/icon_256x256.png
+        COMMAND iconutil -c icns ${_iconset} -o ${CMAKE_BINARY_DIR}/gitgud.icns
+        DEPENDS ${_icons}/16x16/gitgud.png ${_icons}/32x32/gitgud.png
+            ${_icons}/64x64/gitgud.png ${_icons}/256x256/gitgud.png
+        COMMENT "Making gitgud.icns"
+        VERBATIM)
+    target_sources(gitgud PRIVATE ${CMAKE_BINARY_DIR}/gitgud.icns)
+    set_source_files_properties(${CMAKE_BINARY_DIR}/gitgud.icns PROPERTIES
+        MACOSX_PACKAGE_LOCATION Resources)
+
+    if(GITGUD_UI_CEGUI AND CEGUI_FOUND)
+        file(GLOB _cegui_dylibs "${CEGUI_LIB_DIR}/*.dylib" "${CEGUI_LIB_DIR}/cegui-9999.0/*.dylib")
+        add_custom_command(TARGET gitgud POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_BUNDLE_CONTENT_DIR:gitgud>/Frameworks
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_cegui_dylibs}
+                $<TARGET_BUNDLE_CONTENT_DIR:gitgud>/Frameworks
+            COMMENT "Copying CEGUI's libraries into the app bundle")
+    endif()
 endif()
 
 # ---- Linux packages ------------------------------------------------------

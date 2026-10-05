@@ -204,8 +204,8 @@ dot above HEAD for uncommitted changes. Show a row's picture inline:
 | `setClipboard(text)` | |
 | `pathExists(path)` | |
 | `readRepoFile(rel)` / `writeRepoFile(rel, text)` | files inside the open repository only |
-| `trashRepoFile(rel)` | move a file inside the open repository to the Recycle Bin |
-| `configRead(name)` / `configWrite(name, text)` | per-user files in `%APPDATA%\Gitgud` |
+| `trashRepoFile(rel)` | move a file inside the open repository to the Recycle Bin (the Trash on macOS) |
+| `configRead(name)` / `configWrite(name, text)` | per-user files in `%APPDATA%\Gitgud` (`~/Library/Application Support/Gitgud` on macOS, `~/.config/gitgud` on Linux) |
 | `docs()` | `{ {name, path}, … }` for the shipped docs folder |
 | `findProgram(name)` | full path of a program on PATH (or bundled with Git for Windows), or `nil` |
 | `runProgram({program, args…}, cwd?, stdin?)` | run to completion: `{code, output, error}`, or `nil, msg` if it can't start. Blocks — quick tools only |
@@ -217,7 +217,7 @@ dot above HEAD for uncommitted changes. Show a row's picture inline:
 | `installTool(name, {url, sha256, tool, version})` | download a .zip, check its SHA-256, unpack it into `<app data>/tools/<tool>/<version>` and remove older versions; `<name>.done` carries the folder |
 | `installedTools(tool)` | `{ {version, dir}, … }` installed by `installTool` |
 | `homeDir()` | the user's home folder |
-| `appDir()` | the folder the app runs from (holds `resources/`, `docs/`, and on Linux the bundled `gh/`) |
+| `appDir()` | the folder the app runs from (holds `resources/`, `docs/`, and on Linux and macOS the bundled `gh/`); on macOS the app bundle's `Contents/Resources` |
 | `version` | app version string |
 | `platform` | `"windows"`, `"macos"` or `"linux"` |
 
@@ -225,13 +225,15 @@ dot above HEAD for uncommitted changes. Show a row's picture inline:
 
 `app.started` (detail `"hot-reload"` after a reload), `app.focusGained`,
 `app.fileDropped` (path), `key` (combo, e.g. `"ctrl+shift+p"`, also plain
-`"up"`, `"down"`, `"pageup"`, `"pagedown"` — see `core/keys.lua`),
+`"up"`, `"down"`, `"pageup"`, `"pagedown"`; see `core/keys.lua`. On macOS
+Command is reported as `ctrl`, so bindings work unchanged),
 `status.changed`, `repo.changed`, `repo.error`, `credential.missing`,
 `credential.rejected`,
 `ssh.unknownHost`, `console.output` / `console.done`, `window.state`
 (`"maximized"` / `"restored"`),
 `window.resized` (`"WxH"`), plus the network events above. Scripts can ask
-the window to `window.minimize`, `window.toggleMaximize`, `window.close`.
+the window to `window.minimize`, `window.toggleMaximize` (zoom on macOS),
+`window.close`.
 Pop-out windows add `window.closed` (id), `window.key` (`"id|combo"` — a
 pop-out's shortcuts don't reach `key`), `window.focused` (id), and
 `window.popOutResized` (`"id|WxH"`).

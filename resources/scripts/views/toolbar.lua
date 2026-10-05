@@ -7,6 +7,7 @@
 
 local C = require("core.palette")
 local app = require("core.app")
+local keys = require("core.keys")
 local repo = require("core.repo")
 local status = require("core.status")
 local sync = require("views.sync")
@@ -108,9 +109,10 @@ local function paintUndo()
     gitgud.setEnabled("UndoButton", nextUndo ~= nil)
     gitgud.setEnabled("RedoButton", nextRedo ~= nil)
     gitgud.setProperty("UndoButton", "TooltipText",
-        nextUndo and ("Undo: " .. nextUndo.label .. "  (Ctrl+Z)") or "Nothing to undo")
+        nextUndo and ("Undo: " .. nextUndo.label .. "  (" .. keys.label("ctrl+z") .. ")") or "Nothing to undo")
     gitgud.setProperty("RedoButton", "TooltipText",
-        nextRedo and ("Redo: " .. nextRedo.label .. "  (Ctrl+Shift+Z)") or "Nothing to redo")
+        nextRedo and ("Redo: " .. nextRedo.label .. "  (" .. keys.label("ctrl+shift+z") .. ")")
+            or "Nothing to redo")
     gitgud.setProperty("UndoButtonLabel", "NormalTextColour", nextUndo and C.text2 or C.disabled)
     gitgud.setProperty("RedoButtonLabel", "NormalTextColour", nextRedo and C.text2 or C.disabled)
     gitgud.setProperty("UndoButtonIcon", "IconColour", nextUndo and "FFFFFFFF" or C.disabled)

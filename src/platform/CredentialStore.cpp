@@ -1,8 +1,8 @@
 // -----------------------------------------------------------------------------
-// Credential store backends: Windows Credential Manager, and the Secret
-// Service (libsecret, loaded at run time) on Linux. The factory returns
-// nullptr where there is none (macOS until its Keychain backend lands, Linux
-// without libsecret); callers treat "no store" as "always prompt".
+// Credential store backends: Windows Credential Manager, the macOS Keychain,
+// and the Secret Service (libsecret, loaded at run time) on Linux. The
+// factory returns nullptr where there is none (Linux without libsecret);
+// callers treat "no store" as "always prompt".
 // -----------------------------------------------------------------------------
 
 #include "platform/ICredentialStore.h"
@@ -14,6 +14,11 @@
 #include <wincred.h>
 
 #include <vector>
+#elif defined(__APPLE__)
+#include <CoreFoundation/CoreFoundation.h>
+#include <Security/Security.h>
+
+#include <utility>
 #elif defined(__linux__)
 #include <dlfcn.h>
 #endif
@@ -256,11 +261,138 @@ namespace gitgud::platform
         return std::make_unique<SecretServiceStore>(plib, store, lookup, clear, free);
     }
 
+#elif defined(__APPLE__)
+
+    namespace
+    {
+
+        // Releases a Core Foundation object when it goes out of scope.
+        template <typename T> struct CfRef
+        {
+            T m_Ref = nullptr;
+
+            explicit CfRef(T _Ref) : m_Ref(_Ref)
+            {
+            }
+            ~CfRef()
+            {
+                if (m_Ref)
+                {
+                    CFRelease(m_Ref);
+                }
+            }
+            CfRef(const CfRef&) = delete;
+            CfRef& operator=(const CfRef&) = delete;
+        };
+
+        CFStringRef MakeCfString(const std::string& _Text)
+        {
+            return CFStringCreateWithBytes(kCFAllocatorDefault,
+                reinterpret_cast<const UInt8*>(_Text.data()), static_cast<CFIndex>(_Text.size()),
+                kCFStringEncodingUTF8, false);
+        }
+
+        // Keychain backend: one generic password per host (service = the
+        // store's service name, account = host) in the user's login
+        // keychain. The secret is "<username>\n<password>".
+        class KeychainStore final : public ICredentialStore
+        {
+          public:
+            explicit KeychainStore(std::string _Service) : m_Service(std::move(_Service))
+            {
+            }
+
+            bool Get(const std::string& _Host, Credential& _Out) const override
+            {
+                CfRef<CFMutableDictionaryRef> query(Query(_Host));
+                CFDictionarySetValue(query.m_Ref, kSecReturnData, kCFBooleanTrue);
+                CFDictionarySetValue(query.m_Ref, kSecMatchLimit, kSecMatchLimitOne);
+                CFTypeRef presult = nullptr;
+                if (SecItemCopyMatching(query.m_Ref, &presult) != errSecSuccess || !presult)
+                {
+                    return false;
+                }
+                CfRef<CFTypeRef> result(presult);
+                if (CFGetTypeID(presult) != CFDataGetTypeID())
+                {
+                    return false;
+                }
+                const auto pdata = static_cast<CFDataRef>(presult);
+                const std::string secret(reinterpret_cast<const char*>(CFDataGetBytePtr(pdata)),
+                    static_cast<std::size_t>(CFDataGetLength(pdata)));
+                const std::size_t nbreak = secret.find('\n');
+                if (nbreak == std::string::npos)
+                {
+                    return false;
+                }
+                _Out.m_Username = secret.substr(0, nbreak);
+                _Out.m_Password = secret.substr(nbreak + 1);
+                return true;
+            }
+
+            bool Set(const std::string& _Host, const Credential& _In) override
+            {
+                const std::string secret = _In.m_Username + "\n" + _In.m_Password;
+                CfRef<CFDataRef> data(CFDataCreate(kCFAllocatorDefault,
+                    reinterpret_cast<const UInt8*>(secret.data()),
+                    static_cast<CFIndex>(secret.size())));
+
+                // Replace the existing item, or add one.
+                CfRef<CFMutableDictionaryRef> query(Query(_Host));
+                CfRef<CFMutableDictionaryRef> change(CFDictionaryCreateMutable(kCFAllocatorDefault,
+                    0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks));
+                CFDictionarySetValue(change.m_Ref, kSecValueData, data.m_Ref);
+                const OSStatus iupdated = SecItemUpdate(query.m_Ref, change.m_Ref);
+                if (iupdated != errSecItemNotFound)
+                {
+                    return iupdated == errSecSuccess;
+                }
+                CfRef<CFStringRef> label(MakeCfString("GitGud: " + _Host));
+                CFDictionarySetValue(query.m_Ref, kSecAttrLabel, label.m_Ref);
+                CFDictionarySetValue(query.m_Ref, kSecValueData, data.m_Ref);
+                return SecItemAdd(query.m_Ref, nullptr) == errSecSuccess;
+            }
+
+            bool Erase(const std::string& _Host) override
+            {
+                CfRef<CFMutableDictionaryRef> query(Query(_Host));
+                return SecItemDelete(query.m_Ref) == errSecSuccess;
+            }
+
+          private:
+            // The attributes that identify a host's item.
+            CFMutableDictionaryRef Query(const std::string& _Host) const
+            {
+                CFMutableDictionaryRef pquery = CFDictionaryCreateMutable(kCFAllocatorDefault, 0,
+                    &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+                CfRef<CFStringRef> service(MakeCfString(m_Service));
+                CfRef<CFStringRef> account(MakeCfString(_Host));
+                CFDictionarySetValue(pquery, kSecClass, kSecClassGenericPassword);
+                CFDictionarySetValue(pquery, kSecAttrService, service.m_Ref);
+                CFDictionarySetValue(pquery, kSecAttrAccount, account.m_Ref);
+                return pquery;
+            }
+
+            std::string m_Service;
+        };
+
+    } // namespace
+
+    std::unique_ptr<ICredentialStore> MakeCredentialStore()
+    {
+        return MakeKeychainStore("GitGud");
+    }
+
+    std::unique_ptr<ICredentialStore> MakeKeychainStore(const std::string& _Service)
+    {
+        return std::make_unique<KeychainStore>(_Service);
+    }
+
 #else
 
     std::unique_ptr<ICredentialStore> MakeCredentialStore()
     {
-        return nullptr; // macOS Keychain backend TBD
+        return nullptr;
     }
 
 #endif

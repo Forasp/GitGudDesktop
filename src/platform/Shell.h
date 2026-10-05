@@ -34,7 +34,8 @@ namespace gitgud::platform
     // Replace the clipboard's text.
     bool SetClipboardText(const std::string& _Text);
 
-    // Folder of the running executable (UTF-8).
+    // Folder of the running executable (UTF-8), where its resources/ and
+    // docs/ are. On macOS, inside an app bundle, the bundle's Resources folder.
     std::string ExecutableDirectory();
 
     // Per-user settings folder: %APPDATA%\Gitgud on Windows,

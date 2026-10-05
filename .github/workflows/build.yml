@@ -1,10 +1,11 @@
 # Builds, tests, and packages GitGud Desktop on every push and pull request.
 # Every run keeps the zip, the installer, and the update files as the
-# GitGud-win64 artifact, and the .deb and .rpm as GitGud-linux; pushing a tag
-# like v1.0 also publishes a release with all of them. Installed Windows
-# copies update themselves from a release's update files (update-manifest.txt,
-# signed with the GITGUD_UPDATE_SIGNING_KEY secret, and GitGud-win64.pack);
-# Linux packages are updated by the package manager.
+# GitGud-win64 artifact, the .deb and .rpm as GitGud-linux, and the .dmg as
+# GitGud-macos; pushing a tag like v1.0 also publishes a release with all of
+# them. Installed Windows copies update themselves from a release's update
+# files (update-manifest.txt, signed with the GITGUD_UPDATE_SIGNING_KEY
+# secret, and GitGud-win64.pack); Linux packages are updated by the package
+# manager, and Mac users download the new .dmg.
 #
 # The first run builds every vcpkg dependency (OpenSSL among them) and CEGUI,
 # which takes a while; both are cached, so later runs only build the app.
@@ -274,10 +275,178 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # Apple Silicon, macOS 12 and later (see triplets/arm64-osx.cmake).
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Packages
+        run: brew install ninja pkg-config
+
+      - name: Cache keys
+        id: keys
+        run: |
+          echo "baseline=$(jq -r '."builtin-baseline"' vcpkg.json)" >> "$GITHUB_OUTPUT"
+          echo "cegui=$(git ls-tree HEAD third_party/cegui | awk '{print $3}')" >> "$GITHUB_OUTPUT"
+          echo "image=$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
+
+      - name: vcpkg
+        run: |
+          root="$RUNNER_TEMP/vcpkg"
+          git clone --quiet https://github.com/microsoft/vcpkg "$root"
+          git -C "$root" checkout --quiet ${{ steps.keys.outputs.baseline }}
+          "$root/bootstrap-vcpkg.sh" -disableMetrics
+          mkdir -p "$RUNNER_TEMP/vcpkg-binaries"
+          echo "VCPKG_ROOT=$root" >> "$GITHUB_ENV"
+          echo "VCPKG_BINARY_SOURCES=clear;files,$RUNNER_TEMP/vcpkg-binaries,readwrite" >> "$GITHUB_ENV"
+
+      - name: Restore vcpkg packages
+        id: vcpkg-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/vcpkg-binaries
+          key: vcpkg-${{ steps.keys.outputs.image }}-${{ steps.keys.outputs.baseline }}-${{ hashFiles('vcpkg.json', 'third_party/cegui-manifest/vcpkg.json', 'triplets/*.cmake') }}
+          restore-keys: |
+            vcpkg-${{ steps.keys.outputs.image }}-${{ steps.keys.outputs.baseline }}-
+
+      - name: Restore CEGUI
+        id: cegui-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: third_party/cegui-install-release
+          key: cegui-${{ steps.keys.outputs.image }}-${{ steps.keys.outputs.cegui }}-${{ hashFiles('third_party/patches/cegui/*.patch', 'third_party/cegui-manifest/vcpkg.json', 'triplets/*.cmake', 'setup.sh') }}
+
+      # On failure, carry on compiling past the first error and list every
+      # one, and always list warnings in GitGud's own sources.
+      - name: Build and test
+        run: |
+          log="$RUNNER_TEMP/setup.log"
+          set +e
+          ./setup.sh --preset release --test 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            for dir in build/cegui-rel build/release; do
+              [ -f "$dir/build.ninja" ] && ninja -C "$dir" -k 0 >> "$log" 2>&1
+            done
+            echo "--- errors"
+            grep -E "error:|Undefined symbols|ld: " "$log" | sort -u | head -80
+          fi
+          echo "--- warnings in src/ and from the linker"
+          grep -E "/src/[^ ]*: warning:|^ld: warning" "$log" | grep -v third_party | sort -u | head -80
+          exit $status
+
+      - name: Save vcpkg packages
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/vcpkg-binaries
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+
+      - name: Save CEGUI
+        if: always() && steps.cegui-cache.outputs.cache-hit != 'true' && hashFiles('third_party/cegui-install-release/.gitgud-stamp') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: third_party/cegui-install-release
+          key: ${{ steps.cegui-cache.outputs.cache-primary-key }}
+
+      - name: Package
+        run: ./package.sh --skip-build
+
+      # Install the app from the .dmg and start it with a script that zooms
+      # the window and closes it once the UI is up; then two copies at once
+      # through `open -n` (several copies must run side by side); then the
+      # walkthrough on a scratch repository. Everything runs with a scratch
+      # HOME, and nothing here signs in, so the Keychain isn't touched.
+      - name: Smoke test and walkthrough
+        run: |
+          scratch="$RUNNER_TEMP/ui"
+          mkdir -p "$scratch/home" "$scratch/shots" "$scratch/Applications"
+          hdiutil attach -quiet -nobrowse -mountpoint "$scratch/dmg" build/dist/GitGud-macOS-arm64.dmg
+          ditto "$scratch/dmg/GitGud Desktop.app" "$scratch/Applications/GitGud Desktop.app"
+          hdiutil detach -quiet "$scratch/dmg"
+          bundle="$scratch/Applications/GitGud Desktop.app"
+          codesign --verify --strict "$bundle"
+          "$bundle/Contents/Resources/gh/gh" --version
+          cat > "$scratch/smoke.lua" <<'LUA'
+          gitgud.on("window.state", function(state) print("[smoke] window " .. state) end)
+          gitgud.on("window.resized", function(size) print("[smoke] resized to " .. size) end)
+          gitgud.after(2000, function() gitgud.emit("window.toggleMaximize", "") end)
+          gitgud.after(4000, function()
+              print("[smoke] ui up")
+              gitgud.emit("window.close", "")
+          end)
+          LUA
+          # Run the app, killing it after two minutes.
+          run_app() {
+            HOME="$scratch/home" GITGUD_UI=default GITGUD_SCRIPT="$1" GITGUD_LOG="$2" \
+              GITGUD_SHOTS="$scratch/shots" "$bundle/Contents/MacOS/gitgud" "${@:3}" &
+            local pid=$!
+            for _ in $(seq 120); do sleep 1; kill -0 $pid 2>/dev/null || break; done
+            kill $pid 2>/dev/null || true
+            wait $pid || true
+          }
+          fail() {
+            echo "::error title=Smoke test::$1"
+            tail -30 "$2" || true
+            tail -30 "$scratch/home/Library/Application Support/Gitgud/logs/CEGUI.log" || true
+            exit 1
+          }
+
+          run_app "$scratch/smoke.lua" "$scratch/smoke.log"
+          grep "\[smoke\]\|\[display\]" "$scratch/smoke.log" || true
+          grep -q "\[smoke\] ui up" "$scratch/smoke.log" || fail "the app didn't start" "$scratch/smoke.log"
+
+          for i in 1 2; do
+            open -n -W --env HOME="$scratch/home" --env GITGUD_UI=default \
+              --env GITGUD_SCRIPT="$scratch/smoke.lua" --env GITGUD_LOG="$scratch/open$i.log" "$bundle" &
+          done
+          wait
+          for i in 1 2; do
+            grep -q "\[smoke\] ui up" "$scratch/open$i.log" || fail "copy $i from open -n didn't start" "$scratch/open$i.log"
+          done
+          echo "two copies ran side by side"
+
+          tests/ui/make-testrepo.sh "$scratch/repo"
+          # A screenshot as a Retina display draws it (GITGUD_PIXEL_RATIO).
+          cat > "$scratch/retina.lua" <<'LUA'
+          gitgud.after(2500, function() gitgud.screenshot(os.getenv("GITGUD_SHOTS") .. "/00-retina.png") end)
+          gitgud.after(4000, function() gitgud.emit("window.close", "") end)
+          LUA
+          GITGUD_PIXEL_RATIO=2 run_app "$scratch/retina.lua" "$scratch/retina.log" "$scratch/repo"
+          run_app "$PWD/tests/ui/walkthrough.lua" "$scratch/walk.log" "$scratch/repo"
+          grep -i "error\|failed\|\[ui-test\] finished" "$scratch/walk.log" || true
+          ls "$scratch/shots"
+          [ -n "$(ls "$scratch/shots")" ] || fail "the walkthrough took no screenshots" "$scratch/walk.log"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: GitGud-macos-screenshots
+          path: ${{ runner.temp }}/ui/shots
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload disk image
+        uses: actions/upload-artifact@v7
+        with:
+          name: GitGud-macos
+          path: build/dist/GitGud-macOS-arm64.dmg
+          if-no-files-found: error
+          retention-days: 14
+
   # A tag publishes one release with every platform's files.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows, linux]
+    needs: [windows, linux, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
