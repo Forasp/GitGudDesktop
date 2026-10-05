@@ -1,6 +1,6 @@
 # GitGud Desktop
 
-A Git client you can reshape. The engine is native C++ over libgit2; the
+A Git and/or P4 client you can reshape. The engine is native C++ over libgit2; the
 interface above it (layouts, skin, menus, shortcuts, workflows) is XML and
 Lua that reloads while the app runs, so you can restyle it, rearrange it, or
 build your own features without recompiling. Works with any Git server; no
@@ -10,7 +10,7 @@ account required.
 
 1. Download the **[installer](https://github.com/Forasp/GitGudDesktop/releases/latest/download/GitGud-win64-setup.exe)**
    and run it, or the **[zip](https://github.com/Forasp/GitGudDesktop/releases/latest/download/GitGud-win64.zip)**
-   to unzip anywhere and run `gitgud.exe` without installing. Other versions
+   to unzip anywhere and run `gitgud.exe` without installing. Other versions. platforms, 
    and release notes are on the
    [releases page](https://github.com/Forasp/GitGudDesktop/releases).
 2. Start GitGud and pick an interface (you can switch any time).
