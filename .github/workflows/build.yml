@@ -323,8 +323,24 @@ jobs:
           path: third_party/cegui-install-release
           key: cegui-${{ steps.keys.outputs.image }}-${{ steps.keys.outputs.cegui }}-${{ hashFiles('third_party/patches/cegui/*.patch', 'third_party/cegui-manifest/vcpkg.json', 'triplets/*.cmake', 'setup.sh') }}
 
+      # On failure, carry on compiling past the first error and list every
+      # one, and always list warnings in GitGud's own sources.
       - name: Build and test
-        run: ./setup.sh --preset release --test
+        run: |
+          log="$RUNNER_TEMP/setup.log"
+          set +e
+          ./setup.sh --preset release --test 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            for dir in build/cegui-rel build/release; do
+              [ -f "$dir/build.ninja" ] && ninja -C "$dir" -k 0 >> "$log" 2>&1
+            done
+            echo "--- errors"
+            grep -E "error:|Undefined symbols|ld: " "$log" | sort -u | head -80
+          fi
+          echo "--- warnings in src/"
+          grep -E "/src/[^ ]*: warning:" "$log" | grep -v third_party | sort -u | head -80
+          exit $status
 
       - name: Save vcpkg packages
         if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
