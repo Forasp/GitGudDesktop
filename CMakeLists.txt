@@ -6,7 +6,7 @@ set(CMAKE_OSX_ARCHITECTURES arm64 CACHE STRING "macOS architectures to build")
 set(CMAKE_OSX_DEPLOYMENT_TARGET 12.0 CACHE STRING "Oldest macOS to support")
 
 project(Gitgud
-    VERSION 1.5.1
+    VERSION 1.5.2
     DESCRIPTION "A moddable Git client with an XML+Lua GUI"
     LANGUAGES CXX)
 
