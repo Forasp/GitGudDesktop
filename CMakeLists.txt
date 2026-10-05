@@ -53,6 +53,19 @@ find_package(Lua REQUIRED)
 # zlib (already shipped for libgit2) inflates downloaded update files.
 find_package(ZLIB REQUIRED)
 
+# vcpkg's libgit2 target names zlib by its file, while libssh2's (and ours)
+# use ZLIB::ZLIB, so the link line had zlib twice and Apple's linker warned.
+# Name it ZLIB::ZLIB there too, so it's listed once (see CMP0156 above).
+if(APPLE)
+    get_target_property(_git2_deps libgit2::libgit2package INTERFACE_LINK_LIBRARIES)
+    set(_git2_deps_without_zlib ${_git2_deps})
+    list(FILTER _git2_deps_without_zlib EXCLUDE REGEX "/libz\\.a>?$")
+    if(NOT _git2_deps_without_zlib STREQUAL _git2_deps)
+        set_target_properties(libgit2::libgit2package PROPERTIES
+            INTERFACE_LINK_LIBRARIES "${_git2_deps_without_zlib};ZLIB::ZLIB")
+    endif()
+endif()
+
 # stb (header-only) decodes PNG/JPEG/GIF/BMP/TGA for the image diff.
 find_path(STB_INCLUDE_DIRS "stb_image.h" REQUIRED)
 
