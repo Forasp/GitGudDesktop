@@ -430,7 +430,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: GitGud-macos-screenshots
+          name: ui-screenshots-macos
           path: ${{ runner.temp }}/ui/shots
           if-no-files-found: ignore
           retention-days: 14
@@ -451,8 +451,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Package artifacts are named GitGud-*; anything else a job keeps
+      # (test screenshots) is named otherwise and stays out of the release.
       - uses: actions/download-artifact@v7
         with:
+          pattern: GitGud-*
           path: dist
           merge-multiple: true
 

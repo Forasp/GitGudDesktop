@@ -275,8 +275,9 @@ GPU, so the smoke test borrows Mesa's software OpenGL (`-OpenGLRuntime`); those
 DLLs go next to the test's copy of the app only, never into the package.
 Inno Setup comes from its GitHub release at a pinned version, checked
 against a pinned SHA-256 (`INNO_VERSION` and `INNO_SHA256` in the workflow;
-update both together). Each run keeps the zip, the installer, and the
-update files as its `GitGud-win64` artifact for two weeks.
+update both together). Each run keeps its packages for two weeks as
+artifacts: the zip, the installer, and the update files (`GitGud-win64`),
+the .deb and .rpm (`GitGud-linux`), and the disk image (`GitGud-macos`).
 
 To release, set the version in `CMakeLists.txt` (`project(... VERSION x.y.z)`)
 and `vcpkg.json`, commit, and push a tag:
@@ -286,10 +287,13 @@ git tag v1.5.1
 git push origin v1.5.1
 ```
 
-The workflow then publishes a release for the tag with
+Once every platform has built, the workflow publishes a release for the
+tag with the files of every artifact named `GitGud-*`, so name package
+artifacts that way and anything else (test screenshots) otherwise: Windows
 `GitGud-win64.zip`, `GitGud-win64-setup.exe`, `GitGud-win64.pack`, and
-`update-manifest.txt` attached; installed copies find the new version
-through the last two. The latest one is always at
+`update-manifest.txt` (installed copies find the new version through the
+last two, so every release needs them), the Linux .deb and .rpm, and
+`GitGud-macOS-arm64.dmg`. The latest one is always at
 <https://github.com/Forasp/GitGudDesktop/releases/latest>.
 
 ## Tests
