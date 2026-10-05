@@ -4,7 +4,7 @@
 --   * every menu command (with its shortcut), so nothing is only a menu away
 --   * commands modules register here (commands.register)
 --   * whatever the UI's candidate sources add when the palette opens
---     (commands.addSource) — the default UI adds "Check out <branch>",
+--     (commands.addSource): the GitGud UI adds "Check out <branch>",
 --     "Open <repository>", and "Show <file>" (views/menus.lua)
 -- Matching is fuzzy (the letters in order, not necessarily together); word
 -- starts and runs of letters rank higher. With an empty box, recently run

@@ -1,4 +1,4 @@
---- tests/ui/splitters.lua: resizing the default UI's regions by dragging,
+--- tests/ui/splitters.lua: resizing the GitGud UI's regions by dragging,
 -- through the real UI.
 --
 -- Run it in a repository made by make-testrepo.ps1 with GITGUD_UI=default, a

@@ -1,7 +1,7 @@
 --- main.lua — the Depot UI's entry point.
 --
 -- A UI package (see docs/MODDING.md, "Your own interface"): this folder's
--- scripts/ is searched before the default UI's, so `require` finds the
+-- scripts/ is searched before the GitGud UI's, so `require` finds the
 -- Depot modules here (depot/…, and core/palette.lua with the Dagobah colours)
 -- and the shared toolkit there (core/, ui/, and a few default views used as
 -- headless services: repositories, sync, ssh, settings, lfs).
@@ -41,7 +41,7 @@ require("depot.changedialog").init()
 require("depot.windows").init()
 require("depot.p4actions").init()
 
--- Shared services from the default UI (no widgets of their own here).
+-- Shared services from the GitGud UI (no widgets of their own here).
 app.use(require("views.repositories"))
 app.use(require("views.sync"))
 app.use(require("views.ssh"))

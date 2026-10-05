@@ -6,7 +6,7 @@
 -- screenshots. It walks the tabs, makes a numbered changelist, marks a file
 -- for add, shelves (a branch, pushed to the test remote), reverts,
 -- unshelves, deletes the shelf, and submits; opens the Diff, Revision Graph,
--- Time-lapse, and Folder Diff windows; then switches to the default UI, the
+-- Time-lapse, and Folder Diff windows; then switches to the GitGud UI, the
 -- picker, and back. The script runs again after every UI switch, so it keeps
 -- its phase in a config file. Prints "[check] ..." lines for the log.
 
@@ -337,7 +337,7 @@ if phase() == "depot" and gitgud.currentUi().id == "depot" then
         shot("p14-main")
     end)
 
-    step(600, "switch to the default UI", function()
+    step(600, "switch to the GitGud UI", function()
         setPhase("default")
         local ok = gitgud.switchUi("default", true)
         check("switchUi accepted", ok == true)
@@ -346,15 +346,15 @@ end
 
 -- ======================================================== phase: default ==
 if phase() == "default" and gitgud.currentUi().id == "default" then
-    step(1500, "the default UI came up", function()
-        check("default UI running", gitgud.currentUi().id == "default")
+    step(1500, "the GitGud UI came up", function()
+        check("GitGud UI running", gitgud.currentUi().id == "default")
         check("previous UI is depot", gitgud.previousUi() == "depot")
         local found = false
         for _, entry in ipairs(require("ui.menu").entries()) do
             found = found or entry.item.label == "Switch user interface…"
         end
         check("File menu offers Switch user interface…", found)
-        shot("d01-default-ui")
+        shot("d01-gitgud-ui")
         setPhase("picker")
         gitgud.showUiPicker()
     end)

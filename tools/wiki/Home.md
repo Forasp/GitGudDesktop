@@ -4,7 +4,7 @@ workflows — is XML and Lua that reloads while the app runs. No recompiling,
 no restarting.
 
 It ships with two interfaces similar to other popular revision control
-software. The default one has changes and history side by side, a commit
+software. The GitGud one has changes and history side by side, a commit
 graph, undo, interactive rebase, and a merge tool. The Depot interface has
 pending changelists, shelving, a revision graph, and separate diff windows.
 Pick one on first launch and switch whenever you like.
@@ -17,7 +17,7 @@ build something different on the same engine.
   loop, adding your own panels, menus, and commands.
 - **[Lua API](Lua-API)**: every `gitgud.*` function and event scripts can use.
 - **[Building](Building)**: set up the toolchain and build from source.
-- **[Using the Default UI](Using-the-Default-UI)**: a tour of the interface
+- **[Using the GitGud Interface](Using-the-GitGud-Interface)**: a tour of the interface
   GitGud ships with.
 - **[Using the Depot UI](Using-the-Depot-UI)**: the changelist-based interface, and how
   its changelists and shelves map onto Git.

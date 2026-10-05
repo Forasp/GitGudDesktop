@@ -9,7 +9,7 @@
 --   Labels        new (tag a changelist), delete, push
 --   Connection    fetch, push, remotes, workspaces (repositories)
 --
--- The branch commands reuse the default UI's views/branches.lua (dialogs,
+-- The branch commands reuse the GitGud UI's views/branches.lua (dialogs,
 -- stash-before-switch, undo); everything is logged as its git command.
 
 local app = require("core.app")
@@ -227,7 +227,7 @@ end
 -- ---- resolve ------------------------------------------------------------------------------
 
 --- Resolve conflicted files: accept yours, theirs, or the merged file as
--- edited; the default UI's merge tool is not part of this layout, so
+-- edited; the GitGud UI's merge tool is not part of this layout, so
 -- "merged" means you edited the conflict markers out in your editor.
 -- @param paths  conflicted files (default: all)
 function commands.resolve(paths)

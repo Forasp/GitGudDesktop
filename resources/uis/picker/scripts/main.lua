@@ -1,13 +1,13 @@
 --- main.lua — the user-interface picker (a UI package of its own).
 --
 -- Shown on first launch and whenever a UI asks for it (gitgud.showUiPicker).
--- One card per interface: the default UI, the built-in alternatives
+-- One card per interface: the GitGud UI, the built-in alternatives
 -- (resources/uis/*), and any package already chosen from a folder. Picking
 -- one remembers it (gitgud.switchUi(id, true)) and starts it; "Use an
 -- interface from a folder…" accepts any folder holding scripts/main.lua and
 -- layouts/main.xml. Cancel goes back to the interface that opened the picker.
 --
--- It reuses the default UI's toolkit (require searches this package's
+-- It reuses the GitGud UI's toolkit (require searches this package's
 -- scripts/ first, then resources/scripts).
 
 local C = require("core.palette")

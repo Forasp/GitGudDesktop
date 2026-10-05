@@ -1,4 +1,4 @@
---- tests/ui/p4.lua: the default UI on a Perforce workspace, through the
+--- tests/ui/p4.lua: the GitGud UI on a Perforce workspace, through the
 -- real UI.
 --
 -- Run it in a workspace made by make-p4workspace.ps1 (gitgud.exe <dir>\ws)

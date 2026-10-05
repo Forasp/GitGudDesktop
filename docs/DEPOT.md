@@ -2,10 +2,10 @@
 
 GitGud's second interface is built around changelists, like other popular
 revision control software, in the Dagobah palette. It works on the same
-repositories as the default UI; Git has no server-side changelists, so a few
+repositories as the GitGud UI; Git has no server-side changelists, so a few
 changelist ideas are mapped onto Git as described under *How changelist
 ideas map to Git*. Switch to it from the interface picker
-(first launch, or *File ▸ Switch user interface…* in the default UI); switch
+(first launch, or *File ▸ Switch user interface…* in the GitGud UI); switch
 back from *Edit ▸ Preferences ▸ Switch User Interface…* or *File ▸ Switch
 User Interface…*.
 
