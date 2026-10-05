@@ -341,6 +341,10 @@ jobs:
           fi
           echo "--- warnings in src/ and from the linker"
           grep -E "/src/[^ ]*: warning:|^ld: warning" "$log" | grep -v third_party | sort -u | head -80
+          echo "--- zlib on the link line (temporary)"
+          cmake --version | head -1
+          ninja -C build/release -t commands bin/gitgud_tests | tail -1 | tr ' ' '\n' | grep -n 'libz\|libgit2\|ssh2\|lua\|ssl\|crypto\|rsp' || true
+          grep -h "INTERFACE_LINK_LIBRARIES" build/release/vcpkg_installed/arm64-osx/share/libgit2/*.cmake build/release/vcpkg_installed/arm64-osx/share/libssh2/*.cmake 2>/dev/null | cut -c1-400 || true
           exit $status
 
       - name: Save vcpkg packages

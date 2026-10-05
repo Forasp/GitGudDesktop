@@ -101,7 +101,8 @@ Finder. Run another copy with `open -n build/release/bin/gitgud.app`.
 
 The window uses the display's full resolution on Retina screens: the UI is
 laid out in points, and text and the commit graph are drawn at two pixels
-per point (CEGUI patch 0012).
+per point (CEGUI patch 0012). `GITGUD_PIXEL_RATIO=2` shows on any display,
+on any platform, what a Retina screen would (at half size).
 
 ### macOS disk image: `package.sh`
 
