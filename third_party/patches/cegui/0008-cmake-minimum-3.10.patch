@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 418931822..6fad7a2f4 100755
+index 418931822..f37ffadb0 100755
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -1,7 +1,10 @@
@@ -7,10 +7,10 @@ index 418931822..6fad7a2f4 100755
  # Top-level CMakeLists.txt file for Crazy Eddie's GUI System
  ################################################################################
 -cmake_minimum_required(VERSION 3.1)
-+# Gitgud patch: was 3.1. CMake 4 refuses anything below 3.5 and CMake 3.27+
-+# warns about it; 3.5 is also what CMAKE_POLICY_VERSION_MINIMUM gave CMake 4
-+# builds, so every CMake now configures CEGUI the same way.
-+cmake_minimum_required(VERSION 3.5)
++# Gitgud patch: was 3.1. CMake 4 refuses anything below 3.5, and CMake 3.31+
++# deprecates anything below 3.10. GitGud itself needs CMake 3.20, so every
++# CMake that builds it now configures CEGUI the same way.
++cmake_minimum_required(VERSION 3.10)
  
  if (APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
      set( CMAKE_OSX_ARCHITECTURES ${CMAKE_HOST_SYSTEM_PROCESSOR} CACHE STRING "Build architectures for Mac OS X")

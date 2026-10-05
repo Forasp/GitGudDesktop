@@ -301,7 +301,7 @@ powershell -ExecutionPolicy Bypass -File tools\publish-wiki.ps1   # -DryRun to p
 - *CEGUI wasn't found* — run `setup.cmd` with that preset (or build and
   install CEGUI for that build type by hand, above).
 - *CMake 4 rejects CEGUI's `cmake_minimum_required`*: patch
-  `0008-cmake-minimum-3.5.patch` isn't applied; apply every patch first.
+  `0008-cmake-minimum-3.10.patch` isn't applied; apply every patch first.
 - *Lua syntax check without running the app* — vcpkg's Lua has no `luac`;
   compile a tiny `luaL_loadfile` program against
   `build\release\vcpkg_installed\x64-windows\lib\lua.lib`.
