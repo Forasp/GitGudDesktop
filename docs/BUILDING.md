@@ -288,7 +288,8 @@ git push origin v1.5.1
 ```
 
 Once every platform has built, the workflow publishes a release for the
-tag with those three artifacts' files attached and nothing else: Windows
+tag with the files of every artifact named `GitGud-*`, so name package
+artifacts that way and anything else (test screenshots) otherwise: Windows
 `GitGud-win64.zip`, `GitGud-win64-setup.exe`, `GitGud-win64.pack`, and
 `update-manifest.txt` (installed copies find the new version through the
 last two, so every release needs them), the Linux .deb and .rpm, and
