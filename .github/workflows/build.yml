@@ -451,10 +451,19 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Only the package artifacts: the run also holds test screenshots.
       - uses: actions/download-artifact@v7
         with:
+          name: GitGud-win64
           path: dist
-          merge-multiple: true
+      - uses: actions/download-artifact@v7
+        with:
+          name: GitGud-linux
+          path: dist
+      - uses: actions/download-artifact@v7
+        with:
+          name: GitGud-macos
+          path: dist
 
       - name: Publish release
         env:
