@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 
+# macOS: Apple Silicon, macOS 12 and later (vcpkg's libraries are built for
+# the same target, see triplets/arm64-osx.cmake). Ignored elsewhere.
+set(CMAKE_OSX_ARCHITECTURES arm64 CACHE STRING "macOS architectures to build")
+set(CMAKE_OSX_DEPLOYMENT_TARGET 12.0 CACHE STRING "Oldest macOS to support")
+
 project(Gitgud
     VERSION 1.5.1
     DESCRIPTION "A moddable Git client with an XML+Lua GUI"
