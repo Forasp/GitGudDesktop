@@ -339,8 +339,10 @@ jobs:
             echo "--- errors"
             grep -E "error:|Undefined symbols|ld: " "$log" | sort -u | head -80
           fi
-          echo "--- warnings in src/"
-          grep -E "/src/[^ ]*: warning:" "$log" | grep -v third_party | sort -u | head -80
+          echo "--- warnings in src/ and from the linker"
+          grep -E "/src/[^ ]*: warning:|^ld: warning" "$log" | grep -v third_party | sort -u | head -80
+          echo "--- gitgud's link libraries (temporary)"
+          ninja -C build/release -t commands bin/gitgud.app/Contents/MacOS/gitgud | tail -1 | tr ' ' '\n' | grep -n '\.a$\|\.dylib$\|framework\|^-l' || true
           exit $status
 
       - name: Save vcpkg packages
@@ -446,7 +448,7 @@ jobs:
         if: always()
         run: |
           for f in 00-retina 01-changes; do
-            sips -s format jpeg -s formatOptions 60 --cropToHeightWidth 300 560 --cropOffset 0 0 "$RUNNER_TEMP/ui/shots/$f.png" --out "$RUNNER_TEMP/$f.jpg" > /dev/null
+            sips -s format jpeg -s formatOptions 50 --resampleWidth 640 "$RUNNER_TEMP/ui/shots/$f.png" --out "$RUNNER_TEMP/$f.jpg" > /dev/null
             echo "@@PREVIEW-BEGIN $f"; base64 -i "$RUNNER_TEMP/$f.jpg" | fold -w 160; echo "@@PREVIEW-END"
           done
 
