@@ -7,7 +7,7 @@
 // principle 8): secrets must never land in plaintext config. Each OS gets a backend:
 //   * Windows: Credential Manager (CredRead/CredWrite)   — implemented
 //   * macOS:   Keychain                                   — future
-//   * Linux:   libsecret                                  — future
+//   * Linux:   Secret Service through libsecret (loaded at run time)
 //
 // Keys are the remote host name (e.g. "git.example.com"), so one credential
 // covers every repo on the same server.

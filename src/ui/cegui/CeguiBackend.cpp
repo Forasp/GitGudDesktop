@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -31,6 +32,7 @@
 // SDL scancode -> DirectInput keynum table (public domain, copied from
 // third_party/cegui/application_templates). CEGUI's Key::Scan values are
 // DirectInput keynums. The table needs SDL_NUM_SCANCODES.
+#include <SDL_clipboard.h>
 #include <SDL_events.h> // SDL_ENABLE / SDL_DISABLE
 #include <SDL_mouse.h>
 #include <SDL_scancode.h>
@@ -179,6 +181,42 @@ namespace gitgud::ui
           private:
             std::string m_Utf8;
         };
+#else
+        // Bridges CEGUI's clipboard to SDL's, which speaks X11, Wayland and
+        // Cocoa. Both sides use UTF-8.
+        class SdlClipboardProvider final : public CEGUI::NativeClipboardProvider
+        {
+          public:
+            void sendToClipboard(
+                const CEGUI::String& _MimeType, void* _pBuffer, size_t _nSize) override
+            {
+                if (CEGUI::String::convertUtf32ToUtf8(_MimeType.c_str()) != "text/plain")
+                {
+                    return;
+                }
+                const std::string text(static_cast<const char*>(_pBuffer), _nSize);
+                SDL_SetClipboardText(text.c_str());
+            }
+
+            void retrieveFromClipboard(
+                CEGUI::String& _MimeType, void*& _pBuffer, size_t& _nSize) override
+            {
+                // CEGUI copies out of `buffer` before the next call, so a member
+                // keeps it alive long enough.
+                m_Utf8.clear();
+                if (char* sztext = SDL_GetClipboardText())
+                {
+                    m_Utf8 = sztext;
+                    SDL_free(sztext);
+                }
+                _MimeType = "text/plain";
+                _pBuffer = m_Utf8.data();
+                _nSize = m_Utf8.size();
+            }
+
+          private:
+            std::string m_Utf8;
+        };
 #endif // _WIN32
 
     } // namespace
@@ -214,18 +252,36 @@ namespace gitgud::ui
             std::fprintf(stderr, "[cegui] can't write %s\n", logFile.c_str());
         }
 
+#if !defined(_WIN32)
+        // CEGUI loads its XML parser, image codec and window renderers at run
+        // time, by default from the folder it was installed to on the build
+        // machine. An installed GitGud carries them in <app>/lib/cegui-9999.0.
+        {
+            const std::string exeDir = _ResourceRoot.substr(0, _ResourceRoot.find_last_of('/'));
+            const std::string moduleDir = exeDir + "/lib/cegui-9999.0";
+            std::error_code ec;
+            if (!std::getenv("CEGUI_MODULE_DIR") &&
+                std::filesystem::is_directory(std::filesystem::u8path(moduleDir), ec))
+            {
+                setenv("CEGUI_MODULE_DIR", moduleDir.c_str(), 1);
+            }
+        }
+#endif
+
         m_pRenderer = &OpenGL3Renderer::bootstrapSystem(
             Sizef(static_cast<float>(_iWindowWidth), static_cast<float>(_iWindowHeight)));
         m_pGuiContext =
             &System::getSingleton().createGUIContext(m_pRenderer->getDefaultRenderTarget());
         m_ResourceRoot = _ResourceRoot;
 
-#if defined(_WIN32)
         // Bridge Ctrl+C/V/X to the OS clipboard (CEGUI's is app-internal only
         // until a native provider is set).
+#if defined(_WIN32)
         m_ClipboardProvider = std::make_unique<Win32ClipboardProvider>();
-        System::getSingleton().getClipboard()->setNativeProvider(m_ClipboardProvider.get());
+#else
+        m_ClipboardProvider = std::make_unique<SdlClipboardProvider>();
 #endif
+        System::getSingleton().getClipboard()->setNativeProvider(m_ClipboardProvider.get());
 
 #ifndef GITGUD_CEGUI_DATAFILES_REL
 #error "GITGUD_CEGUI_DATAFILES_REL must be set by CMake when GITGUD_UI_CEGUI is ON"

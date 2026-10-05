@@ -232,7 +232,7 @@ local function contextMenu(nodes)
             require("depot.windows.revgraph").open(first.path)
         end },
         { separator = true },
-        { label = "Show in Explorer", action = function()
+        { label = "Show in " .. require("core.shell").names.fileManager, action = function()
             require("core.shell").showInFolder(repo.state().path .. (first.path ~= "" and ("/" .. first.path) or ""))
         end },
         { label = "Open in Editor", enabled = single, action = function()

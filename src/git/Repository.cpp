@@ -2,12 +2,51 @@
 
 #include "git/LibGit2Internal.h"
 
+#include <cstdlib>
 #include <filesystem>
 
 namespace gitgud::git
 {
 
     using namespace internal;
+
+    namespace
+    {
+
+        // libgit2 on Linux uses vcpkg's OpenSSL, which looks for CA
+        // certificates under its own build prefix. Point it at the system's
+        // bundle (SSL_CERT_FILE / SSL_CERT_DIR win when set).
+        void UseSystemCertificates()
+        {
+#if defined(__linux__)
+            const char* szfile = std::getenv("SSL_CERT_FILE");
+            const char* szdir = std::getenv("SSL_CERT_DIR");
+            if (!szfile && !szdir)
+            {
+                std::error_code ec;
+                for (const char* szbundle :
+                    {"/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt",
+                        "/etc/ssl/ca-bundle.pem", "/etc/ssl/cert.pem"})
+                {
+                    if (std::filesystem::exists(szbundle, ec))
+                    {
+                        szfile = szbundle;
+                        break;
+                    }
+                }
+                if (!szfile && std::filesystem::is_directory("/etc/ssl/certs", ec))
+                {
+                    szdir = "/etc/ssl/certs";
+                }
+            }
+            if (szfile || szdir)
+            {
+                git_libgit2_opts(GIT_OPT_SET_SSL_CERT_LOCATIONS, szfile, szdir);
+            }
+#endif
+        }
+
+    } // namespace
 
     // ---- LibGit2 global init/shutdown ---------------------------------------
     LibGit2::LibGit2()
@@ -16,6 +55,7 @@ namespace gitgud::git
         {
             RaiseLastError("git_libgit2_init failed");
         }
+        UseSystemCertificates();
         RegisterLfsFilter();
     }
 

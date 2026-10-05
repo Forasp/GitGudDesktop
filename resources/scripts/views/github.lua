@@ -4,17 +4,19 @@
 -- github.com remote needs a sign-in, views/sync.lua hands over here:
 --   1. If gh is already signed in, reuse its token (no prompt at all).
 --   2. Otherwise offer "Sign in with browser". gh is found on PATH, or in
---      the copy GitGud keeps under its app data; when neither exists we ask,
---      then download the latest release (its SHA-256 checked) into
---      <app data>/tools/gh/<version>.
+--      the copy GitGud keeps: on Windows under its app data (when there is
+--      none we ask, then download the latest release, its SHA-256 checked,
+--      into <app data>/tools/gh/<version>); elsewhere the copy the package
+--      installs next to the app (<app folder>/gh).
 --   3. Run `gh auth login --web` in the background, show its one-time code
 --      (also put on the clipboard), and open the browser.
 --   4. Store the token gh ends up with like any other credential and retry.
 -- "Use a token" falls back to the plain username/token dialog.
 --
--- GitGud's own copy of gh is kept current: checked shortly after start and
--- then daily, updated when a newer release is out. A gh on PATH belongs to
--- the user and is left alone.
+-- On Windows GitGud's own copy of gh is kept current: checked shortly after
+-- start and then daily, updated when a newer release is out. Elsewhere the
+-- bundled copy updates with the package. A gh on PATH belongs to the user
+-- and is left alone.
 --
 -- Public API: github.handles(host), github.signIn(host, opts),
 --   github.checkForUpdate(), github.init()
@@ -27,6 +29,7 @@ local text = require("core.text")
 local github = {}
 
 local TOOL = "gh"
+local WINDOWS = gitgud.platform == "windows"
 local RELEASE_API = "https://api.github.com/repos/cli/cli/releases/latest"
 local DOWNLOADS = "https://github.com/cli/cli/releases/download/"
 local UPDATE_EVERY_SECONDS = 24 * 60 * 60
@@ -107,9 +110,11 @@ local function compareVersions(a, b)
     return 0
 end
 
---- The gh.exe inside an install folder, or nil.
+--- The gh executable inside an install folder, or nil.
 local function exeIn(dir)
-    for _, rel in ipairs({ "\\bin\\gh.exe", "\\gh.exe" }) do
+    local candidates = WINDOWS and { "\\bin\\gh.exe", "\\gh.exe" }
+        or { "/bin/gh", "/gh" }
+    for _, rel in ipairs(candidates) do
         if gitgud.pathExists(dir .. rel) then
             return dir .. rel
         end
@@ -135,6 +140,9 @@ local function findGh()
     local onPath = gitgud.findProgram("gh")
     if onPath then
         return onPath
+    end
+    if not WINDOWS then
+        return exeIn(gitgud.appDir() .. "/gh")
     end
     local own = ownCopy()
     return own and own.exe or nil
@@ -194,6 +202,9 @@ end
 --- Update GitGud's own copy of gh when a newer release is out. Quiet unless
 -- it actually updates; at most once a day.
 function github.checkForUpdate()
+    if not WINDOWS then
+        return -- the bundled copy updates with the package
+    end
     local own = ownCopy()
     if not own or installing or loginRun then
         return
@@ -378,6 +389,21 @@ function github.signIn(host, opts)
         .. "browser instead; two-factor authentication works as usual."
     if opts.rejected then
         message = "GitHub didn't accept the saved sign-in. " .. message
+    end
+    if not gh and not WINDOWS then
+        dialog.show({
+            title = "Sign in to GitHub",
+            message = message .. "\n\nGitGud uses the GitHub CLI (gh) for this, but it isn't "
+                .. "installed. Reinstall GitGud Desktop (its package includes gh), or install your "
+                .. "system's gh package, then try again. Or sign in with a personal access token.",
+            ok = "Use a token",
+            width = 540,
+            onOk = function()
+                opts.useToken()
+                return true
+            end,
+        })
+        return
     end
     if not gh then
         message = message .. "\n\nGitGud uses the GitHub CLI for this. It isn't installed, so "

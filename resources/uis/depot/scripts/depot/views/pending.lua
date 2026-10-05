@@ -322,7 +322,7 @@ local function contextMenu(nodes, x, y)
         { label = "Open in Editor", enabled = single ~= nil and single ~= false, action = function()
             require("core.shell").openInEditor(repo.state().path .. "/" .. single)
         end },
-        { label = "Show in Explorer", enabled = single ~= nil and single ~= false, action = function()
+        { label = "Show in " .. require("core.shell").names.fileManager, enabled = single ~= nil and single ~= false, action = function()
             require("core.shell").showInFolder(repo.state().path .. "/" .. single)
         end },
     }, x, y)

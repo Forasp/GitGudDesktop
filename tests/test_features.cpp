@@ -543,12 +543,20 @@ TEST_CASE("Git LFS files are stored as pointers and restored on checkout", "[lfs
 
 TEST_CASE("RunProcess captures output and feeds stdin", "[process]")
 {
+#if defined(_WIN32)
     const auto echo = gitgud::platform::RunProcess({"cmd.exe", "/c", "echo hello"}, "");
+#else
+    const auto echo = gitgud::platform::RunProcess({"sh", "-c", "echo hello"}, "");
+#endif
     REQUIRE(echo.m_bStarted);
     CHECK(echo.m_iExitCode == 0);
     CHECK(echo.m_Output.find("hello") != std::string::npos);
 
+#if defined(_WIN32)
     const auto sorted = gitgud::platform::RunProcess({"sort.exe"}, "", "b\r\na\r\n");
+#else
+    const auto sorted = gitgud::platform::RunProcess({"sort"}, "", "b\na\n");
+#endif
     REQUIRE(sorted.m_bStarted);
     CHECK(sorted.m_Output.find("a") < sorted.m_Output.find("b"));
 

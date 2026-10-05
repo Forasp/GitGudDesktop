@@ -39,7 +39,7 @@ local pendingView = nil    -- view to restore after a switch
 -- @param path  a path
 -- @return normalised key
 local function key(path)
-    return (path:gsub("\\", "/"):gsub("/+$", ""):lower())
+    return require("core.shell").pathKey(path)
 end
 
 --- Index of an open path.

@@ -1,0 +1,16 @@
+diff --git a/cmake/FindIconv.cmake b/cmake/FindIconv.cmake
+index 8fe3f01dd..838937a7c 100644
+--- a/cmake/FindIconv.cmake
++++ b/cmake/FindIconv.cmake
+@@ -79,7 +79,10 @@ else()
+ 	check_function_exists(iconv HAVE_ICONV_IN_LIBC)
+ 	if(ICONV_H_PATH AND HAVE_ICONV_IN_LIBC)
+    		set(ICONV_FOUND TRUE)
+-		set(ICONV_LIB  CACHE TYPE STRING FORCE)
++		# Gitgud patch: iconv is part of libc here, so there's no library to
++		# link. This was `set(ICONV_LIB  CACHE TYPE STRING FORCE)`, which
++		# CMake reads as setting a cache entry of type "TYPE".
++		set(ICONV_LIB "" CACHE STRING "iconv library (empty: part of libc)" FORCE)
+ 	endif()
+ 	if(ICONV_H_PATH AND ICONV_LIB)
+    		set(ICONV_FOUND TRUE)

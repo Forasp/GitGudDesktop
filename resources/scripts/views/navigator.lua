@@ -485,7 +485,7 @@ local function submoduleMenu(sub)
         },
         { separator = true },
         {
-            label = "Show in Explorer",
+            label = "Show in " .. shell.names.fileManager,
             enabled = sub.initialized,
             action = function()
                 shell.showInFolder(path)
@@ -513,7 +513,7 @@ local function worktreeMenu(tree)
             end,
         },
         {
-            label = "Show in Explorer",
+            label = "Show in " .. shell.names.fileManager,
             enabled = tree.valid,
             action = function()
                 shell.showInFolder(tree.path)

@@ -55,13 +55,16 @@ function menus.preferences()
             { label = "Name (for your changelists)", value = gitgud.globalConfig("user.name") },
             { label = "Email", value = gitgud.globalConfig("user.email") },
             { label = "Shelf branches ({user} is your user name)", value = settings.get("depot.shelfPrefix", "shelves/{user}/") },
-            { label = 'External editor command — e.g. code "%s" (blank: the default program)', value = settings.get("editorCommand", "") },
+            { label = 'External editor command, e.g. code "%s" (blank: the default program)', value = settings.get("editorCommand", "") },
         },
         checks = {
             { label = "Show new (untracked) files in the default changelist", value = settings.get("depot.untrackedInPending", false) },
             { label = "Share shelves by default (push the shelf branch)", value = settings.get("depot.pushShelves", true) },
             { label = "Ask before reverting files", value = settings.get("confirmDiscard", true) },
-            { label = "Check for updates automatically", value = settings.get("updateCheck", true) },
+            -- Only Windows updates itself; elsewhere the package manager does.
+            gitgud.platform == "windows"
+                and { label = "Check for updates automatically", value = settings.get("updateCheck", true) }
+                or nil,
         },
         alt = {
             label = "Switch User Interface…",
@@ -92,7 +95,9 @@ function menus.preferences()
             settings.set("depot.untrackedInPending", v.checks[1])
             settings.set("depot.pushShelves", v.checks[2])
             settings.set("confirmDiscard", v.checks[3])
-            settings.set("updateCheck", v.checks[4])
+            if gitgud.platform == "windows" then
+                settings.set("updateCheck", v.checks[4])
+            end
             app.requestRefresh()
             return true
         end,
@@ -122,7 +127,7 @@ local function fileMenu()
         { label = "Open File in Editor", enabled = oneFile, action = function()
             shell.openInEditor(repo.state().path .. "/" .. selection.files()[1])
         end },
-        { label = "Show in Explorer", enabled = isOpen, action = function()
+        { label = "Show in " .. shell.names.fileManager, enabled = isOpen, action = function()
             local item = selection.primary()
             shell.showInFolder(repo.state().path .. ((item and item.path and item.path ~= "") and ("/" .. item.path) or ""))
         end },
@@ -372,7 +377,7 @@ local function toolsMenu()
         { label = "Open Terminal in Workspace", shortcut = "ctrl+`", enabled = isOpen, action = function()
             shell.openTerminal(repo.state().path)
         end },
-        { label = "Show Workspace in Explorer", enabled = isOpen, action = function()
+        { label = "Show Workspace in " .. shell.names.fileManager, enabled = isOpen, action = function()
             shell.showInFolder(repo.state().path)
         end },
         { separator = true },

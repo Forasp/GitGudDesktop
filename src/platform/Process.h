@@ -9,7 +9,8 @@
 // BLOCKS; callers on the UI thread keep inputs small (signing a commit) and
 // anything long (the console) runs on a TaskRunner worker.
 //
-// Windows only today; other platforms report "not implemented".
+// Windows uses CreateProcess and cmd.exe; macOS and Linux use fork/exec and
+// /bin/sh.
 // -----------------------------------------------------------------------------
 
 #include <atomic>
@@ -36,7 +37,8 @@ namespace gitgud::platform
     ProcessResult RunProcess(const std::vector<std::string>& _Args, const std::string& _WorkingDir,
         const std::string& _Input = "");
 
-    // Run a whole command line through the system shell (cmd.exe /c), merging
+    // Run a whole command line through the system shell (cmd.exe /c, or
+    // /bin/sh -c outside Windows), merging
     // stdout and stderr and handing each chunk to `_OnOutput` as it arrives.
     // Setting `*_pCancel` to true kills the command and everything it started.
     // Returns the exit code (-1 when it couldn't start or was cancelled).

@@ -22,7 +22,7 @@ local stale = true
 
 --- Normalise a path for comparison.
 local function key(path)
-    return (path:gsub("\\", "/"):gsub("/+$", ""):lower())
+    return require("core.shell").pathKey(path)
 end
 
 --- Every workspace: this repository's worktrees, then known repositories.
@@ -128,7 +128,7 @@ function workspaces.init()
                 { label = "Switch to This Workspace", enabled = not ws.current, action = function()
                     open(ws)
                 end },
-                { label = "Show in Explorer", action = function()
+                { label = "Show in " .. require("core.shell").names.fileManager, action = function()
                     require("core.shell").showInFolder(ws.path)
                 end },
                 { label = "Open Terminal Here", action = function()

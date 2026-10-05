@@ -7,6 +7,22 @@
 #include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl.h>
+#else
+#include "platform/Process.h"
+
+#include <SDL.h>
+
+#include <cctype>
+#include <cerrno>
+#include <cstdio>
+#include <ctime>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#if defined(__APPLE__)
+#include <cstdint>
+#include <mach-o/dyld.h>
+#endif
 #endif
 
 #include <algorithm>
@@ -25,14 +41,52 @@ namespace gitgud::platform
         {
             return (fs::u8path(szappdata) / "Gitgud").u8string();
         }
-#endif
+#elif defined(__APPLE__)
         if (const char* szhome = std::getenv("HOME"))
         {
-            return (fs::u8path(szhome) / ".gitgud").u8string();
+            return (fs::u8path(szhome) / "Library" / "Application Support" / "Gitgud").u8string();
         }
-        // Never the exe's folder: it may be read only (Program Files).
+#else
+        if (const char* szconfig = std::getenv("XDG_CONFIG_HOME"); szconfig && *szconfig)
+        {
+            return (fs::u8path(szconfig) / "gitgud").u8string();
+        }
+        if (const char* szhome = std::getenv("HOME"))
+        {
+            return (fs::u8path(szhome) / ".config" / "gitgud").u8string();
+        }
+#endif
+        // Never the exe's folder: it may be read only (Program Files, /usr).
         std::error_code ec;
         return (fs::temp_directory_path(ec) / "Gitgud").u8string();
+    }
+
+    std::string ExecutableDirectory()
+    {
+        namespace fs = std::filesystem;
+        std::error_code ec;
+#if defined(_WIN32)
+        wchar_t wszexe[MAX_PATH * 2] = {};
+        const DWORD dwlen = GetModuleFileNameW(nullptr, wszexe, MAX_PATH * 2);
+        if (dwlen > 0 && dwlen < MAX_PATH * 2)
+        {
+            return fs::path(wszexe).parent_path().u8string();
+        }
+#elif defined(__APPLE__)
+        char szexe[4096] = {};
+        std::uint32_t nsize = sizeof(szexe);
+        if (_NSGetExecutablePath(szexe, &nsize) == 0)
+        {
+            return fs::canonical(szexe, ec).parent_path().u8string();
+        }
+#else
+        const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+        if (!ec)
+        {
+            return exe.parent_path().u8string();
+        }
+#endif
+        return fs::current_path(ec).u8string();
     }
 
     std::string LogDirectory()
@@ -230,37 +284,275 @@ namespace gitgud::platform
 
 #else
 
-    bool OpenExternal(const std::string&, std::string& _Error)
+    namespace
     {
-        _Error = "openExternal is not implemented on this platform";
-        return false;
+
+        namespace fs = std::filesystem;
+
+        // Start /bin/sh -c `_CommandLine` fully detached: its own session, no
+        // stdio, and a double fork so it never becomes our zombie.
+        bool SpawnDetached(const std::string& _CommandLine, const std::string& _WorkingDir)
+        {
+            const pid_t pid = fork();
+            if (pid < 0)
+            {
+                return false;
+            }
+            if (pid == 0)
+            {
+                setsid();
+                if (fork() != 0)
+                {
+                    _exit(0);
+                }
+                const int inull = open("/dev/null", O_RDWR);
+                dup2(inull, STDIN_FILENO);
+                dup2(inull, STDOUT_FILENO);
+                dup2(inull, STDERR_FILENO);
+                if (!_WorkingDir.empty() && chdir(_WorkingDir.c_str()) != 0)
+                {
+                    _exit(127);
+                }
+                execl("/bin/sh", "sh", "-c", _CommandLine.c_str(), static_cast<char*>(nullptr));
+                _exit(127);
+            }
+            int istatus = 0;
+            while (waitpid(pid, &istatus, 0) < 0 && errno == EINTR)
+            {
+            }
+            return true;
+        }
+
+        // Single-quote a word for /bin/sh.
+        std::string ShellQuote(const std::string& _Word)
+        {
+            std::string out = "'";
+            for (const char c : _Word)
+            {
+                if (c == '\'')
+                {
+                    out += "'\\''";
+                }
+                else
+                {
+                    out.push_back(c);
+                }
+            }
+            out.push_back('\'');
+            return out;
+        }
+
+        // file:// URI for an absolute path, percent-encoding everything but
+        // unreserved characters and '/'.
+        std::string FileUri(const std::string& _Path)
+        {
+            static const char kHex[] = "0123456789ABCDEF";
+            std::string out = "file://";
+            for (const unsigned char c : _Path)
+            {
+                if (std::isalnum(c) || c == '/' || c == '-' || c == '_' || c == '.' || c == '~')
+                {
+                    out.push_back(static_cast<char>(c));
+                }
+                else
+                {
+                    out.push_back('%');
+                    out.push_back(kHex[c >> 4]);
+                    out.push_back(kHex[c & 15]);
+                }
+            }
+            return out;
+        }
+
+        std::string Trimmed(std::string _Text)
+        {
+            while (!_Text.empty() && (_Text.back() == '\n' || _Text.back() == '\r'))
+            {
+                _Text.pop_back();
+            }
+            return _Text;
+        }
+
+        // The FreeDesktop trash spec's home trash: move the file into
+        // $XDG_DATA_HOME/Trash/files and describe it in Trash/info. Only works
+        // on the home folder's file system (rename can't cross devices).
+        bool MoveToHomeTrash(const fs::path& _Path)
+        {
+            fs::path dataHome;
+            if (const char* szdata = std::getenv("XDG_DATA_HOME"); szdata && *szdata)
+            {
+                dataHome = szdata;
+            }
+            else if (const char* szhome = std::getenv("HOME"))
+            {
+                dataHome = fs::path(szhome) / ".local" / "share";
+            }
+            else
+            {
+                return false;
+            }
+            const fs::path filesDir = dataHome / "Trash" / "files";
+            const fs::path infoDir = dataHome / "Trash" / "info";
+            std::error_code ec;
+            fs::create_directories(filesDir, ec);
+            fs::create_directories(infoDir, ec);
+
+            const std::string base = _Path.filename().string();
+            for (int i = 0; i < 1000; ++i)
+            {
+                const std::string name = i == 0 ? base : base + "." + std::to_string(i);
+                const fs::path info = infoDir / (name + ".trashinfo");
+                // O_EXCL claims the name, as the spec asks.
+                const int ifd = open(info.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
+                if (ifd < 0)
+                {
+                    continue;
+                }
+                char szwhen[32] = {};
+                const std::time_t now = std::time(nullptr);
+                std::tm local = {};
+                localtime_r(&now, &local);
+                std::strftime(szwhen, sizeof(szwhen), "%Y-%m-%dT%H:%M:%S", &local);
+                const std::string uri = FileUri(_Path.string());
+                const std::string body = "[Trash Info]\nPath=" + uri.substr(7) +
+                                         "\nDeletionDate=" + szwhen + "\n";
+                const bool bwritten =
+                    write(ifd, body.data(), body.size()) == static_cast<ssize_t>(body.size());
+                close(ifd);
+                if (bwritten && std::rename(_Path.c_str(), (filesDir / name).c_str()) == 0)
+                {
+                    return true;
+                }
+                fs::remove(info, ec);
+                return false;
+            }
+            return false;
+        }
+
+    } // namespace
+
+    bool OpenExternal(const std::string& _Target, std::string& _Error)
+    {
+#if defined(__APPLE__)
+        const char* szopener = "open";
+#else
+        const char* szopener = "xdg-open";
+#endif
+        if (FindProgram(szopener).empty() ||
+            !SpawnDetached(std::string(szopener) + " " + ShellQuote(_Target), ""))
+        {
+            _Error = "could not open '" + _Target + "'";
+            return false;
+        }
+        return true;
     }
 
-    bool ShowInFolder(const std::string&, std::string& _Error)
+    bool ShowInFolder(const std::string& _Path, std::string& _Error)
     {
-        _Error = "showInFolder is not implemented on this platform";
-        return false;
+        std::error_code ec;
+        const fs::path path = fs::absolute(fs::u8path(_Path), ec);
+#if defined(__APPLE__)
+        if (RunProcess({"open", "-R", path.u8string()}, "").m_iExitCode == 0)
+        {
+            return true;
+        }
+#else
+        // File managers that implement org.freedesktop.FileManager1 select
+        // the item; anything else just opens the folder.
+        if (!FindProgram("dbus-send").empty() &&
+            RunProcess({"dbus-send", "--session", "--print-reply",
+                           "--dest=org.freedesktop.FileManager1", "/org/freedesktop/FileManager1",
+                           "org.freedesktop.FileManager1.ShowItems",
+                           "array:string:" + FileUri(path.u8string()), "string:"},
+                "")
+                    .m_iExitCode == 0)
+        {
+            return true;
+        }
+#endif
+        const fs::path folder = fs::is_directory(path, ec) ? path : path.parent_path();
+        if (!OpenExternal(folder.u8string(), _Error))
+        {
+            _Error = "could not reveal '" + _Path + "'";
+            return false;
+        }
+        return true;
     }
 
-    bool Spawn(const std::string&, const std::string&, std::string& _Error)
+    bool Spawn(const std::string& _CommandLine, const std::string& _WorkingDir, std::string& _Error)
     {
-        _Error = "spawn is not implemented on this platform";
-        return false;
+        if (!SpawnDetached(_CommandLine, _WorkingDir))
+        {
+            _Error = "could not start: " + _CommandLine;
+            return false;
+        }
+        return true;
     }
 
-    bool MoveToTrash(const std::string&)
+    bool MoveToTrash(const std::string& _Path)
     {
-        return false;
+        const fs::path path = fs::u8path(_Path);
+        std::error_code ec;
+        if (!fs::exists(fs::symlink_status(path, ec)))
+        {
+            return false;
+        }
+#if defined(__APPLE__)
+        // Finder's own trash, through AppleScript (keeps "Put Back" working).
+        const std::string script = "tell application \"Finder\" to delete POSIX file \"" +
+                                   fs::absolute(path, ec).u8string() + "\"";
+        if (RunProcess({"osascript", "-e", script}, "").m_iExitCode == 0)
+        {
+            return true;
+        }
+#else
+        // gio knows every trash location (other drives too); the spec's home
+        // trash covers systems without it.
+        if (!FindProgram("gio").empty() &&
+            RunProcess({"gio", "trash", "--", fs::absolute(path, ec).u8string()}, "").m_iExitCode ==
+                0)
+        {
+            return true;
+        }
+#endif
+        return MoveToHomeTrash(fs::absolute(path, ec));
     }
 
-    std::string PickFolder(const std::string&)
+    std::string PickFolder(const std::string& _Title)
     {
-        return {};
+#if defined(__APPLE__)
+        const std::string script =
+            "POSIX path of (choose folder with prompt \"" + _Title + "\")";
+        const ProcessResult result = RunProcess({"osascript", "-e", script}, "");
+#else
+        // The desktop's own dialog tools: zenity (GNOME and most others) or
+        // kdialog (KDE).
+        ProcessResult result;
+        if (!FindProgram("zenity").empty())
+        {
+            result = RunProcess(
+                {"zenity", "--file-selection", "--directory", "--title=" + _Title}, "");
+        }
+        else if (!FindProgram("kdialog").empty())
+        {
+            result = RunProcess({"kdialog", "--getexistingdirectory", ".", "--title", _Title}, "");
+        }
+#endif
+        if (result.m_iExitCode != 0)
+        {
+            return {};
+        }
+        std::string path = Trimmed(result.m_Output);
+        if (path.size() > 1 && path.back() == '/')
+        {
+            path.pop_back();
+        }
+        return path;
     }
 
-    bool SetClipboardText(const std::string&)
+    bool SetClipboardText(const std::string& _Text)
     {
-        return false;
+        return SDL_SetClipboardText(_Text.c_str()) == 0;
     }
 
 #endif

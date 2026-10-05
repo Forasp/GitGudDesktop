@@ -9,9 +9,13 @@ add_executable(gitgud_tests
     test_workflows.cpp
     test_features.cpp
     test_depot.cpp
-    test_update.cpp
     test_p4.cpp
 )
+
+# The updater is Windows only (BCrypt signatures, gitgud-patcher.exe).
+if(WIN32)
+    target_sources(gitgud_tests PRIVATE test_update.cpp)
+endif()
 
 target_link_libraries(gitgud_tests PRIVATE
     gitgud_core

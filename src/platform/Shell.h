@@ -6,8 +6,8 @@
 // recycle bin, pick a folder, and put text on the clipboard.
 //
 // Everything is best effort and returns false (with a message) on failure so
-// the Lua layer can surface it. Only Windows is implemented today; other
-// platforms return false with "not implemented".
+// the Lua layer can surface it. macOS and Linux use the desktop's own tools
+// (open/xdg-open, gio, zenity/kdialog, D-Bus) when they are installed.
 // -----------------------------------------------------------------------------
 
 #include <string>
@@ -34,8 +34,12 @@ namespace gitgud::platform
     // Replace the clipboard's text.
     bool SetClipboardText(const std::string& _Text);
 
-    // Per-user settings folder: %APPDATA%\Gitgud on Windows, ~/.gitgud
-    // elsewhere (UTF-8; may not exist yet). Everything the app writes for
+    // Folder of the running executable (UTF-8).
+    std::string ExecutableDirectory();
+
+    // Per-user settings folder: %APPDATA%\Gitgud on Windows,
+    // ~/Library/Application Support/Gitgud on macOS, $XDG_CONFIG_HOME/gitgud
+    // (~/.config/gitgud) on Linux (UTF-8; may not exist yet). Everything the app writes for
     // itself goes under here, never next to the exe, which may be read only.
     std::string ConfigDirectory();
 

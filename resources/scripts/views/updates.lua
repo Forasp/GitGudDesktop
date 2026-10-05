@@ -139,7 +139,10 @@ end
 --- Help ▸ Check for Updates…
 function updates.show()
     local info = gitgud.updateInfo()
-    if not info.packaged then
+    if gitgud.platform ~= "windows" then
+        dialog.alert("Updates", "GitGud Desktop " .. info.current .. " is updated through your "
+            .. "system's package manager (for example Software Updater, apt, or dnf).")
+    elseif not info.packaged then
         dialog.alert("Updates", "This is a developer build (" .. info.current .. "). Only release "
             .. "builds, installed or unzipped, update themselves.")
     elseif info.staged ~= "" then
