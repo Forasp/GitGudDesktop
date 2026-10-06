@@ -1,6 +1,6 @@
 --- core/p4setup.lua: choosing Git or Perforce, setting up Perforce
 -- workspaces, and signing in to Perforce servers. Shared by every
--- interface (the default UI, Depot, and the first-launch picker).
+-- interface (the GitGud UI, Depot, and the first-launch picker).
 --
 -- A Perforce workspace is a folder whose .p4config names the server, user,
 -- and workspace; gitgud.openRepo opens it like any repository and every
@@ -130,7 +130,7 @@ end
 -- is; otherwise Git clones a URL into it (or starts a new repository), and
 -- Perforce maps a stream or depot folder there. The tab used becomes the
 -- default for new repositories. Opened on first launch and from the File
--- (default UI) or Connection (Depot) menu.
+-- (GitGud UI) or Connection (Depot) menu.
 -- @param onDone  function() run after Continue or Cancel
 -- @param opts    { firstLaunch = true }: nothing pre-selected, a folder is
 --                required, and the setup runs once the chosen interface

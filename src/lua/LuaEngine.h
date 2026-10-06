@@ -84,7 +84,7 @@ namespace gitgud::lua
         // <dir>/views/changes.lua). Applied now and after every Reset().
         void SetScriptRoot(const std::string& _Directory);
         // Several directories, searched in order (a UI package's scripts, then
-        // the default UI's, so packages reuse and override shared modules).
+        // the GitGud UI's, so packages reuse and override shared modules).
         void SetScriptRoots(const std::vector<std::string>& _Directories);
 
         // Run a script file. Returns false and logs on error.

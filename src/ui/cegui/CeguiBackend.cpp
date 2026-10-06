@@ -316,7 +316,7 @@ namespace gitgud::ui
         // Our own layouts/skin (resources/ is copied next to the exe by CMake; the
         // caller resolves it from the exe location so cwd can be the user's repo).
         prp->setResourceGroupDirectory("layouts", _ResourceRoot + "/layouts/");
-        // The default UI's layouts, importable by every UI package (the
+        // The GitGud UI's layouts, importable by every UI package (the
         // "layouts" group follows the running package: SetLayoutDirectory).
         prp->setResourceGroupDirectory("gitgud-layouts", _ResourceRoot + "/layouts/");
         prp->setResourceGroupDirectory("gitgud-schemes", _ResourceRoot + "/schemes/");

@@ -11,11 +11,11 @@
 //     <root>/looknfeel/*.xml (optional skin overrides, loaded over the base skin)
 //     <root>/imagesets/*.xml (optional: the package's own images / icons)
 //
-// The default UI is resources/ itself (id "default"). Built-in alternatives
+// The GitGud UI is resources/ itself (id "default"). Built-in alternatives
 // live in resources/uis/<id>/ (the Depot UI, the UI picker). Users can
 // point GitGud at a package anywhere on disk ("path:<folder>").
 //
-// Scripts of any package can `require` the default UI's modules (core/,
+// Scripts of any package can `require` the GitGud UI's modules (core/,
 // ui/, views/): a package's own scripts/ is searched first, then the base
 // resources/scripts — so a package overrides a shared module (e.g. its own
 // core/palette.lua) just by providing a file of the same name.
@@ -59,7 +59,7 @@ namespace gitgud::app
     // layouts/main.xml. `_Id` becomes the package id.
     std::optional<UiPackage> LoadUiPackage(const std::string& _Root, const std::string& _Id);
 
-    // The default UI plus every package under <resourceRoot>/uis/, built-ins
+    // The GitGud UI plus every package under <resourceRoot>/uis/, built-ins
     // first. Hidden packages are included (callers filter on m_bHidden).
     std::vector<UiPackage> ListUiPackages(const std::string& _ResourceRoot);
 

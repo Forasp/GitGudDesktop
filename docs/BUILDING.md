@@ -178,7 +178,7 @@ D:\...\build\release\bin\gitgud.exe C:\path\to\some\repo   # opens that one ("."
 
 Without a path, GitGud reopens the repository you had open last. The first
 launch opens none: it asks which interface to use, then you add a repository
-from the UI. The first launch asks which interface to use (the default or
+from the UI. The first launch asks which interface to use (GitGud or
 the Depot one); `GITGUD_UI=default`, `depot`, or `path:<folder>` picks
 one for a run without asking. Launched from a terminal it prints to that console;
 `GITGUD_CONSOLE=1` forces a console window and `GITGUD_LOG=<file>` sends all

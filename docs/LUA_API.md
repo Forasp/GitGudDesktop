@@ -166,7 +166,7 @@ dot above HEAD for uncommitted changes. Show a row's picture inline:
 | `getRect(name)` | `x, y, width, height` on screen, or `nil` |
 | `focus(name)` / `bringToFront(name)` | |
 | `createWindow(type, name, parent)` / `destroyWindow(name)` | runtime widgets (raise events like layout widgets) |
-| `loadLayout(file, parent = "Root")` | attach a layout file (relative to the running UI's `layouts/`; `resources/layouts` for the default UI) |
+| `loadLayout(file, parent = "Root")` | attach a layout file (relative to the running UI's `layouts/`; `resources/layouts` for the GitGud UI) |
 | `suspendLayout(name, bool)` | pause/resume child layout around bulk changes |
 | `linkScroll(listA, listB)` | keep two lists scrolled together |
 | `isImage(path)` | true for image file types |
@@ -247,7 +247,7 @@ pop-out's shortcuts don't reach `key`), `window.focused` (id), and
 | `windows()` | the open pop-out ids |
 | `setWindowBordered(bool)` | the main window's OS frame on (native title bar) or off (the UI draws its own) |
 | `currentUi()` | the running interface: `{id, name, description, root, builtIn}` — id `"default"`, a built-in's folder name, or `"path:<folder>"` |
-| `uiList()` | the interfaces to choose from (same shape), the default first |
+| `uiList()` | the interfaces to choose from (same shape), GitGud's first |
 | `switchUi(id, remember = true)` | switch after the current handler returns (every window's widgets and the Lua VM start over); `remember` makes it the one GitGud starts with. `nil, msg` for a folder that isn't a UI package |
 | `showUiPicker()` / `previousUi()` | run the interface picker (not remembered); the interface that was running before |
 | `firstLaunch()` | `true` until an interface has been chosen |

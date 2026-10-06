@@ -14,7 +14,7 @@
   The window uses the OS frame (gitgud.setWindowBordered).
   Panels live in panels/*.xml; the shared dialog, popup blocker, command
   palette, and modal shade are Dagobah-coloured copies (dialogs/, popups/) or
-  imported from the default UI (resourceGroup="gitgud-layouts").
+  imported from the GitGud UI (resourceGroup="gitgud-layouts").
 -->
 <GUILayout version="4">
     <Window type="DefaultWindow" name="Root">

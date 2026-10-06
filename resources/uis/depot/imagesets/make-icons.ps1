@@ -1,5 +1,5 @@
 # Generates DepotIcons.png + DepotIcons.xml — the Depot UI's colour icons
-# (imageset "Depot-Icons"). Unlike the default UI's white-and-tinted atlas,
+# (imageset "Depot-Icons"). Unlike the GitGud UI's white-and-tinted atlas,
 # these are drawn in colour for the Dagobah theme (light strokes on dark).
 #
 #   Toolbar icons, 24x24, first rows:  Refresh GetLatest Submit Checkout Add

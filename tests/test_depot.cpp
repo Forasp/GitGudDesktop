@@ -358,7 +358,7 @@ TEST_CASE("UI packages: built-ins, custom folders, and the remembered choice", "
         fs::create_directories(_File.parent_path());
         std::ofstream(_File, std::ios::binary) << _Text;
     };
-    // resources/ (the default UI) plus two built-ins, one hidden, one broken.
+    // resources/ (the GitGud UI) plus two built-ins, one hidden, one broken.
     touch(root / "res/scripts/main.lua", "");
     touch(root / "res/layouts/main.xml", "");
     touch(root / "res/ui.ini", "name=GitGud\n");

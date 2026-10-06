@@ -45,7 +45,7 @@ resources/
   imagesets/              the icon atlas (regenerate with make-atlas.ps1)
   uis/                    other interfaces: depot/ (the Depot UI) and
                           picker/ (the chooser shown on first launch)
-  ui.ini                  the default UI's name and description
+  ui.ini                  the GitGud UI's name and description
 ```
 
 ## 2. The dev loop
@@ -231,9 +231,9 @@ throwaway repository.
 ## 9. Your own interface
 
 Mods extend the interface you have; a **UI package** replaces it. GitGud
-ships two: the default UI (`resources/` itself) and the Depot UI
+ships two: the GitGud UI (`resources/` itself, id `default`) and the Depot UI
 (`resources/uis/depot/`, see `docs/DEPOT.md`). Switch with **File ▸ Switch user
-interface…** (default UI) or **Edit ▸ Preferences ▸ Switch User
+interface…** (GitGud UI) or **Edit ▸ Preferences ▸ Switch User
 Interface…** (Depot UI); the first launch asks.
 
 A package is a folder:
@@ -254,14 +254,14 @@ it in `resources/uis/<id>/` to ship it as a built-in.
 
 What a package gets for free:
 
-- **The default UI's Lua.** `require` searches your `scripts/` first, then
+- **The GitGud UI's Lua.** `require` searches your `scripts/` first, then
   `resources/scripts`, so `core/`, `ui/` (menus, dialogs, the command
   palette), and even `views/` modules are there to reuse — the Depot UI uses
   `views/sync.lua` for push/pull and sign-in, `views/repositories.lua` for
   clone/open. A file of your own with the same name wins: the Depot UI's
   `scripts/core/palette.lua` recolours every shared widget.
-- **The default UI's layouts.** Your `layouts/` is where layout files
-  resolve; the default UI's are resource group `gitgud-layouts`:
+- **The GitGud UI's layouts.** Your `layouts/` is where layout files
+  resolve; the GitGud UI's are resource group `gitgud-layouts`:
   ```xml
   <LayoutImport filename="dialogs/dialog.xml" resourceGroup="gitgud-layouts"/>
   ```
@@ -282,7 +282,7 @@ What a package gets for free:
   typed at. The Depot UI's Diff, Revision Graph, Time-lapse, and Folder Diff
   windows are built this way (`scripts/depot/windows*`).
 - **The window frame.** `gitgud.setWindowBordered(true)` gives the main
-  window the OS title bar (the default UI draws its own).
+  window the OS title bar (the GitGud UI draws its own).
 
 A minimal package:
 

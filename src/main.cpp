@@ -9,7 +9,7 @@
 // is what makes the UI fully moddable without a recompile (docs/MODDING.md).
 //
 // Which Lua + XML runs is a user-interface package (app/UiPackages.h): the
-// default UI is resources/scripts + resources/layouts, alternatives live in
+// GitGud UI is resources/scripts + resources/layouts, alternatives live in
 // resources/uis/<id>/ or anywhere on disk. AppShell below starts the chosen
 // one (the picker on first launch), switches between them, and opens the
 // pop-out windows scripts ask for — extra OS windows sharing the main
@@ -127,7 +127,7 @@ namespace
       public:
         void SetRoots(std::vector<std::string> _Roots)
         {
-            // The default UI's package root is the base root: scan it once.
+            // The GitGud UI's package root is the base root: scan it once.
             std::sort(_Roots.begin(), _Roots.end());
             _Roots.erase(std::unique(_Roots.begin(), _Roots.end()), _Roots.end());
             m_Roots = std::move(_Roots);
@@ -1093,7 +1093,7 @@ int main(int _iArgc, char* _aSzArgv[])
     }
 
     // --- SDL + OpenGL window --------------------------------------------
-    // The default UI draws its own title bar, so the OS frame is dropped.
+    // The GitGud UI draws its own title bar, so the OS frame is dropped.
     // These hints keep Windows treating the borderless window as a normal app
     // window: real resize borders, working Aero snap, and a maximize that
     // respects the taskbar. (Hint names spelled out: this vcpkg SDL2's
