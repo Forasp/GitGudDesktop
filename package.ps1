@@ -186,7 +186,8 @@ function Get-PinnedLibraries($Asset, $Url, $Sha256, $Dlls) {
         }
     }
     # Windows' own tar (bsdtar) reads .tar.bz2; Git's GNU tar earlier on PATH can't.
-    $members = $Dlls | ForEach-Object { "$name/lib/$_" }
+    # Always a list: one DLL would be a lone string, splatted letter by letter.
+    $members = @($Dlls | ForEach-Object { "$name/lib/$_" })
     & (Join-Path $env:WINDIR "System32\tar.exe") -xf $archive -C $dir @members
     if ($LASTEXITCODE -ne 0) {
         throw "Unpacking $Asset failed."

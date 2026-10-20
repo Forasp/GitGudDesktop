@@ -6,6 +6,17 @@
 #include <cmath>
 #include <limits>
 
+// Apple's C++ library has no std::from_chars for a double, and its
+// std::to_chars for one needs macOS 13.3 (the app runs on 12): numbers go
+// through streams in the "C" locale there instead. GITGUD_JSON_STREAM_NUMBERS
+// turns that path on elsewhere, to test it.
+#if defined(__APPLE__) || defined(GITGUD_JSON_STREAM_NUMBERS)
+#define GITGUD_JSON_STREAMS 1
+#include <iomanip>
+#include <locale>
+#include <sstream>
+#endif
+
 namespace gitgud::app
 {
 
@@ -14,6 +25,58 @@ namespace gitgud::app
 
         // Deeper nesting than this is refused rather than risking the stack.
         constexpr int kMaxDepth = 512;
+
+        // A double from the whole of [_pBegin, _pEnd): std::errc() when it
+        // read, result_out_of_range when it's too large for one.
+        std::errc ReadDouble(const char* _pBegin, const char* _pEnd, double& _fOut)
+        {
+#if defined(GITGUD_JSON_STREAMS)
+            std::istringstream in(std::string(_pBegin, _pEnd));
+            in.imbue(std::locale::classic());
+            double fvalue = 0.0;
+            in >> fvalue;
+            if (in.fail())
+            {
+                // Too large: the stream gives the largest double and fails.
+                return std::fabs(fvalue) == std::numeric_limits<double>::max() ? std::errc::result_out_of_range
+                                                                                : std::errc::invalid_argument;
+            }
+            if (in.peek() != std::char_traits<char>::eof())
+            {
+                return std::errc::invalid_argument;
+            }
+            _fOut = fvalue;
+            return std::errc();
+#else
+            const auto [pdone, ec] = std::from_chars(_pBegin, _pEnd, _fOut);
+            return ec == std::errc() && pdone != _pEnd ? std::errc::invalid_argument : ec;
+#endif
+        }
+
+        // The shortest text that reads back as the same (finite) double.
+        void WriteDouble(std::string& _Out, double _fValue)
+        {
+#if defined(GITGUD_JSON_STREAMS)
+            std::string text;
+            for (int iprecision = 15; iprecision <= 17; ++iprecision)
+            {
+                std::ostringstream out;
+                out.imbue(std::locale::classic());
+                out << std::setprecision(iprecision) << _fValue;
+                text = out.str();
+                double fback = 0.0;
+                if (ReadDouble(text.data(), text.data() + text.size(), fback) == std::errc() && fback == _fValue)
+                {
+                    break;
+                }
+            }
+            _Out += text;
+#else
+            char buffer[32];
+            const auto [pend, ec] = std::to_chars(buffer, buffer + sizeof(buffer), _fValue);
+            _Out.append(buffer, ec == std::errc() ? pend : buffer);
+#endif
+        }
 
         const Json& NullValue()
         {
@@ -236,14 +299,14 @@ namespace gitgud::app
             const char* pbegin = m_Text.data() + nstart;
             const char* pend = m_Text.data() + m_nPos;
             double fvalue = 0.0;
-            const auto [pdone, ec] = std::from_chars(pbegin, pend, fvalue);
+            const std::errc ec = ReadDouble(pbegin, pend, fvalue);
             if (ec == std::errc::result_out_of_range)
             {
                 // Too large for a double: keep the sign, as most parsers do.
                 fvalue = *pbegin == '-' ? -std::numeric_limits<double>::infinity()
                                         : std::numeric_limits<double>::infinity();
             }
-            else if (ec != std::errc() || pdone != pend)
+            else if (ec != std::errc())
             {
                 return Fail("bad number");
             }
@@ -731,10 +794,7 @@ namespace gitgud::app
                 _Out += "null";
                 return;
             }
-            // Shortest text that reads back as the same double.
-            char buffer[32];
-            const auto [pend, ec] = std::to_chars(buffer, buffer + sizeof(buffer), m_fNumber);
-            _Out.append(buffer, ec == std::errc() ? pend : buffer);
+            WriteDouble(_Out, m_fNumber);
             return;
         }
         case Type::String:
