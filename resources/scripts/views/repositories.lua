@@ -92,11 +92,17 @@ local function renderList()
     end
 
     if #items == 0 then
-        local hint = #known == 0 and "No repositories yet — use Add." or "No repositories match."
+        local hint = #known == 0 and "No repositories yet. Use Add." or "No repositories match."
         items[1] = text.colour(C.dim, hint)
     end
 
     gitgud.setList("RepoList", items)
+end
+
+--- Add a repository to the list (at the top) without opening it.
+-- @param path  repository root
+function repositories.remember(path)
+    remember(path)
 end
 
 --- Every repository in the list, most recently opened first.

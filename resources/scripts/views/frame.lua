@@ -20,10 +20,10 @@
 --   frame.setConsole(bool)            frame.consoleVisible()
 -- Signals (app.publish): "frame.graphChanged" (on), "frame.changed"
 
-local C = require("core.palette")
 local app = require("core.app")
 local geometry = require("ui.geometry")
 local settings = require("core.settings")
+local splitter = require("ui.splitter")
 
 local frame = { name = "frame" }
 
@@ -33,7 +33,7 @@ local NAVIGATOR_WIDTH = 236
 local SIDEBAR_WIDTH = 320
 local CONSOLE_HEIGHT = 230
 local GRAPH_SHARE = 0.56   -- of the main area's height, in graph mode
-local SPLIT = 4            -- splitter grab width, centred on the seam
+local SPLIT = splitter.WIDTH -- splitter grab width, centred on the seam
 local MIN_CONTENT = 320    -- the content pane never gets narrower than this
 
 local bands = { tabs = 0, notice = 0 }
@@ -156,19 +156,9 @@ local function makeSplitters()
         { name = "SplitConsole", direction = "vertical", key = "consoleHeight" },
     }
     for _, s in ipairs(splitters) do
-        gitgud.createWindow("Gitgud/Button", s.name, "MainArea")
-        gitgud.setText(s.name, "")
-        gitgud.setProperty(s.name, "NormalFillColour", C.transparent)
-        gitgud.setProperty(s.name, "HoverFillColour", C.borderStrong)
-        gitgud.setProperty(s.name, "PushedFillColour", C.blue)
-        gitgud.setProperty(s.name, "BorderColour", C.transparent)
-        gitgud.setDraggable(s.name, true, s.direction)
-
-        gitgud.on(s.name .. ".dragging", function(value)
-            local x, y = value:match("^(-?%d+),(-?%d+)$")
-            local mx, my, mw, mh = gitgud.getRect("MainArea")
-            x, y = tonumber(x), tonumber(y)
-            if not x or not mx then
+        splitter.create(s.name, "MainArea", s.direction, function(x, y)
+            local mx, my, _, mh = gitgud.getRect("MainArea")
+            if not mx then
                 return
             end
             if s.key == "navigatorWidth" then
@@ -182,8 +172,7 @@ local function makeSplitters()
                 live.graphShare = (y - my) / usable
             end
             frame.relayout()
-        end)
-        gitgud.on(s.name .. ".dragEnded", function()
+        end, function()
             -- Save what the layout actually used (after clamping).
             local nav = navigatorWidth()
             local values = {

@@ -37,8 +37,8 @@ local function render(state)
                 cells = {
                     path = selection.depotPath(file.path),
                     action = icons.actionName(file.status),
-                    left = file.status == "A" and "—" or windows.revisionLabel(state.left),
-                    right = file.status == "D" and "—" or windows.revisionLabel(state.right),
+                    left = file.status == "A" and "-" or windows.revisionLabel(state.left),
+                    right = file.status == "D" and "-" or windows.revisionLabel(state.right),
                 },
                 data = file,
             }

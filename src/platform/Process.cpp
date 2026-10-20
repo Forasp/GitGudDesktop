@@ -1,5 +1,7 @@
 #include "platform/Process.h"
 
+#include "platform/WinSpawn.h"
+
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -265,21 +267,15 @@ namespace gitgud::platform
             return result;
         }
 
-        STARTUPINFOW si = {};
-        si.cb = sizeof(si);
-        si.dwFlags = STARTF_USESTDHANDLES;
-        si.hStdInput = stdinRead.m_hHandle;
-        si.hStdOutput = stdoutWrite.m_hHandle;
-        si.hStdError = stderrWrite.m_hHandle;
-
         std::wstring cmd = Widen(commandLine);
         std::vector<wchar_t> buffer(cmd.begin(), cmd.end());
         buffer.push_back(L'\0');
         const std::wstring cwd = Widen(_WorkingDir);
 
         PROCESS_INFORMATION pi = {};
-        if (!CreateProcessW(nullptr, buffer.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
-                nullptr, cwd.empty() ? nullptr : cwd.c_str(), &si, &pi))
+        if (!SpawnWithStdHandles(buffer.data(), CREATE_NO_WINDOW, nullptr,
+                cwd.empty() ? nullptr : cwd.c_str(), stdinRead.m_hHandle, stdoutWrite.m_hHandle,
+                stderrWrite.m_hHandle, pi))
         {
             result.m_StartError = "could not start '" + program + "'";
             return result;
@@ -359,13 +355,6 @@ namespace gitgud::platform
         nul.m_hHandle = CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa,
             OPEN_EXISTING, 0, nullptr);
 
-        STARTUPINFOW si = {};
-        si.cb = sizeof(si);
-        si.dwFlags = STARTF_USESTDHANDLES;
-        si.hStdInput = nul.m_hHandle;
-        si.hStdOutput = outWrite.m_hHandle;
-        si.hStdError = outWrite.m_hHandle;
-
         // A job object so cancelling kills the whole tree (cmd and its children).
         ScopedHandle job;
         job.m_hHandle = CreateJobObjectW(nullptr, nullptr);
@@ -383,9 +372,9 @@ namespace gitgud::platform
         const std::wstring cwd = Widen(_WorkingDir);
 
         PROCESS_INFORMATION pi = {};
-        if (!CreateProcessW(nullptr, buffer.data(), nullptr, nullptr, TRUE,
-                CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, cwd.empty() ? nullptr : cwd.c_str(),
-                &si, &pi))
+        if (!SpawnWithStdHandles(buffer.data(), CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr,
+                cwd.empty() ? nullptr : cwd.c_str(), nul.m_hHandle, outWrite.m_hHandle,
+                outWrite.m_hHandle, pi))
         {
             _OnOutput(_StartError);
             return -1;
@@ -596,7 +585,8 @@ namespace gitgud::platform
         }
 
         // argv for execv, pointing into `_Args` (which must outlive it).
-        std::vector<char*> MakeArgv(const std::string& _Program, const std::vector<std::string>& _Args)
+        std::vector<char*> MakeArgv(
+            const std::string& _Program, const std::vector<std::string>& _Args)
         {
             std::vector<char*> argv;
             argv.push_back(const_cast<char*>(_Program.c_str()));
@@ -677,7 +667,8 @@ namespace gitgud::platform
         // Read until the shell closes its output or the time is up; a profile
         // that waits for input or hangs must not hold up the app.
         std::string output;
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(ikTimeoutMs);
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(ikTimeoutMs);
         bool bdone = false;
         while (!bdone)
         {
@@ -827,8 +818,8 @@ namespace gitgud::platform
         }
 
         const std::vector<char*> argv = MakeArgv(program, _Args);
-        const pid_t pid = StartChild(argv, _WorkingDir, stdinRead.m_iFd, stdoutWrite.m_iFd,
-            stderrWrite.m_iFd, false);
+        const pid_t pid = StartChild(
+            argv, _WorkingDir, stdinRead.m_iFd, stdoutWrite.m_iFd, stderrWrite.m_iFd, false);
         if (pid < 0)
         {
             result.m_StartError = "could not start '" + program + "'";
@@ -983,8 +974,8 @@ namespace gitgud::platform
                                     : "'" + _Args[0] + "' was not found\n");
             return -1;
         }
-        return StreamProgram(
-            program, _Args, _WorkingDir, _OnOutput, _pCancel, "could not start '" + program + "'\n");
+        return StreamProgram(program, _Args, _WorkingDir, _OnOutput, _pCancel,
+            "could not start '" + program + "'\n");
     }
 
 #endif

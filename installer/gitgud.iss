@@ -78,6 +78,7 @@ Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags
 Type: filesandordirs; Name: "{app}\resources"
 Type: filesandordirs; Name: "{app}\docs"
 Type: filesandordirs; Name: "{app}\cegui-datafiles"
+Type: filesandordirs; Name: "{app}\voice"
 Type: files; Name: "{app}\*.dll"
 Type: files; Name: "{app}\gitgud*.exe"
 Type: files; Name: "{app}\*.txt"

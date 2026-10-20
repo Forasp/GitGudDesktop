@@ -21,14 +21,14 @@
          widgets should be >= 30px tall for the halo to draw unclipped. -->
     <WidgetLook name="Gitgud/Checkbox">
         <PropertyDefinition redrawOnWrite="true" initialValue="FFF3EEFC" type="ColourRect" name="NormalTextColour"/>
-        <PropertyDefinition redrawOnWrite="true" initialValue="FFFFFFFF" type="ColourRect" name="HoverTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFFFFFFE" type="ColourRect" name="HoverTextColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="FFF3EEFC" type="ColourRect" name="PushedTextColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="FF4D4470" type="ColourRect" name="DisabledTextColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="52C4B5FD" type="ColourRect" name="BoxBorderColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="FF7EF2D6" type="ColourRect" name="BoxHoverColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="FF7EF2D6" type="ColourRect" name="BoxFillColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="FF9BF5E0" type="ColourRect" name="BoxFillHoverColour"/>
-        <PropertyDefinition redrawOnWrite="true" initialValue="FF0E0A1A" type="ColourRect" name="MarkColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FF0E0A1B" type="ColourRect" name="MarkColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="997EF2D6" type="ColourRect" name="GlowColour"/>
         <Property name="Size" value="{{0, 128}, {0, 30}}" />
         <ImagerySection name="label">

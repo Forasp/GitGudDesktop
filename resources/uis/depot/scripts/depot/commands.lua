@@ -383,7 +383,7 @@ function commands.remotes()
     local remotes = require("views.remotes")
     local items = {}
     for _, remote in ipairs(repo.state().remotes) do
-        items[#items + 1] = remote.name .. "  —  " .. remote.url
+        items[#items + 1] = remote.name .. "  -  " .. remote.url
     end
     dialog.show({
         title = "Remotes",

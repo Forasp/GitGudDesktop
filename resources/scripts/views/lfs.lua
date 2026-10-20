@@ -194,7 +194,7 @@ function lfs.describe(fileDiff)
     --- "1.2 MB"
     local function human(bytes)
         if not bytes then
-            return "—"
+            return "-"
         end
         local units = { "bytes", "KB", "MB", "GB" }
         local value = bytes

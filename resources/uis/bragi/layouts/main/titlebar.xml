@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  titlebar.xml (Bragi UI) - replaces the GitGud UI's title bar, which the
+  design doesn't have (the window buttons are bragi/chrome.xml, the menus
+  live in the command palette). It keeps, hidden, the widgets the shared
+  scripts expect: MenuBar (ui/menu.lua builds the menus into it; they stay
+  reachable through Ctrl K), AppTitleMark and AppTitleLabel.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="TitleBar">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{0,32}}"/>
+        <Property name="Visible" value="false"/>
+
+        <Window type="Gitgud/Icon" name="AppTitleMark">
+            <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+            <Property name="IconImage" value="Bragi-Icons/Mark"/>
+        </Window>
+        <Window type="DefaultWindow" name="MenuBar">
+            <Property name="Area" value="{{0,0},{0,0},{0,600},{1,0}}"/>
+        </Window>
+        <Window type="Gitgud/Label" name="AppTitleLabel">
+            <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

@@ -97,6 +97,8 @@
 
         <!-- ======================= commit box ======================= -->
         <Window type="DefaultWindow" name="CommitBox">
+            <!-- Tab moves between the message boxes only. -->
+            <UserString name="TabGroup" value="true"/>
             <Property name="Area" value="{{0,0},{1,-212},{1,0},{1,0}}"/>
 
             <Window type="Gitgud/StaticText" name="CommitBoxHairline">
@@ -126,6 +128,8 @@
             </Window>
 
             <Window type="Gitgud/MultiLineEditbox" name="DescriptionEdit">
+                <!-- Tab moves on to the next field. -->
+                <UserString name="TabStop" value="true"/>
                 <Property name="Area" value="{{0,12},{0,50},{1,-12},{0,124}}"/>
                 <Property name="Text" value=""/>
             </Window>
@@ -164,9 +168,9 @@
                 <Property name="HoverFillColour" value="FF93A4FF"/>
                 <Property name="PushedFillColour" value="FF6F84E6"/>
                 <Property name="DisabledFillColour" value="FF291F47"/>
-                <Property name="NormalTextColour" value="FF0E0A1A"/>
-                <Property name="HoverTextColour" value="FF0E0A1A"/>
-                <Property name="PushedTextColour" value="FF0E0A1A"/>
+                <Property name="NormalTextColour" value="FF0E0A1B"/>
+                <Property name="HoverTextColour" value="FF0E0A1B"/>
+                <Property name="PushedTextColour" value="FF0E0A1B"/>
                 <Property name="BorderColour" value="FF93A4FF"/>
                 <Property name="Font" value="Gitgud-UI-Bold"/>
                 <Property name="TooltipText" value="Commit the included changes  (Ctrl+Enter)"/>

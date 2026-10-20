@@ -8,7 +8,7 @@
     //proj/dev, a few submitted changes, and the workspace <Dir>\ws with a
     .p4config GitGud opens (gitgud.exe <Dir>\ws).
 
-    The test user "tim" gets a password and a ticket in <Dir>\p4tickets.txt.
+    The test user "sam" gets a password and a ticket in <Dir>\p4tickets.txt.
     Launch GitGud with P4TICKETS (and P4TRUST, P4ENVIRO) pointing into <Dir>,
     as the script prints, so the app never needs Windows Credential Manager.
 
@@ -43,7 +43,7 @@ function Invoke-P4 {
     param([string]$Client, [string]$Cwd, [string]$Stdin, [string[]]$Arguments)
     # A Process of our own: PowerShell's pipe would send CRLF line ends,
     # which p4 passwd rejects.
-    $all = @("-p", $port, "-u", "tim", "-c", $Client, "-d", $Cwd) + $Arguments
+    $all = @("-p", $port, "-u", "sam", "-c", $Client, "-d", $Cwd) + $Arguments
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $P4
     $psi.Arguments = ($all | ForEach-Object { '"' + $_ + '"' }) -join " "
@@ -72,11 +72,11 @@ Invoke-P4 -Client none -Cwd "$Dir\tmp" -Stdin "$password`n" -Arguments @("login"
 Invoke-P4 -Client none -Cwd "$Dir\tmp" -Arguments @("depot", "-i") `
     -Stdin "Depot: proj`nType: stream`nMap: proj/...`nStreamDepth: //proj/1`n" | Out-Null
 Invoke-P4 -Client none -Cwd "$Dir\tmp" -Arguments @("stream", "-i") `
-    -Stdin "Stream: //proj/main`nOwner: tim`nName: main`nParent: none`nType: mainline`nParentView: inherit`nPaths:`n`tshare ...`n" | Out-Null
+    -Stdin "Stream: //proj/main`nOwner: sam`nName: main`nParent: none`nType: mainline`nParentView: inherit`nPaths:`n`tshare ...`n" | Out-Null
 
 $ws = "$Dir\ws"
 Invoke-P4 -Client ws -Cwd $ws -Arguments @("client", "-i") `
-    -Stdin "Client: ws`nOwner: tim`nRoot: $ws`nOptions: allwrite noclobber nocompress unlocked nomodtime rmdir`nStream: //proj/main`nLineEnd: local`n" | Out-Null
+    -Stdin "Client: ws`nOwner: sam`nRoot: $ws`nOptions: allwrite noclobber nocompress unlocked nomodtime rmdir`nStream: //proj/main`nLineEnd: local`n" | Out-Null
 
 [System.IO.File]::WriteAllText("$ws\README.md", "# Test project`n")
 New-Item -ItemType Directory -Force "$ws\src" | Out-Null
@@ -89,16 +89,16 @@ Invoke-P4 -Client ws -Cwd $ws -Arguments @("reconcile", "$ws\...") | Out-Null
 Invoke-P4 -Client ws -Cwd $ws -Arguments @("submit", "-d", "Say hi") | Out-Null
 
 Invoke-P4 -Client ws -Cwd $ws -Arguments @("stream", "-i") `
-    -Stdin "Stream: //proj/dev`nOwner: tim`nName: dev`nParent: //proj/main`nType: development`nParentView: inherit`nPaths:`n`tshare ...`n" | Out-Null
+    -Stdin "Stream: //proj/dev`nOwner: sam`nName: dev`nParent: //proj/main`nType: development`nParentView: inherit`nPaths:`n`tshare ...`n" | Out-Null
 Invoke-P4 -Client ws -Cwd $ws -Arguments @("populate", "-d", "Branch dev", "-S", "//proj/dev", "-r") | Out-Null
 Invoke-P4 -Client ws -Cwd $ws -Arguments @("label", "-i") `
-    -Stdin "Label: v1`nOwner: tim`nDescription:`n`tFirst release`nOptions: unlocked noautoreload`nRevision: @2`nView:`n`t//proj/main/...`n" | Out-Null
+    -Stdin "Label: v1`nOwner: sam`nDescription:`n`tFirst release`nOptions: unlocked noautoreload`nRevision: @2`nView:`n`t//proj/main/...`n" | Out-Null
 
 # Local edits for the Changes view: one modified, one new.
 [System.IO.File]::AppendAllText("$ws\README.md", "More text.`n")
 [System.IO.File]::WriteAllText("$ws\notes.txt", "a new file`n")
 
-[System.IO.File]::WriteAllText("$ws\.p4config", "P4PORT=$port`nP4USER=tim`nP4CLIENT=ws`n")
+[System.IO.File]::WriteAllText("$ws\.p4config", "P4PORT=$port`nP4USER=sam`nP4CLIENT=ws`n")
 
 Write-Output "Workspace: $ws"
 Write-Output "Launch with:"

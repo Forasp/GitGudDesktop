@@ -34,6 +34,7 @@ local C = require("core.palette")
 local app = require("core.app")
 local geometry = require("ui.geometry")
 local settings = require("core.settings")
+local sprites = require("core.sprites")
 local text = require("core.text")
 local worddiff = require("core.worddiff")
 
@@ -111,16 +112,14 @@ end
 -- @param hunk  row-model hunk ({ changes = {idx...} })
 -- @return an [image=...] markup string
 local function hunkSprite(hunk)
-    return "[vert-formatting='CentreAligned'][image-size='w:26 h:26'][image='Gitgud-Images/Hunk"
-        .. inclusion(hunk.changes) .. "']"
+    return "[vert-formatting='CentreAligned']" .. sprites.image("Hunk" .. inclusion(hunk.changes), 26, 26)
 end
 
 --- The line-height toggle sprite for one block of changed lines.
 -- @param block  row-model block ({ changes = {idx...} })
 -- @return an [image=...] markup string
 local function blockSprite(block)
-    return "[vert-formatting='CentreAligned'][image-size='w:16 h:16'][image='Gitgud-Images/Block"
-        .. inclusion(block.changes) .. "']"
+    return "[vert-formatting='CentreAligned']" .. sprites.image("Block" .. inclusion(block.changes), 16, 16)
 end
 
 --- A hunk header row: dim blue "@@ ... @@" text, 26px tall to match the
@@ -129,7 +128,7 @@ end
 -- @return markup
 local function headerText(header)
     return "[vert-formatting='CentreAligned'][image-size='w:1 h:26'][image='Gitgud-Images/Spacer']"
-        .. text.colour(C.blue, expand(header))
+        .. text.colour(C.hunkHeader or C.blue, expand(header))
 end
 
 --- Line-number cell + marker for one side of a line.
@@ -689,10 +688,12 @@ function diff.mode()
     return settings.get("diffMode", "split")
 end
 
---- Switch display mode (re-renders the current diff).
+--- Switch display mode (re-renders the current diff; tells subscribers:
+-- "diff.modeChanged").
 -- @param mode  "split" | "unified"
 function diff.setMode(mode)
     settings.set("diffMode", mode)
+    app.publish("diff.modeChanged", mode)
 
     if current then
         showMode()

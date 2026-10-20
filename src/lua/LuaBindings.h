@@ -3,12 +3,15 @@
 // -----------------------------------------------------------------------------
 // LuaBindings — shared helpers for the `gitgud` binding implementation files
 // (LuaRepoBindings.cpp, LuaUiBindings.cpp, LuaFeatureBindings.cpp,
-// LuaAppBindings.cpp, LuaUpdateBindings.cpp). Internal to src/lua/.
+// LuaAppBindings.cpp, LuaUpdateBindings.cpp, LuaJsonBindings.cpp,
+// LuaVoiceBindings.cpp, LuaAgentBindings.cpp). Internal to src/lua/.
 //
 // Every binding is a plain lua_CFunction whose first upvalue is the owning
 // LuaEngine (see LuaEngine::InstallBindings), reached through Self().
 // -----------------------------------------------------------------------------
 
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -25,6 +28,22 @@ namespace gitgud::git
 {
     struct FileDiff;
 }
+
+namespace gitgud::app
+{
+    class Json;
+}
+
+namespace gitgud::voice
+{
+    class ILink;
+}
+
+namespace gitgud::platform
+{
+    class IAudioCapture;
+    class IAudioPlayback;
+} // namespace gitgud::platform
 
 namespace gitgud::lua::bindings
 {
@@ -83,10 +102,46 @@ namespace gitgud::lua::bindings
     // Each file appends its functions to the `gitgud` table's registry.
     void AddRepoBindings(std::vector<luaL_Reg>& _Out);
     void AddUiBindings(std::vector<luaL_Reg>& _Out);
+    void AddStoreBindings(std::vector<luaL_Reg>& _Out);
+
+    // Config names (LuaUiBindings.cpp): a name scripts may use for a file or
+    // folder in the config folder ("bragi/wikis/x.wiki.git"), and its path.
+    bool IsConfigName(const char* _szName);
+    std::string ConfigFile(const std::string& _Name);
     void AddFeatureBindings(std::vector<luaL_Reg>& _Out);
     void AddAppBindings(std::vector<luaL_Reg>& _Out);
     void AddUpdateBindings(std::vector<luaL_Reg>& _Out);
     void AddP4Bindings(std::vector<luaL_Reg>& _Out);
+    void AddJsonBindings(std::vector<luaL_Reg>& _Out);
+
+    // A Lua value as JSON (LuaJsonBindings.cpp); throws std::runtime_error on
+    // what JSON can't hold.
+    app::Json LuaToJson(lua_State* _pL, int _iIndex);
+
+    // Voice (LuaVoiceBindings.cpp).
+    void AddVoiceBindings(std::vector<luaL_Reg>& _Out);
+    // The local app data folder, downloads, archives (LuaLocalDataBindings.cpp).
+    void AddLocalDataBindings(std::vector<luaL_Reg>& _Out);
+    // Close the voice channels and devices (the Lua engine is going away).
+    void StopVoice();
+    // The speech engine's links (voice/Link.h): the app's own engine unless
+    // this is called; tests pass an in-memory one. Stops voice first.
+    void SetVoiceLink(std::function<std::unique_ptr<voice::ILink>(const std::string&)> _MakeLink);
+    // Tests: where voice gets its microphone and speaker (empty: the real
+    // devices).
+    void SetVoiceAudio(std::function<std::unique_ptr<platform::IAudioCapture>()> _MakeCapture,
+        std::function<std::unique_ptr<platform::IAudioPlayback>()> _MakePlayback);
+
+    void AddAgentBindings(std::vector<luaL_Reg>& _Out);
+    void AddAgentHistoryBindings(std::vector<luaL_Reg>& _Out);
+    // Pictures in a conversation: the clipboard, image files shown at a size
+    // (LuaImageBindings.cpp).
+    void AddImageBindings(std::vector<luaL_Reg>& _Out);
+    // Show the pictures decoded since the last call (gitgud.showImage
+    // decodes on a worker thread). True when any was shown. UI thread.
+    bool ShowDecodedImages(gitgud::ui::IUiBackend* _pUi);
+    // End every Claude Code session (the engine is going away).
+    void StopAgents();
 
     // The credential provider worker jobs use (credential store, then a
     // "credential.missing" event). LuaRepoBindings.cpp.

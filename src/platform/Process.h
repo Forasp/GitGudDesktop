@@ -55,6 +55,10 @@ namespace gitgud::platform
     // which carry gpg and git-lfs), or "" when it can't be found.
     std::string FindProgram(const std::string& _Name);
 
+    // Other processes whose command line contains `_Needle`: their ids
+    // (Windows and Linux; empty where command lines can't be read).
+    std::vector<unsigned long> ProcessesWithArgument(const std::string& _Needle);
+
     // Quote one argument for a Windows command line (CommandLineToArgvW rules).
     std::string QuoteArgument(const std::string& _Arg);
 

@@ -326,6 +326,21 @@ namespace gitgud::git
         bool m_bDirty = false;       // has uncommitted changes inside
     };
 
+    // A folder's repository at a glance (Summarize): where it is, what's
+    // checked out, and how much its working tree differs from HEAD.
+    struct FolderSummary
+    {
+        std::string m_Root;      // the working tree's root (forward slashes)
+        std::string m_CommonDir; // the shared .git folder (the same for every worktree)
+        std::string m_Branch;    // checked-out branch ("" when detached)
+        std::string m_Head;      // HEAD's commit, short ("" on an unborn branch)
+        std::string m_Worktree;  // a linked worktree's name, "" for the main one
+        int m_iFiles = 0;        // files that differ from HEAD (untracked included)
+        int m_iAdded = 0;        // lines added: staged, unstaged, and untracked text files
+        int m_iRemoved = 0;      // lines removed
+        std::vector<RemoteInfo> m_Remotes;
+    };
+
     struct WorktreeInfo
     {
         std::string m_Name;
@@ -436,6 +451,12 @@ namespace gitgud::git
 
         // Open an existing repository at `path`. Throws GitError on failure.
         static Repository Open(const std::string& _Path);
+
+        // The Git repository holding `_Folder` (the folder or one above it):
+        // its root, branch, worktree, remotes, and the lines its working
+        // tree adds and removes against HEAD. Reads files: run it on a
+        // worker. Throws GitError when there's none.
+        static FolderSummary Summarize(const std::string& _Folder);
 
         // Create a new, non-bare repository at `path` (like `git init`).
         static Repository Init(const std::string& _Path);

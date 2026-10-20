@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  main.xml - the Bragi UI's window: the icon
+  rail on the left, one view at a time beside it (scripts/bragi/shell.lua),
+  and the window buttons in the top right corner over each view's top bar.
+  Colours are theme tokens ($panel, ...; themes/*.ini).
+
+    BragiRail      bragi/rail.xml: logo, Agent / Repo / Boards / Wiki,
+                   theme toggle, Settings, server status
+    AgentView      bragi/agent.xml
+    RepoView       the GitGud UI's window, from its own layouts; this
+                   package replaces main/toolbar.xml (the top bar) and
+                   main/titlebar.xml (no title bar: the window buttons are
+                   bragi/chrome.xml). It starts 32px above the window,
+                   where the GitGud UI keeps its title bar, so its 56px top
+                   bar lands at the top edge.
+    BoardsView     bragi/boards.xml
+    WikiView       bragi/wiki.xml
+    SettingsView   bragi/settings.xml
+    WelcomeView    bragi/welcome.xml: first-time setup, over everything
+                   but the window buttons, dialogs, and menus
+
+  Every view's top bar is 56px high, carries AppDrag (it's the window's
+  caption), and leaves 140px free on the right for the window buttons.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="Root">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+
+        <Window type="Gitgud/StaticText" name="AppBackground">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="$bg"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <Window type="DefaultWindow" name="RepoView">
+            <Property name="Area" value="{{0,72},{0,-32},{1,0},{1,0}}"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Visible" value="false"/>
+
+            <LayoutImport filename="main/titlebar.xml"/>
+            <LayoutImport filename="main/toolbar.xml"/>
+            <LayoutImport filename="main/tabs.xml"/>
+            <LayoutImport filename="main/notice.xml"/>
+
+            <Window type="DefaultWindow" name="MainArea">
+                <Property name="Area" value="{{0,0},{0,88},{1,0},{1,-24}}"/>
+                <LayoutImport filename="main/navigator.xml"/>
+                <LayoutImport filename="main/sidebar.xml"/>
+                <LayoutImport filename="main/content.xml"/>
+                <LayoutImport filename="main/graph.xml"/>
+                <LayoutImport filename="main/console.xml"/>
+            </Window>
+
+            <LayoutImport filename="main/statusbar.xml"/>
+        </Window>
+
+        <Window type="DefaultWindow" name="AgentView">
+            <Property name="Area" value="{{0,72},{0,0},{1,0},{1,0}}"/>
+            <LayoutImport filename="bragi/agent.xml"/>
+        </Window>
+
+        <Window type="DefaultWindow" name="BoardsView">
+            <Property name="Area" value="{{0,72},{0,0},{1,0},{1,0}}"/>
+            <Property name="Visible" value="false"/>
+            <LayoutImport filename="bragi/boards.xml"/>
+        </Window>
+
+        <Window type="DefaultWindow" name="WikiView">
+            <Property name="Area" value="{{0,72},{0,0},{1,0},{1,0}}"/>
+            <Property name="Visible" value="false"/>
+            <LayoutImport filename="bragi/wiki.xml"/>
+        </Window>
+
+        <Window type="DefaultWindow" name="SettingsView">
+            <Property name="Area" value="{{0,72},{0,0},{1,0},{1,0}}"/>
+            <Property name="Visible" value="false"/>
+            <LayoutImport filename="bragi/settings.xml"/>
+        </Window>
+
+        <LayoutImport filename="bragi/rail.xml"/>
+        <LayoutImport filename="bragi/welcome.xml"/>
+        <LayoutImport filename="bragi/chrome.xml"/>
+
+        <LayoutImport filename="popups/blocker.xml"/>
+        <LayoutImport filename="popups/repositories.xml"/>
+        <LayoutImport filename="popups/branches.xml"/>
+        <LayoutImport filename="popups/palette.xml"/>
+
+        <LayoutImport filename="dialogs/shade.xml"/>
+        <LayoutImport filename="dialogs/dialog.xml"/>
+        <LayoutImport filename="dialogs/repository-settings.xml"/>
+        <LayoutImport filename="dialogs/rebase.xml"/>
+    </Window>
+</GUILayout>

@@ -7,12 +7,14 @@
 -- Public API:
 --   commitview.show({
 --       summary = "...", body = "...", meta = "...",   -- plain text
+--       metaMarkup = "...",                             -- optional, instead of meta
 --       oid = "<commit the files belong to>",
 --       files = { fileDiff, ... },                      -- gitgud.commitDiff()
 --       actions = { { label = "Restore", action = fn }, ... },  -- up to 2
 --   })
 --   commitview.current()   -> the spec being shown (or nil)
 --   commitview.selectFile(i)
+--   commitview.setLook(fields)
 
 local C = require("core.palette")
 local content = require("views.content")
@@ -23,6 +25,26 @@ local commitview = { name = "commitview" }
 
 local shown = nil
 local selectedFile = 1
+
+-- Where the metadata line goes in CommitHeader: the GitGud UI's. A UI
+-- package with its own content/commit-header.xml can move it with
+-- commitview.setLook.
+--   left            px from the header's left (and right) edge
+--   metaTop         its top edge under a body line
+--   metaTopCompact  its top edge when there's no body
+local look = {
+    left = 18,
+    metaTop = 62,
+    metaTopCompact = 40,
+}
+
+--- Restyle the header (see `look` above).
+-- @param fields  any of look's fields
+function commitview.setLook(fields)
+    for key, value in pairs(fields) do
+        look[key] = value
+    end
+end
 
 --- Colour for a file-status letter.
 -- @param code  "A" | "D" | "M" | "R" | "T"
@@ -78,10 +100,11 @@ function commitview.show(spec)
 
     gitgud.setText("CommitSummaryLabel", text.escape(spec.summary or ""))
     gitgud.setText("CommitBodyLabel", text.escape(spec.body or ""))
-    gitgud.setText("CommitMetaLabel", text.escape(spec.meta or ""))
+    gitgud.setText("CommitMetaLabel", spec.metaMarkup or text.escape(spec.meta or ""))
     gitgud.setVisible("CommitBodyLabel", hasBody)
-    local metaTop = hasBody and 62 or 40
-    gitgud.setProperty("CommitMetaLabel", "Area", geometry.area(0, 18, 0, metaTop, 1, -18, 0, metaTop + 24))
+    local metaTop = hasBody and look.metaTop or look.metaTopCompact
+    gitgud.setProperty("CommitMetaLabel", "Area",
+        geometry.area(0, look.left, 0, metaTop, 1, -look.left, 0, metaTop + 24))
 
     local actions = spec.actions or {}
     for i = 1, 2 do

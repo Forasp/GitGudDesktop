@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  toolbar.xml (Bragi UI) - the Repository view's 56px top bar (design D),
+  replacing the GitGud UI's toolbar. It sits at y=32 inside RepoView, which
+  starts 32px above the window, so it's the window's top edge.
+
+    repo ▾  main ▾  Fetch origin   [branches undo redo graph console]
+    [Changes n | History]  [Search or run a command  Ctrl K]  (window buttons)
+
+  It keeps every widget the GitGud UI's views/toolbar.lua and friends drive
+  (RepoButton/RepoValue, BranchButton/BranchValue, SyncButton and its icon
+  and labels, Undo/Redo/Graph/Console/Palette buttons with Icon and Label
+  children); labels the design doesn't show are hidden. scripts/bragi/repo.lua
+  lays the left group out to fit and drives the Changes / History switch.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="Toolbar">
+        <Property name="Area" value="{{0,0},{0,32},{1,0},{0,88}}"/>
+        <Property name="PanelColour" value="$bg"/>
+        <Property name="Text" value=""/>
+        <UserString name="AppDrag" value="true"/>
+
+        <!-- ================= repository and branch ================= -->
+        <Window type="Bragi/Button8" name="RepoButton">
+            <Property name="Area" value="{{0,24},{0,10},{0,164},{0,46}}"/>
+            <Property name="Text" value=""/>
+            <Property name="BorderColour" value="$border"/>
+            <Property name="TooltipText" value="Switch, add, clone, or create a repository  (Ctrl+T)"/>
+            <Window type="Gitgud/Icon" name="RepoIcon">
+                <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconRepo"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+            <Window type="Gitgud/Label" name="RepoLabel">
+                <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+            <Window type="Gitgud/Label" name="RepoValue">
+                <Property name="Area" value="{{0,12},{0,0},{1,-28},{1,0}}"/>
+                <Property name="Text" value=""/>
+                <Property name="Font" value="Bragi-Mono-13"/>
+                <Property name="NormalTextColour" value="$text"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Icon" name="RepoChevron">
+                <Property name="Area" value="{{1,-21},{0.5,-5},{1,-11},{0.5,5}}"/>
+                <Property name="IconImage" value="Gitgud-Images/Chevron"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+
+        <Window type="Bragi/Button8" name="BranchButton">
+            <Property name="Area" value="{{0,174},{0,10},{0,314},{0,46}}"/>
+            <Property name="Text" value=""/>
+            <Property name="BorderColour" value="$border"/>
+            <Property name="TooltipText" value="Switch, create, or merge branches  (Ctrl+B)"/>
+            <Window type="Gitgud/Icon" name="BranchIcon">
+                <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconBranch"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+            <Window type="Gitgud/Label" name="BranchLabel">
+                <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+            <Window type="Gitgud/Label" name="BranchValue">
+                <Property name="Area" value="{{0,12},{0,0},{1,-28},{1,0}}"/>
+                <Property name="Text" value=""/>
+                <Property name="Font" value="Bragi-Mono-13"/>
+                <Property name="NormalTextColour" value="$text"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Icon" name="BranchChevron">
+                <Property name="Area" value="{{1,-21},{0.5,-5},{1,-11},{0.5,5}}"/>
+                <Property name="IconImage" value="Gitgud-Images/Chevron"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+
+        <!-- Fetch / push / pull: a quiet text button. -->
+        <Window type="Bragi/Button8" name="SyncButton">
+            <Property name="Area" value="{{0,322},{0,10},{0,512},{0,46}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="DisabledFillColour" value="00000000"/>
+            <Property name="BorderColour" value="00000000"/>
+            <Property name="TooltipText" value="Fetch, push, or pull  (Ctrl+Shift+F / P / L)"/>
+            <Window type="Gitgud/Icon" name="SyncIcon">
+                <Property name="Area" value="{{0,8},{0.5,-8},{0,24},{0.5,8}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconSync"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="SyncLabel">
+                <Property name="Area" value="{{0,30},{0,0},{1,-8},{1,0}}"/>
+                <Property name="Text" value=""/>
+                <Property name="Font" value="Bragi-13"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="SyncValue">
+                <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+        </Window>
+
+        <!-- Quick actions, icons only (labels kept hidden for the scripts). -->
+        <Window type="Bragi/Button8" name="BragiBranchesButton">
+            <Property name="Area" value="{{0,520},{0,12},{0,552},{0,44}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="DisabledFillColour" value="00000000"/>
+            <Property name="BorderColour" value="00000000"/>
+            <Property name="TooltipText" value="Branches, remotes, tags, stashes  (Ctrl+Shift+B)"/>
+            <Window type="Gitgud/Icon" name="BragiBranchesIcon">
+                <Property name="Area" value="{{0.5,-9},{0.5,-9},{0.5,9},{0.5,9}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconBranch"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+        <Window type="Bragi/Button8" name="UndoButton">
+            <Property name="Area" value="{{0,556},{0,12},{0,588},{0,44}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="DisabledFillColour" value="00000000"/>
+            <Property name="BorderColour" value="00000000"/>
+            <Property name="TooltipText" value="Undo  (Ctrl+Z)"/>
+            <Window type="Gitgud/Icon" name="UndoButtonIcon">
+                <Property name="Area" value="{{0.5,-9},{0.5,-9},{0.5,9},{0.5,9}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconUndo"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="UndoButtonLabel">
+                <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+        </Window>
+        <Window type="Bragi/Button8" name="RedoButton">
+            <Property name="Area" value="{{0,592},{0,12},{0,624},{0,44}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="DisabledFillColour" value="00000000"/>
+            <Property name="BorderColour" value="00000000"/>
+            <Property name="TooltipText" value="Redo  (Ctrl+Y)"/>
+            <Window type="Gitgud/Icon" name="RedoButtonIcon">
+                <Property name="Area" value="{{0.5,-9},{0.5,-9},{0.5,9},{0.5,9}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconRedo"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="RedoButtonLabel">
+                <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+        </Window>
+        <Window type="Bragi/Button8" name="GraphButton">
+            <Property name="Area" value="{{0,628},{0,12},{0,660},{0,44}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="DisabledFillColour" value="00000000"/>
+            <Property name="BorderColour" value="00000000"/>
+            <Property name="TooltipText" value="Commit graph  (Ctrl+G)"/>
+            <Window type="Gitgud/Icon" name="GraphButtonIcon">
+                <Property name="Area" value="{{0.5,-9},{0.5,-9},{0.5,9},{0.5,9}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconGraph"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="GraphButtonLabel">
+                <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+        </Window>
+        <Window type="Bragi/Button8" name="ConsoleButton">
+            <Property name="Area" value="{{0,664},{0,12},{0,696},{0,44}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="DisabledFillColour" value="00000000"/>
+            <Property name="BorderColour" value="00000000"/>
+            <Property name="TooltipText" value="Console  (Ctrl+`)"/>
+            <Window type="Gitgud/Icon" name="ConsoleButtonIcon">
+                <Property name="Area" value="{{0.5,-9},{0.5,-9},{0.5,9},{0.5,9}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconTerminal"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="ConsoleButtonLabel">
+                <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+        </Window>
+
+        <!-- ================= Changes | History ================= -->
+        <Window type="Bragi/Box10" name="BragiRepoTabs">
+            <Property name="Area" value="{{1,-604},{0,10},{1,-400},{0,48}}"/>
+            <Property name="FillColour" value="$rail"/>
+            <Window type="Bragi/Button8" name="BragiChangesTab">
+                <Property name="Area" value="{{0,3},{0,3},{0,117},{1,-3}}"/>
+                <Property name="Text" value=""/>
+                <Property name="BorderColour" value="00000000"/>
+                <Property name="TooltipText" value="Uncommitted changes"/>
+                <Window type="Gitgud/Label" name="BragiChangesTabLabel">
+                    <Property name="Area" value="{{0,14},{0,0},{1,-38},{1,0}}"/>
+                    <Property name="Text" value="Changes"/>
+                    <Property name="Font" value="Bragi-13-Bold"/>
+                    <Property name="NormalTextColour" value="$text"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+                <Window type="Bragi/Box8" name="BragiChangesCount">
+                    <Property name="Area" value="{{1,-34},{0.5,-9},{1,-10},{0.5,9}}"/>
+                    <Property name="FillColour" value="$accent"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                    <Window type="Gitgud/Label" name="BragiChangesCountLabel">
+                        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+                        <Property name="Text" value=""/>
+                        <Property name="Font" value="Bragi-12-Bold"/>
+                        <Property name="HorzFormatting" value="CentreAligned"/>
+                        <Property name="NormalTextColour" value="$on-accent"/>
+                        <Property name="CursorPassThroughEnabled" value="true"/>
+                    </Window>
+                </Window>
+            </Window>
+            <Window type="Bragi/Button8" name="BragiHistoryTab">
+                <Property name="Area" value="{{0,119},{0,3},{1,-3},{1,-3}}"/>
+                <Property name="Text" value="History"/>
+                <Property name="Font" value="Bragi-13-Bold"/>
+                <Property name="BorderColour" value="00000000"/>
+                <Property name="TooltipText" value="Commit history"/>
+            </Window>
+        </Window>
+
+        <!-- ================= search (the command palette) ================= -->
+        <Window type="Bragi/Button8" name="PaletteButton">
+            <Property name="Area" value="{{1,-388},{0,10},{1,-148},{0,46}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="$well"/>
+            <Property name="HoverFillColour" value="$well"/>
+            <Property name="PushedFillColour" value="$well"/>
+            <Property name="BorderColour" value="$border"/>
+            <Property name="TooltipText" value="Search, or run any command  (Ctrl+K)"/>
+            <Window type="Gitgud/Icon" name="PaletteButtonIcon">
+                <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconCommand"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+            <Window type="Gitgud/Label" name="PaletteButtonLabel">
+                <Property name="Area" value="{{0,12},{0,0},{1,-60},{1,0}}"/>
+                <Property name="Text" value="Search or run a command"/>
+                <Property name="Font" value="Bragi-13"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="PaletteButtonKey">
+                <Property name="Area" value="{{1,-60},{0,0},{1,-12},{1,0}}"/>
+                <Property name="Text" value="Ctrl K"/>
+                <Property name="Font" value="Bragi-Mono-11"/>
+                <Property name="HorzFormatting" value="RightAligned"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="ToolbarHairline">
+            <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="$border"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

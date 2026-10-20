@@ -32,7 +32,7 @@ end
 function remotes.add()
     dialog.show({
         title = "Add a remote",
-        message = "Another copy of this repository to fetch from and push to — a fork, a mirror, "
+        message = "Another copy of this repository to fetch from and push to: a fork, a mirror, "
             .. "or a second host.",
         fields = {
             { label = "Name", value = repo.primaryRemote() and "" or "origin" },

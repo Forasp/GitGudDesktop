@@ -34,18 +34,26 @@ guide walks through each step with screenshots, including signing in to a
 server. Older versions and release notes are on the
 [releases page](https://github.com/Forasp/GitGudDesktop/releases).
 
-## Two interfaces, or build your own
+## Three interfaces, or build your own
 
-GitGud ships two interfaces and asks which one you'd like on first launch:
+GitGud ships three interfaces and asks which one you'd like on first launch:
 
 - **GitGud**: changes and history side by side, a commit graph, a branch
   tree, undo, interactive rebase, and a merge tool.
 - **Depot**: pending changelists with shelving, submitted changelists, and
   revision graph, time-lapse, and diff windows.
+- **Bragi**: a workspace for Claude Code beside your repositories:
+  conversations grouped by project, one conversation that routes work to
+  the others, the agent's changes to review, and tasks, boards, and wikis
+  kept on your computer. It needs Claude Code installed; its own first-run
+  setup covers the rest. Talk to it by voice on Windows: speech is
+  recognized on your computer, with models its setup downloads when you
+  choose to. With an NVIDIA GPU, it can answer in a voice made from a
+  recording.
 
 ![The GitGud interface behind the Depot interface](.github/images/ui-interfaces.png)
 
-Both work on the same repositories and settings, and on Perforce workspaces
+All work on the same repositories and settings, and on Perforce workspaces
 as well as Git repositories. Or build your own: see
 [Modding](https://github.com/Forasp/GitGudDesktop/wiki/Modding).
 

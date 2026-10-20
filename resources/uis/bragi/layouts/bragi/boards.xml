@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  boards.xml - the Boards view (design D): a top bar (board name, Board /
+  List / Backlog, filter, New task, search) over the columns.
+  scripts/bragi/boards.lua
+  builds the columns and cards from Bragi's store (bragi/server.lua);
+  the title picks the board.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="BoardsRoot">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+        <Property name="PanelColour" value="$bg"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/StaticText" name="BoardsHeader">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,56}}"/>
+            <Property name="PanelColour" value="$bg"/>
+            <Property name="Text" value=""/>
+            <UserString name="AppDrag" value="true"/>
+            <Window type="Bragi/Button8" name="BoardsTitle">
+                <Property name="Area" value="{{0,12},{0,10},{0,220},{0,46}}"/>
+                <Property name="Text" value="Boards"/>
+                <Property name="Font" value="Bragi-15-Bold"/>
+                <Property name="HorzFormatting" value="LeftAligned"/>
+                <Property name="NormalFillColour" value="00000000"/>
+                <Property name="DisabledFillColour" value="00000000"/>
+                <Property name="BorderColour" value="00000000"/>
+                <Property name="NormalTextColour" value="$text"/>
+                <Property name="HoverTextColour" value="$text"/>
+                <Property name="TooltipText" value="Choose a board"/>
+            </Window>
+            <Window type="Bragi/Box10" name="BoardsModes">
+                <Property name="Area" value="{{0,232},{0,10},{0,500},{0,48}}"/>
+                <Property name="FillColour" value="$rail"/>
+            </Window>
+            <Window type="Bragi/Button8" name="BoardsFilter">
+                <Property name="Area" value="{{0,512},{0,10},{0,612},{0,46}}"/>
+                <Property name="Text" value="Filter"/>
+                <Property name="Font" value="Bragi-13"/>
+                <Property name="NormalFillColour" value="00000000"/>
+                <Property name="DisabledFillColour" value="00000000"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="TooltipText" value="Assignee, branch, type"/>
+            </Window>
+            <Window type="Bragi/Button8" name="BoardsNewTask">
+                <Property name="Area" value="{{1,-508},{0,10},{1,-400},{0,46}}"/>
+                <Property name="Text" value="New task"/>
+                <Property name="Font" value="Bragi-13-Bold"/>
+                <Property name="NormalFillColour" value="$accent"/>
+                <Property name="HoverFillColour" value="$accent-hover"/>
+                <Property name="PushedFillColour" value="$accent-pressed"/>
+                <Property name="BorderColour" value="00000000"/>
+                <Property name="NormalTextColour" value="$on-accent"/>
+                <Property name="HoverTextColour" value="$on-accent"/>
+                <Property name="PushedTextColour" value="$on-accent"/>
+            </Window>
+            <Window type="Bragi/Button8" name="BoardsSearch">
+                <Property name="Area" value="{{1,-388},{0,10},{1,-148},{0,46}}"/>
+                <Property name="Text" value=""/>
+                <Property name="NormalFillColour" value="$well"/>
+                <Property name="HoverFillColour" value="$well"/>
+                <Property name="PushedFillColour" value="$well"/>
+                <Property name="BorderColour" value="$border"/>
+                <Property name="TooltipText" value="Search, or run any command  (Ctrl+K)"/>
+                <Window type="Gitgud/Label" name="BoardsSearchLabel">
+                    <Property name="Area" value="{{0,12},{0,0},{1,-60},{1,0}}"/>
+                    <Property name="Text" value="Search or run a command"/>
+                    <Property name="Font" value="Bragi-13"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+                <Window type="Gitgud/Label" name="BoardsSearchKey">
+                    <Property name="Area" value="{{1,-60},{0,0},{1,-12},{1,0}}"/>
+                    <Property name="Text" value="Ctrl K"/>
+                    <Property name="Font" value="Bragi-Mono-11"/>
+                    <Property name="HorzFormatting" value="RightAligned"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+            </Window>
+            <Window type="Gitgud/StaticText" name="BoardsHeaderRule">
+                <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+                <Property name="PanelColour" value="$border"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+        </Window>
+
+        <!-- The columns; boards.lua builds them. -->
+        <Window type="Gitgud/ScrollablePane" name="BoardsColumns">
+            <Property name="Area" value="{{0,0},{0,56},{1,0},{1,0}}"/>
+        </Window>
+    </Window>
+</GUILayout>

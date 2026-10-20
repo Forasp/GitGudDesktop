@@ -3,8 +3,9 @@
 -- Same harness as remotes.lua (GITGUD_SCRIPT, GITGUD_SHOTS, a repository
 -- made by make-testrepo.ps1, and a scratch APPDATA). Covers the masked
 -- password field (typed text hidden, the last character shown briefly, the
--- real text still read back), the "credential.rejected" prompt, and the
--- GitHub browser sign-in up to the one-time code: with no gh on PATH it
+-- real text still read back), the "credential.rejected" prompt, and, only
+-- with GITGUD_TEST_NETWORK=1 (it reaches github.com), the GitHub browser
+-- sign-in up to the one-time code: with no gh on PATH it
 -- downloads the GitHub CLI into the scratch APPDATA, starts
 -- `gh auth login --web`, shows the code, then cancels. Opening the browser,
 -- the clipboard, and `gh auth token` (gh's token lives in the real Windows
@@ -165,11 +166,28 @@ end)
 
 -- ---- GitHub through the browser --------------------------------------------------
 
-step(500, "GitHub needs a sign-in", function()
+-- With GITGUD_TEST_GH (the build's gitgud_test_gh.exe, tests/fake_gh.cpp)
+-- this part runs offline against a stand-in GitHub CLI. The real one, which
+-- starts `gh auth login --web` against github.com (and downloads the GitHub
+-- CLI when none is on PATH), runs only with GITGUD_TEST_NETWORK=1 and
+-- GITGUD_TEST_GH unset. With neither, it's skipped.
+local fakeGh = os.getenv("GITGUD_TEST_GH")
+fakeGh = fakeGh ~= "" and fakeGh or nil
+local network = os.getenv("GITGUD_TEST_NETWORK") == "1" and not fakeGh
+local function netStep(...)
+    if fakeGh or network then
+        step(...)
+    end
+end
+if not fakeGh and not network then
+    print("[ui-test] the GitHub browser sign-in is skipped (set GITGUD_TEST_GH, or GITGUD_TEST_NETWORK=1)")
+end
+
+netStep(500, "GitHub needs a sign-in", function()
     gitgud.emit("credential.missing", "github.com")
 end)
 
-step(500, "GitHub dialog", function()
+netStep(500, "GitHub dialog", function()
     check("GitHub dialog is open", dialogOpen())
     check("it's the GitHub sign-in", gitgud.getText("DialogTitle") == "Sign in to GitHub")
     check("a token is still possible", gitgud.getProperty("DialogAltButton", "Visible") == "true")
@@ -177,17 +195,17 @@ step(500, "GitHub dialog", function()
     shot("s04-github")
 end)
 
-step(300, "sign in with the browser", function()
+netStep(300, "sign in with the browser", function()
     clickWidget("DialogOkButton")
 end)
 
-step(500, "wait for the download and the code", function()
+netStep(500, "wait for the download and the code", function()
     return poll("code", 120000, function()
         return dialogOpen() and (gitgud.getText("DialogMessage") or ""):find("code", 1, true) ~= nil
     end, "the one-time code is shown")
 end)
 
-step(200, "code dialog", function()
+netStep(200, "code dialog", function()
     local message = gitgud.getText("DialogMessage") or ""
     local code = message:match("([%w]+%-[%w]+)")
     check("a code like XXXX-XXXX is shown", code ~= nil and #code == 9)
@@ -198,28 +216,32 @@ step(200, "code dialog", function()
         and gitgud.getProperty("DialogAltButton", "Visible") == "true")
     check("the device page was opened",
         opened[#opened] ~= nil and opened[#opened]:find("/login/device", 1, true) ~= nil)
-    check("GitGud's own gh copy is installed", #gitgud.installedTools("gh") == 1)
+    if network then
+        check("GitGud's own gh copy is installed", #gitgud.installedTools("gh") == 1)
+    else
+        check("the stand-in's code", code == "ABCD-1234")
+    end
     shot("s05-code")
 end)
 
-step(300, "open the page again", function()
+netStep(300, "open the page again", function()
     clickWidget("DialogOkButton")
 end)
 
-step(500, "open again keeps it open", function()
+netStep(500, "open again keeps it open", function()
     check("the dialog stays open", dialogOpen())
     check("the page was opened again", #opened >= 2)
     marks.copies = #copied
     clickWidget("DialogAltButton")
 end)
 
-step(500, "copy code keeps it open", function()
+netStep(500, "copy code keeps it open", function()
     check("Copy code keeps the dialog open", dialogOpen())
     check("Copy code copied the code", #copied == marks.copies + 1 and copied[#copied] == marks.code)
     clickWidget("DialogCancelButton")
 end)
 
-step(500, "cancel stops gh", function()
+netStep(500, "cancel stops gh", function()
     return poll("stopped", 10000, function()
         return (gitgud.getText("StatusLabel") or ""):find("cancelled", 1, true) ~= nil
             or not gitgud.stopProgram("github.login")

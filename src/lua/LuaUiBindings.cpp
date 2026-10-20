@@ -12,6 +12,8 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <utility>
+#include <vector>
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -22,7 +24,9 @@
 #include "git/Repository.h"
 #include "imaging/ImageDiff.h"
 #include "platform/Shell.h"
+#include "platform/SpellCheck.h"
 #include "ui/IUiBackend.h"
+#include "ui/TextSpans.h"
 
 namespace gitgud::lua::bindings
 {
@@ -55,6 +59,21 @@ namespace gitgud::lua::bindings
             }
             lua_pushlstring(_pL, text.data(), text.size());
             return 1;
+        }
+
+        // gitgud.uiStats() -> windows, windows drawn: how big the UI is (every
+        // drawn window's text goes to the renderer at each redraw).
+        int LUiStats(lua_State* _pL)
+        {
+            int itotal = 0;
+            int idrawn = 0;
+            if (auto* pui = Self(_pL)->UiBackend())
+            {
+                pui->CountWindows(itotal, idrawn);
+            }
+            lua_pushinteger(_pL, itotal);
+            lua_pushinteger(_pL, idrawn);
+            return 2;
         }
 
         int LSetList(lua_State* _pL)
@@ -119,6 +138,31 @@ namespace gitgud::lua::bindings
             }
             lua_pushnumber(_pL, fpos);
             return 1;
+        }
+
+        // gitgud.getScrollMax(name, "horizontal"?): the furthest getScroll goes.
+        int LGetScrollMax(lua_State* _pL)
+        {
+            const char* szid = luaL_checkstring(_pL, 1);
+            float fmax = 0.0f;
+            if (auto* pui = Self(_pL)->UiBackend())
+            {
+                fmax = pui->GetScrollMax(
+                    szid, std::string(luaL_optstring(_pL, 2, "")) == "horizontal");
+            }
+            lua_pushnumber(_pL, fmax);
+            return 1;
+        }
+
+        // gitgud.watchScroll(name): "<name>.scrolled" (the offset) from now on.
+        int LWatchScroll(lua_State* _pL)
+        {
+            const char* szid = luaL_checkstring(_pL, 1);
+            if (auto* pui = Self(_pL)->UiBackend())
+            {
+                pui->WatchScroll(szid);
+            }
+            return 0;
         }
 
         int LSetScroll(lua_State* _pL)
@@ -188,6 +232,107 @@ namespace gitgud::lua::bindings
             return 4;
         }
 
+        // Rectangles as { {x, y, width, height}, ... }.
+        void PushRects(lua_State* _pL, const std::vector<gitgud::ui::PixelRect>& _Rects)
+        {
+            lua_createtable(_pL, static_cast<int>(_Rects.size()), 0);
+            for (size_t ni = 0; ni < _Rects.size(); ++ni)
+            {
+                const auto& rect = _Rects[ni];
+                lua_createtable(_pL, 4, 0);
+                const float values[] = {rect.m_fX, rect.m_fY, rect.m_fWidth, rect.m_fHeight};
+                for (int ii = 0; ii < 4; ++ii)
+                {
+                    lua_pushnumber(_pL, values[ii]);
+                    lua_rawseti(_pL, -2, ii + 1);
+                }
+                lua_rawseti(_pL, -2, static_cast<lua_Integer>(ni + 1));
+            }
+        }
+
+        // gitgud.textRects(name, first, last) -> { {x, y, width, height}, ... }:
+        // where bytes first..last of a static text's text are drawn, one
+        // rectangle per line, relative to the widget
+        int LTextRects(lua_State* _pL)
+        {
+            const char* szid = luaL_checkstring(_pL, 1);
+            const lua_Integer ifirst = luaL_checkinteger(_pL, 2);
+            const lua_Integer ilast = luaL_checkinteger(_pL, 3);
+            std::vector<gitgud::ui::PixelRect> rects;
+            auto* pui = Self(_pL)->UiBackend();
+            if (pui && ifirst > 0 && ilast >= ifirst)
+            {
+                rects =
+                    pui->TextRects(szid, static_cast<size_t>(ifirst), static_cast<size_t>(ilast));
+            }
+            PushRects(_pL, rects);
+            return 1;
+        }
+
+        // gitgud.shownRects(name, first, last) -> { {x, y, width, height}, ... }:
+        // textRects for the characters a static text shows at indices
+        // first..last (0-based, inclusive; the code points of shownText)
+        int LShownRects(lua_State* _pL)
+        {
+            const char* szid = luaL_checkstring(_pL, 1);
+            const lua_Integer ifirst = luaL_checkinteger(_pL, 2);
+            const lua_Integer ilast = luaL_checkinteger(_pL, 3);
+            std::vector<gitgud::ui::PixelRect> rects;
+            auto* pui = Self(_pL)->UiBackend();
+            if (pui && ifirst >= 0 && ilast >= ifirst)
+            {
+                rects =
+                    pui->ShownRects(szid, static_cast<size_t>(ifirst), static_cast<size_t>(ilast));
+            }
+            PushRects(_pL, rects);
+            return 1;
+        }
+
+        // gitgud.shownText(name) -> the text a widget shows: its markup with
+        // the tags left out, [br] as a line break, escapes read
+        int LShownText(lua_State* _pL)
+        {
+            const char* szid = luaL_checkstring(_pL, 1);
+            auto* pui = Self(_pL)->UiBackend();
+            const std::string shown =
+                pui ? gitgud::ui::ShownText(pui->GetText(szid)) : std::string();
+            lua_pushlstring(_pL, shown.data(), shown.size());
+            return 1;
+        }
+
+        // gitgud.textIndexAt(name, x, y) -> where a caret at window pixel
+        // (x, y) goes in a static text (0: before its first character), or
+        // nil when it isn't one
+        int LTextIndexAt(lua_State* _pL)
+        {
+            const char* szid = luaL_checkstring(_pL, 1);
+            const float fx = static_cast<float>(luaL_checknumber(_pL, 2));
+            const float fy = static_cast<float>(luaL_checknumber(_pL, 3));
+            auto* pui = Self(_pL)->UiBackend();
+            const long lindex = pui ? pui->TextIndexAt(szid, fx, fy) : -1;
+            if (lindex < 0)
+            {
+                lua_pushnil(_pL);
+            }
+            else
+            {
+                lua_pushinteger(_pL, static_cast<lua_Integer>(lindex));
+            }
+            return 1;
+        }
+
+        // gitgud.watchPointer(name): "<name>.pointerDown" / "pointerMoved" /
+        // "pointerUp" for the mouse over it from now on (IUiBackend::WatchPointer)
+        int LWatchPointer(lua_State* _pL)
+        {
+            const char* szid = luaL_checkstring(_pL, 1);
+            if (auto* pui = Self(_pL)->UiBackend())
+            {
+                pui->WatchPointer(szid);
+            }
+            return 0;
+        }
+
         int LFocus(lua_State* _pL)
         {
             const char* szid = luaL_checkstring(_pL, 1);
@@ -242,6 +387,24 @@ namespace gitgud::lua::bindings
         }
 
         // gitgud.loadLayout(file, parent) — file relative to resources/layouts.
+        // gitgud.themeColour(name) -> "AARRGGBB" for a named token of the
+        // running theme ("accent"), or nil when the theme doesn't define it.
+        int LThemeColour(lua_State* _pL)
+        {
+            const char* szname = luaL_checkstring(_pL, 1);
+            auto* pui = Self(_pL)->UiBackend();
+            const std::string colour = pui ? pui->ThemeColour(szname) : std::string();
+            if (colour.empty())
+            {
+                lua_pushnil(_pL);
+            }
+            else
+            {
+                lua_pushstring(_pL, colour.c_str());
+            }
+            return 1;
+        }
+
         int LLoadLayout(lua_State* _pL)
         {
             const char* szfile = luaL_checkstring(_pL, 1);
@@ -410,6 +573,23 @@ namespace gitgud::lua::bindings
             return 0;
         }
 
+        // gitgud.simulateMove(x, y, window?) - the mouse moves there, no
+        // button (hover).
+        int LSimulateMove(lua_State* _pL)
+        {
+            const float fx = static_cast<float>(luaL_checknumber(_pL, 1));
+            const float fy = static_cast<float>(luaL_checknumber(_pL, 2));
+            auto* pui = Self(_pL)->UiBackend();
+            if (!pui)
+            {
+                return 0;
+            }
+            pui->SetInputSurface(luaL_optstring(_pL, 3, ""));
+            pui->InjectMousePosition(fx, fy);
+            pui->SetInputSurface("");
+            return 0;
+        }
+
         // gitgud.simulateDrag(x1, y1, x2, y2, window?) - press the left button
         // at (x1, y1), move to (x2, y2) in steps, and release (splitters,
         // dividers, list reordering).
@@ -469,6 +649,71 @@ namespace gitgud::lua::bindings
                 }
                 pui->SetInputSurface("");
             }
+            return 0;
+        }
+
+        // gitgud.simulateKey(combo, window?) - press and release a key in the
+        // focused widget, holding the combo's modifiers: "enter",
+        // "shift+enter", "ctrl+a". Only the widget sees it; bound shortcuts
+        // take gitgud.emit("key", combo).
+        int LSimulateKey(lua_State* _pL)
+        {
+            // SDL scancodes (USB usage ids), so this file needs no SDL.
+            static const std::pair<const char*, int> kKeys[] = {
+                {"enter", 40},
+                {"escape", 41},
+                {"backspace", 42},
+                {"tab", 43},
+                {"right", 79},
+                {"left", 80},
+                {"down", 81},
+                {"up", 82},
+                {"ctrl", 224},
+                {"shift", 225},
+                {"alt", 226},
+            };
+            auto scancode = [](const std::string& _Name)
+            {
+                if (_Name.size() == 1 && _Name[0] >= 'a' && _Name[0] <= 'z')
+                {
+                    return 4 + (_Name[0] - 'a');
+                }
+                for (const auto& [szname, icode] : kKeys)
+                {
+                    if (_Name == szname)
+                    {
+                        return icode;
+                    }
+                }
+                return -1;
+            };
+
+            std::vector<int> keys;
+            std::stringstream combo(luaL_checkstring(_pL, 1));
+            for (std::string part; std::getline(combo, part, '+');)
+            {
+                const int icode = scancode(part);
+                if (icode < 0)
+                {
+                    return luaL_error(_pL, "simulateKey: unknown key '%s'", part.c_str());
+                }
+                keys.push_back(icode);
+            }
+            auto* pui = Self(_pL)->UiBackend();
+            if (!pui || keys.empty())
+            {
+                return 0;
+            }
+            pui->SetInputSurface(luaL_optstring(_pL, 2, ""));
+            for (const int icode : keys)
+            {
+                pui->InjectKey(icode, true);
+            }
+            for (auto it = keys.rbegin(); it != keys.rend(); ++it)
+            {
+                pui->InjectKey(*it, false);
+            }
+            pui->SetInputSurface("");
             return 0;
         }
 
@@ -551,7 +796,8 @@ namespace gitgud::lua::bindings
         }
 
         // gitgud.setCursor(name, shape) - the system cursor over a widget and
-        // its children: "sizewe", "sizens", "sizeall", "hand", or "" (default)
+        // its children: "sizewe", "sizens", "sizeall", "hand", "ibeam",
+        // "arrow", or "" (default)
         int LSetCursor(lua_State* _pL)
         {
             const char* szname = luaL_checkstring(_pL, 1);
@@ -572,6 +818,14 @@ namespace gitgud::lua::bindings
             lua_pushvalue(_pL, 2);
             const int iref = luaL_ref(_pL, LUA_REGISTRYINDEX);
             Self(_pL)->RegisterHandler(szevent, iref);
+            return 0;
+        }
+
+        // gitgud.off(event): drop every handler of the event (a window that's
+        // gone: its handlers would stay for good).
+        int LOff(lua_State* _pL)
+        {
+            Self(_pL)->UnregisterHandlers(luaL_checkstring(_pL, 1));
             return 0;
         }
 
@@ -620,6 +874,27 @@ namespace gitgud::lua::bindings
         int LNow(lua_State* _pL)
         {
             lua_pushinteger(_pL, static_cast<lua_Integer>(LuaEngine::NowMs()));
+            return 1;
+        }
+
+        // gitgud.skipTime(ms) - test harness only (GITGUD_SCRIPT): move
+        // gitgud.now() and the timers' clock ahead, as if ms had passed.
+        int LSkipTime(lua_State* _pL)
+        {
+            const lua_Integer ms = luaL_checkinteger(_pL, 1);
+            if (!std::getenv("GITGUD_SCRIPT"))
+            {
+                return luaL_error(_pL, "gitgud.skipTime is for the test harness (GITGUD_SCRIPT)");
+            }
+            LuaEngine::SkipClock(static_cast<int>(ms));
+            return 0;
+        }
+
+        // gitgud.nextTimer() -> ms until the next timer is due (0 if overdue),
+        // or -1 when none is pending (the running one-shot doesn't count).
+        int LNextTimer(lua_State* _pL)
+        {
+            lua_pushinteger(_pL, Self(_pL)->MillisecondsUntilNextTimer());
             return 1;
         }
 
@@ -713,17 +988,60 @@ namespace gitgud::lua::bindings
             return 1;
         }
 
+        // gitgud.pickFile(title?, filterName?, pattern?) -> path | nil
+        int LPickFile(lua_State* _pL)
+        {
+            const std::string title = luaL_optstring(_pL, 1, "Choose a file");
+            const std::string name = luaL_optstring(_pL, 2, "");
+            const std::string pattern = luaL_optstring(_pL, 3, "");
+            const std::string path = gitgud::platform::PickFile(title, name, pattern);
+            if (path.empty())
+            {
+                lua_pushnil(_pL);
+            }
+            else
+            {
+                lua_pushlstring(_pL, path.data(), path.size());
+            }
+            return 1;
+        }
+
         int LSetClipboard(lua_State* _pL)
         {
             lua_pushboolean(_pL, gitgud::platform::SetClipboardText(luaL_checkstring(_pL, 1)));
             return 1;
         }
 
+        // gitgud.isDictionaryWord(text) -> true / false, or nil when there's
+        // no answer (platform/SpellCheck.h).
+        int LIsDictionaryWord(lua_State* _pL)
+        {
+            const std::optional<bool> oanswer =
+                gitgud::platform::IsDictionaryWord(luaL_checkstring(_pL, 1));
+            if (oanswer)
+            {
+                lua_pushboolean(_pL, *oanswer);
+            }
+            else
+            {
+                lua_pushnil(_pL);
+            }
+            return 1;
+        }
+
+        // gitgud.pathExists(path) -> true, "file" | "folder"; or false
         int LPathExists(lua_State* _pL)
         {
             std::error_code ec;
-            lua_pushboolean(_pL, fs::exists(fs::u8path(luaL_checkstring(_pL, 1)), ec));
-            return 1;
+            const fs::file_status status = fs::status(fs::u8path(luaL_checkstring(_pL, 1)), ec);
+            if (ec || !fs::exists(status))
+            {
+                lua_pushboolean(_pL, 0);
+                return 1;
+            }
+            lua_pushboolean(_pL, 1);
+            lua_pushstring(_pL, fs::is_directory(status) ? "folder" : "file");
+            return 2;
         }
 
         // Resolve a path inside the open repository's working tree; refuses
@@ -825,29 +1143,48 @@ namespace gitgud::lua::bindings
             return 1;
         }
 
-        // Config names are bare identifiers ("recent-repos"), never paths.
+        // Config names are bare identifiers ("recent-repos"), or such names
+        // joined by '/' for a file in a folder of the config folder
+        // ("voice-recordings/2026-10-15-170000.wav"); never other paths.
         bool ValidConfigName(const char* _szName)
         {
-            if (!_szName || !*_szName)
+            if (!_szName || std::string(_szName).find("..") != std::string::npos)
             {
                 return false;
             }
-            for (const char* szc = _szName; *szc; ++szc)
+            // Each part: not empty, not ".", and only these characters.
+            std::string part;
+            for (const char* szc = _szName;; ++szc)
             {
-                if (!(std::isalnum(static_cast<unsigned char>(*szc)) || *szc == '-' ||
-                        *szc == '_' || *szc == '.'))
+                if (*szc == '/' || !*szc)
+                {
+                    if (part.empty() || part == ".")
+                    {
+                        return false;
+                    }
+                    if (!*szc)
+                    {
+                        return true;
+                    }
+                    part.clear();
+                }
+                else if (std::isalnum(static_cast<unsigned char>(*szc)) || *szc == '-' || *szc == '_' ||
+                         *szc == '.')
+                {
+                    part += *szc;
+                }
+                else
                 {
                     return false;
                 }
             }
-            return std::string(_szName).find("..") == std::string::npos;
         }
 
         int LConfigRead(lua_State* _pL)
         {
             const char* szname = luaL_checkstring(_pL, 1);
             luaL_argcheck(_pL, ValidConfigName(szname), 1, "invalid config name");
-            std::ifstream in(ConfigDir() / szname, std::ios::binary);
+            std::ifstream in(ConfigDir() / fs::u8path(szname), std::ios::binary);
             if (!in)
             {
                 lua_pushnil(_pL);
@@ -866,19 +1203,115 @@ namespace gitgud::lua::bindings
             luaL_argcheck(_pL, ValidConfigName(szname), 1, "invalid config name");
             std::size_t len = 0;
             const char* szcontent = luaL_checklstring(_pL, 2, &len);
-            std::error_code ec;
-            fs::create_directories(ConfigDir(), ec);
-            std::ofstream out(ConfigDir() / szname, std::ios::binary | std::ios::trunc);
-            if (!out)
+            // Atomic: a crash leaves the old file or the new one, never half.
+            const fs::path file = ConfigDir() / fs::u8path(szname);
+            std::string error;
+            if (!gitgud::platform::WriteFileAtomically(file.u8string(), std::string(szcontent, len), error))
             {
-                return FailWith(_pL, "could not write config '" + std::string(szname) + "'");
+                return FailWith(_pL, "could not write config '" + std::string(szname) + "': " + error);
             }
-            out.write(szcontent, static_cast<std::streamsize>(len));
+            lua_pushboolean(_pL, 1);
+            return 1;
+        }
+
+        // gitgud.configPath(name?) -> the full path of a config file or
+        // folder (the config folder itself without a name); it may not exist.
+        int LConfigPath(lua_State* _pL)
+        {
+            fs::path path = ConfigDir();
+            if (!lua_isnoneornil(_pL, 1))
+            {
+                const char* szname = luaL_checkstring(_pL, 1);
+                luaL_argcheck(_pL, ValidConfigName(szname), 1, "invalid config name");
+                path /= fs::u8path(szname);
+            }
+            const std::string u8 = path.make_preferred().u8string();
+            lua_pushlstring(_pL, u8.data(), u8.size());
+            return 1;
+        }
+
+        // gitgud.configList(folder) -> { {name, size}, ... }: the files in a
+        // folder of the config folder, by name ({} when it doesn't exist).
+        int LConfigList(lua_State* _pL)
+        {
+            const char* szfolder = luaL_checkstring(_pL, 1);
+            luaL_argcheck(_pL, ValidConfigName(szfolder), 1, "invalid config name");
+            std::vector<std::pair<std::string, uintmax_t>> files;
+            std::error_code ec;
+            for (fs::directory_iterator it(ConfigDir() / fs::u8path(szfolder), ec), end; !ec && it != end;
+                 it.increment(ec))
+            {
+                std::error_code ecfile;
+                if (it->is_regular_file(ecfile))
+                {
+                    const uintmax_t usize = it->file_size(ecfile);
+                    files.emplace_back(it->path().filename().u8string(), ecfile ? 0 : usize);
+                }
+            }
+            std::sort(files.begin(), files.end());
+            lua_createtable(_pL, static_cast<int>(files.size()), 0);
+            for (std::size_t i = 0; i < files.size(); ++i)
+            {
+                lua_createtable(_pL, 0, 2);
+                lua_pushlstring(_pL, files[i].first.data(), files[i].first.size());
+                lua_setfield(_pL, -2, "name");
+                lua_pushinteger(_pL, static_cast<lua_Integer>(files[i].second));
+                lua_setfield(_pL, -2, "size");
+                lua_rawseti(_pL, -2, static_cast<lua_Integer>(i + 1));
+            }
+            return 1;
+        }
+
+        // gitgud.configRemove(name) -> true | nil, msg: delete a config file
+        // (not a folder).
+        int LConfigRemove(lua_State* _pL)
+        {
+            const char* szname = luaL_checkstring(_pL, 1);
+            luaL_argcheck(_pL, ValidConfigName(szname), 1, "invalid config name");
+            const fs::path file = ConfigDir() / fs::u8path(szname);
+            std::error_code ec;
+            if (!fs::is_regular_file(file, ec))
+            {
+                return FailWith(_pL, "no such config file: " + std::string(szname));
+            }
+            if (!fs::remove(file, ec))
+            {
+                return FailWith(_pL, "could not remove " + std::string(szname) + ": " + ec.message());
+            }
+            lua_pushboolean(_pL, 1);
+            return 1;
+        }
+
+        // gitgud.makeDir(path) -> true | nil, msg: make a folder and its parents.
+        int LMakeDir(lua_State* _pL)
+        {
+            const std::string path = luaL_checkstring(_pL, 1);
+            if (path.empty())
+            {
+                return FailWith(_pL, "no folder given");
+            }
+            std::error_code ec;
+            fs::create_directories(fs::u8path(path), ec);
+            if (!fs::is_directory(fs::u8path(path), ec))
+            {
+                return FailWith(_pL, "could not make the folder " + path +
+                                         (ec ? ": " + ec.message() : std::string()));
+            }
             lua_pushboolean(_pL, 1);
             return 1;
         }
 
     } // namespace
+
+    bool IsConfigName(const char* _szName)
+    {
+        return ValidConfigName(_szName);
+    }
+
+    std::string ConfigFile(const std::string& _Name)
+    {
+        return (ConfigDir() / fs::u8path(_Name)).u8string();
+    }
 
     void AddUiBindings(std::vector<luaL_Reg>& _Out)
     {
@@ -892,18 +1325,26 @@ namespace gitgud::lua::bindings
             {"selectListItem", LSelectListItem},
             {"getScroll", LGetScroll},
             {"setScroll", LSetScroll},
+            {"getScrollMax", LGetScrollMax},
+            {"watchScroll", LWatchScroll},
             {"setEnabled", BoolSetter<&IUiBackend::SetEnabled>},
             {"setVisible", BoolSetter<&IUiBackend::SetVisible>},
             {"setChecked", BoolSetter<&IUiBackend::SetChecked>},
             {"setProperty", LSetProperty},
             {"getProperty", LGetProperty},
             {"getRect", LGetRect},
+            {"textRects", LTextRects},
+            {"shownRects", LShownRects},
+            {"shownText", LShownText},
+            {"textIndexAt", LTextIndexAt},
+            {"watchPointer", LWatchPointer},
             {"focus", LFocus},
             {"textInputFocused", LTextInputFocused},
             {"bringToFront", LBringToFront},
             {"createWindow", LCreateWindow},
             {"destroyWindow", LDestroyWindow},
             {"loadLayout", LLoadLayout},
+            {"themeColour", LThemeColour},
             {"suspendLayout", LSuspendLayout},
             {"linkScroll", LLinkScroll},
             {"getSelectedIndex", LGetSelectedIndex},
@@ -916,15 +1357,20 @@ namespace gitgud::lua::bindings
             {"imageDiff", LImageDiff},
             // events + timers
             {"on", LOn},
+            {"off", LOff},
             {"emit", LEmit},
             {"after", LAfter},
             {"every", LEvery},
             {"cancelTimer", LCancelTimer},
             {"now", LNow},
+            {"skipTime", LSkipTime},
+            {"nextTimer", LNextTimer},
             // test harness
             {"simulateClick", LSimulateClick},
             {"simulateText", LSimulateText},
+            {"simulateKey", LSimulateKey},
             {"simulateDrag", LSimulateDrag},
+            {"simulateMove", LSimulateMove},
             {"simulateScroll", LSimulateScroll},
             {"screenshot", LScreenshot},
             // platform
@@ -934,13 +1380,20 @@ namespace gitgud::lua::bindings
             {"showInFolder", ShellCall<&gitgud::platform::ShowInFolder>},
             {"spawn", LSpawn},
             {"pickFolder", LPickFolder},
+            {"pickFile", LPickFile},
             {"setClipboard", LSetClipboard},
             {"pathExists", LPathExists},
+            {"isDictionaryWord", LIsDictionaryWord},
             {"readRepoFile", LReadRepoFile},
             {"writeRepoFile", LWriteRepoFile},
             {"trashRepoFile", LTrashRepoFile},
+            {"uiStats", LUiStats},
             {"configRead", LConfigRead},
+            {"makeDir", LMakeDir},
             {"configWrite", LConfigWrite},
+            {"configPath", LConfigPath},
+            {"configList", LConfigList},
+            {"configRemove", LConfigRemove},
         };
         _Out.insert(_Out.end(), std::begin(kFunctions), std::end(kFunctions));
     }

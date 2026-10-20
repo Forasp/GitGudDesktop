@@ -320,7 +320,7 @@ function inspector.init()
         local hunk = row and blameHunks[row + 1]
         if hunk then
             local who = hunk.uncommitted and "Not committed yet"
-                or (hunk.shortOid .. "  " .. hunk.summary .. "  —  " .. hunk.author .. ", " .. text.ago(hunk.time))
+                or (hunk.shortOid .. "  " .. hunk.summary .. "  -  " .. hunk.author .. ", " .. text.ago(hunk.time))
             status.info(who .. (hunk.uncommitted and "" or "   (double-click to open the commit)"))
         end
     end)

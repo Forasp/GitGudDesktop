@@ -17,7 +17,7 @@
         <PropertyDefinition redrawOnWrite="true" initialValue="2EC4B5FD" type="ColourRect" name="BorderColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="FF1F1738" type="ColourRect" name="ReadOnlyBGColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="FFF3EEFC" type="ColourRect" name="NormalTextColour"/>
-        <PropertyDefinition redrawOnWrite="true" initialValue="FFFFFFFF" type="ColourRect" name="SelectedTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFFFFFFE" type="ColourRect" name="SelectedTextColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="597C93FF" type="ColourRect" name="ActiveSelectionColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="FF342A56" type="ColourRect" name="InactiveSelectionColour"/>
         <Property name="CursorImage" value="Vanilla-Images/Caret" />
@@ -76,7 +76,7 @@
         <PropertyDefinition redrawOnWrite="true" initialValue="FF291F47" type="ColourRect" name="BgColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="2EC4B5FD" type="ColourRect" name="BorderColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="FFF3EEFC" type="ColourRect" name="NormalTextColour"/>
-        <PropertyDefinition redrawOnWrite="true" initialValue="FFFFFFFF" type="ColourRect" name="SelectedTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFFFFFFE" type="ColourRect" name="SelectedTextColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="597C93FF" type="ColourRect" name="ActiveSelectionColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="FF342A56" type="ColourRect" name="InactiveSelectionColour"/>
         <Property name="SelectionBrushImage" value="Vanilla-Images/GenericBrush"/>

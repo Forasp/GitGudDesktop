@@ -64,6 +64,15 @@ namespace gitgud::app
             const std::string& _Spec, bool _bRemember, std::string& _Error) = 0;
         // True on the first launch (no stored choice yet).
         virtual bool FirstLaunch() const = 0;
+
+        // Colour themes of the running UI (app/UiPackages.h) ------------------------
+        virtual std::vector<std::string> Themes() const = 0;
+        // The theme in use ("" when the UI has none).
+        virtual std::string CurrentTheme() const = 0;
+        // Remember _Theme for the running UI and rebuild the UI in it once the
+        // current event handler returns (like a UI switch: the scripts start
+        // over). False with a message for a theme the UI doesn't have.
+        virtual bool RequestThemeSwitch(const std::string& _Theme, std::string& _Error) = 0;
     };
 
 } // namespace gitgud::app

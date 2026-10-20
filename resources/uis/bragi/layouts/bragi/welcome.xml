@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  welcome.xml - the Bragi interface's first-time setup, over
+  the whole window: a top bar (the caption, with the step and "Skip setup"),
+  the step's cards in a centred column, and Back / Skip / Next at the
+  bottom. scripts/bragi/welcome.lua builds each step into WelcomeBody with
+  bragi/settings.lua's card builder.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="WelcomeView">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+        <Property name="PanelColour" value="$bg"/>
+        <Property name="Text" value=""/>
+        <Property name="Visible" value="false"/>
+
+        <Window type="Gitgud/StaticText" name="WelcomeHeader">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,56}}"/>
+            <Property name="PanelColour" value="$bg"/>
+            <Property name="Text" value=""/>
+            <UserString name="AppDrag" value="true"/>
+
+            <Window type="Gitgud/Icon" name="WelcomeLogoPetals">
+                <Property name="Area" value="{{0,20},{0,14},{0,48},{0,42}}"/>
+                <Property name="IconImage" value="Bragi-Icons/MarkPetals"/>
+                <Property name="IconColour" value="$petal"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Icon" name="WelcomeLogoCentre">
+                <Property name="Area" value="{{0,20},{0,14},{0,48},{0,42}}"/>
+                <Property name="IconImage" value="Bragi-Icons/MarkCentre"/>
+                <Property name="IconColour" value="$logo-centre"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="WelcomeTitle">
+                <Property name="Area" value="{{0,60},{0,0},{0,300},{1,0}}"/>
+                <Property name="Text" value="Set up Bragi"/>
+                <Property name="Font" value="Bragi-15-Bold"/>
+                <Property name="NormalTextColour" value="$text"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="WelcomeStepLabel">
+                <Property name="Area" value="{{1,-420},{0,0},{1,-290},{1,0}}"/>
+                <Property name="Text" value=""/>
+                <Property name="Font" value="Bragi-13"/>
+                <Property name="HorzFormatting" value="RightAligned"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Bragi/Button8" name="WelcomeSkipAll">
+                <Property name="Area" value="{{1,-276},{0,12},{1,-152},{0,44}}"/>
+                <Property name="Text" value="Skip setup"/>
+                <Property name="Font" value="Bragi-13-Bold"/>
+                <Property name="NormalFillColour" value="00000000"/>
+                <Property name="DisabledFillColour" value="00000000"/>
+                <Property name="BorderColour" value="00000000"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="HoverTextColour" value="$text"/>
+                <Property name="TooltipText" value="Skip the rest; Settings, Git, Setup runs it again"/>
+            </Window>
+            <Window type="Gitgud/StaticText" name="WelcomeHeaderRule">
+                <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+                <Property name="PanelColour" value="$border"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+        </Window>
+
+        <!-- The step; welcome.lua builds it in here. -->
+        <Window type="Gitgud/ScrollablePane" name="WelcomeBody">
+            <Property name="Area" value="{{0,0},{0,56},{1,0},{1,-72}}"/>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="WelcomeFooter">
+            <Property name="Area" value="{{0,0},{1,-72},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="$bg"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/StaticText" name="WelcomeFooterRule">
+                <Property name="Area" value="{{0,0},{0,0},{1,0},{0,1}}"/>
+                <Property name="PanelColour" value="$border"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Bragi/Button8" name="WelcomeBack">
+                <Property name="Area" value="{{0.5,-320},{0,18},{0.5,-200},{0,54}}"/>
+                <Property name="Text" value="Back"/>
+                <Property name="Font" value="Bragi-13-Bold"/>
+                <Property name="NormalFillColour" value="00000000"/>
+                <Property name="DisabledFillColour" value="00000000"/>
+                <Property name="BorderColour" value="$border"/>
+            </Window>
+            <Window type="Bragi/Button8" name="WelcomeSkip">
+                <Property name="Area" value="{{0.5,40},{0,18},{0.5,170},{0,54}}"/>
+                <Property name="Text" value="Skip"/>
+                <Property name="Font" value="Bragi-13-Bold"/>
+                <Property name="NormalFillColour" value="00000000"/>
+                <Property name="DisabledFillColour" value="00000000"/>
+                <Property name="BorderColour" value="00000000"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="HoverTextColour" value="$text"/>
+            </Window>
+            <Window type="Bragi/Button8" name="WelcomeNext">
+                <Property name="Area" value="{{0.5,180},{0,18},{0.5,320},{0,54}}"/>
+                <Property name="Text" value="Next"/>
+                <Property name="Font" value="Bragi-13-Bold"/>
+                <Property name="NormalFillColour" value="$accent"/>
+                <Property name="HoverFillColour" value="$accent-hover"/>
+                <Property name="PushedFillColour" value="$accent-pressed"/>
+                <Property name="BorderColour" value="00000000"/>
+                <Property name="NormalTextColour" value="$on-accent"/>
+                <Property name="HoverTextColour" value="$on-accent"/>
+                <Property name="PushedTextColour" value="$on-accent"/>
+            </Window>
+        </Window>
+    </Window>
+</GUILayout>

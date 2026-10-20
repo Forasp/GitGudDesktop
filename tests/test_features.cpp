@@ -9,7 +9,9 @@
 #include "git/CommitGraph.h"
 #include "git/Repository.h"
 #include "imaging/GraphRenderer.h"
+#include "lua/LuaEngine.h"
 #include "platform/Process.h"
+#include "platform/SpellCheck.h"
 
 #include <git2.h>
 
@@ -414,6 +416,51 @@ TEST_CASE("Worktrees can be added, listed, and removed", "[worktree]")
     CHECK_FALSE(fs::exists(wtPath));
 }
 
+TEST_CASE("A folder's repository summed up: root, branch, worktree, lines changed", "[worktree]")
+{
+    TempRepo t;
+    t.CommitFile("f.txt", "1\n2\n3\n", "one");
+    t.m_Repo.AddRemote("origin", "https://example.com/sam/f.git");
+
+    // Clean: nothing changed.
+    FolderSummary clean = Repository::Summarize(t.m_Dir.string());
+    CHECK(fs::equivalent(fs::u8path(clean.m_Root), t.m_Dir));
+    CHECK(clean.m_Branch == t.m_Repo.CurrentBranch());
+    CHECK(clean.m_Head.size() >= 7);
+    CHECK(clean.m_Worktree.empty());
+    CHECK(clean.m_iFiles == 0);
+    CHECK(clean.m_iAdded == 0);
+    CHECK(clean.m_iRemoved == 0);
+    REQUIRE(clean.m_Remotes.size() == 1);
+    CHECK(clean.m_Remotes[0].m_Name == "origin");
+    CHECK(clean.m_Remotes[0].m_Url == "https://example.com/sam/f.git");
+
+    // An unstaged edit, a staged new file, an untracked one, from a subfolder.
+    t.Write("f.txt", "1\nTWO\n3\n4\n");
+    t.Write("staged.txt", "a\nb\n");
+    t.m_Repo.Stage("staged.txt");
+    t.Write("sub/untracked.txt", "x\ny\nz\n");
+    FolderSummary dirty = Repository::Summarize((t.m_Dir / "sub").string());
+    CHECK(fs::equivalent(fs::u8path(dirty.m_Root), t.m_Dir));
+    CHECK(dirty.m_iFiles == 3);
+    CHECK(dirty.m_iAdded == 2 + 2 + 3);
+    CHECK(dirty.m_iRemoved == 1);
+
+    // A linked worktree: its own root and name, the same shared folder.
+    const std::string wtPath = t.m_Dir.string() + "-wt";
+    fs::remove_all(wtPath);
+    t.m_Repo.AddWorktree("side", wtPath, "side");
+    FolderSummary side = Repository::Summarize(wtPath);
+    CHECK(fs::equivalent(fs::u8path(side.m_Root), fs::u8path(wtPath)));
+    CHECK(side.m_Branch == "side");
+    CHECK(side.m_Worktree == "side");
+    CHECK(fs::equivalent(fs::u8path(side.m_CommonDir), fs::u8path(dirty.m_CommonDir)));
+    CHECK(side.m_iFiles == 0);
+
+    CHECK_THROWS_AS(Repository::Summarize(fs::temp_directory_path().root_path().string() + "no-such-folder-here"),
+        GitError);
+}
+
 TEST_CASE("Checking out a branch held by another worktree changes nothing", "[worktree]")
 {
     TempRepo t;
@@ -602,4 +649,92 @@ TEST_CASE("RunProcess captures output and feeds stdin", "[process]")
 
     CHECK(gitgud::platform::QuoteArgument("a b") == "\"a b\"");
     CHECK(gitgud::platform::QuoteArgument("plain") == "plain");
+}
+
+TEST_CASE("IsDictionaryWord tells ordinary words from made-up ones", "[spellcheck]")
+{
+    CHECK_FALSE(gitgud::platform::IsDictionaryWord("").has_value());
+    CHECK_FALSE(gitgud::platform::IsDictionaryWord("   ").has_value());
+#if defined(_WIN32)
+    const auto oright = gitgud::platform::IsDictionaryWord("Right");
+    if (!oright)
+    {
+        WARN("No US English spell checker on this machine");
+        return;
+    }
+    CHECK(*oright);
+    CHECK(gitgud::platform::IsDictionaryWord("roger") == std::optional<bool>(true));
+    CHECK(gitgud::platform::IsDictionaryWord("right there") == std::optional<bool>(true));
+    CHECK(gitgud::platform::IsDictionaryWord("xqzvbrk") == std::optional<bool>(false));
+#else
+    CHECK_FALSE(gitgud::platform::IsDictionaryWord("right").has_value());
+#endif
+}
+
+TEST_CASE("Scripts ask whether a word is in the dictionary", "[spellcheck][lua]")
+{
+    gitgud::lua::LuaEngine engine;
+    REQUIRE(engine.Initialize());
+    REQUIRE(engine.Eval(R"(
+        assert(gitgud.isDictionaryWord("") == nil)
+        local right = gitgud.isDictionaryWord("right")
+        assert(right == nil or right == true)
+        local made = gitgud.isDictionaryWord("xqzvbrk")
+        assert(made == nil or made == false)
+        assert(not pcall(gitgud.isDictionaryWord))
+    )"));
+}
+
+TEST_CASE("Kept text survives a script reset, once", "[lua]")
+{
+    // Hot-reload: scripts keep their state across Reset.
+    gitgud::lua::LuaEngine engine;
+    REQUIRE(engine.Initialize());
+    REQUIRE(engine.Eval(R"(
+        gitgud.keepForReload("a", "one")
+        gitgud.keepForReload("b", "two")
+        gitgud.keepForReload("b", nil)
+        assert(type(gitgud.agentList()) == "table")
+        assert(gitgud.agentInfo("never-started") == nil)
+    )"));
+    REQUIRE(engine.Reset());
+    REQUIRE(engine.Eval(R"(
+        assert(gitgud.takeKept("a") == "one")
+        assert(gitgud.takeKept("a") == nil)
+        assert(gitgud.takeKept("b") == nil)
+        gitgud.keepForReload("c", "three")
+    )"));
+    engine.ClearKept();
+    REQUIRE(engine.Reset());
+    REQUIRE(engine.Eval(R"(assert(gitgud.takeKept("c") == nil))"));
+}
+
+TEST_CASE("gitgud.off drops an event's handlers, even from inside one", "[lua]")
+{
+    // A window's click handlers went on for good once it was gone
+    // (the handlers only ever grew as replies streamed).
+    gitgud::lua::LuaEngine engine;
+    REQUIRE(engine.Initialize());
+    REQUIRE(engine.Eval(R"(
+        calls = 0
+        gitgud.on("spot.clicked", function() calls = calls + 1 end)
+        gitgud.on("spot.clicked", function() calls = calls + 10; gitgud.off("spot.clicked") end)
+        gitgud.on("spot.clicked", function() calls = calls + 100 end)
+        gitgud.on("other", function() calls = calls + 1000 end)
+    )"));
+    const std::size_t nbefore = engine.HandlerCount();
+    engine.Dispatch("spot.clicked", "");
+    // The handlers being run when it's dropped still run this once.
+    REQUIRE(engine.Eval("assert(calls == 111, calls)"));
+    CHECK(engine.HandlerCount() == nbefore - 3);
+    engine.Dispatch("spot.clicked", "");
+    engine.Dispatch("other", "");
+    REQUIRE(engine.Eval("assert(calls == 1111, calls)"));
+    // New handlers after it: their own references, never a released one's.
+    REQUIRE(engine.Eval(R"(
+        gitgud.on("spot.clicked", function() calls = calls + 5 end)
+        gitgud.off("never.registered")
+    )"));
+    engine.Dispatch("spot.clicked", "");
+    REQUIRE(engine.Eval("assert(calls == 1116, calls)"));
 }

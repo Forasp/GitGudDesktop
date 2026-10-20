@@ -14,7 +14,7 @@ function about.show()
         title = "GitGud Desktop " .. gitgud.version,
         message = "A moddable Git client for any Git server.\n\n"
             .. "Engine: libgit2 (C++17). Interface: CEGUI layouts (resources/layouts) and Lua "
-            .. "scripts (resources/scripts) — edit them while the app runs and it reloads.\n\n"
+            .. "scripts (resources/scripts): edit them while the app runs and it reloads.\n\n"
             .. "See Help for the build, usage, and modding guides.",
         ok = "Close",
         cancel = false,

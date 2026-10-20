@@ -13,7 +13,7 @@
 -- submodule to open it in a new tab). Right-click anything for its actions.
 -- Drag one branch onto another to merge or rebase them.
 --
--- Public API: navigator.toggle(), navigator.reload()
+-- Public API: navigator.toggle(), navigator.reload(), navigator.setLook(fields)
 
 local C = require("core.palette")
 local app = require("core.app")
@@ -24,14 +24,28 @@ local placeholder = require("ui.placeholder")
 local repo = require("core.repo")
 local settings = require("core.settings")
 local shell = require("core.shell")
+local sprites = require("core.sprites")
 local status = require("core.status")
 local text = require("core.text")
 local undo = require("core.undo")
 
 local navigator = { name = "navigator" }
 
-local ROW_HEIGHT = 26
-local SECTION_HEIGHT = 30
+-- How the tree looks: the GitGud UI's. A UI package can change it with
+-- navigator.setLook (row heights, the section headings' font).
+local look = {
+    rowHeight = 26,
+    sectionHeight = 30,
+    sectionFont = "Gitgud-UI-Small",
+}
+
+--- Restyle the tree (see `look` above); the next refresh uses it.
+-- @param fields  any of look's fields
+function navigator.setLook(fields)
+    for key, value in pairs(fields) do
+        look[key] = value
+    end
+end
 
 local rows = {}           -- list row -> { kind, ... }
 local filterText = ""
@@ -49,10 +63,10 @@ local function collapsed(id)
 end
 
 --- Inline sprite markup.
--- @param name  image in Gitgud-Images
+-- @param name  image in Gitgud-Images (core/sprites.lua)
 -- @return markup
 local function sprite(name)
-    return "[vert-formatting='CentreAligned'][image-size='w:16 h:16'][image='Gitgud-Images/" .. name .. "']"
+    return "[vert-formatting='CentreAligned']" .. sprites.image(name, 16, 16)
 end
 
 --- A section header row.
@@ -63,8 +77,8 @@ end
 local function sectionText(id, title, count)
     local chevron = collapsed(id) and "NavClosed" or "NavOpen"
 
-    return text.rowHeight(SECTION_HEIGHT) .. " " .. sprite(chevron) .. " "
-        .. "[font='Gitgud-UI-Small']" .. text.colour(C.dim, title:upper())
+    return text.rowHeight(look.sectionHeight) .. " " .. sprite(chevron) .. " "
+        .. "[font='" .. look.sectionFont .. "']" .. text.colour(C.dim, title:upper())
         .. text.colour(C.disabled, "  " .. tostring(count)) .. "[font='']"
 end
 
@@ -75,7 +89,7 @@ end
 -- @param suffix  optional dim markup after it
 -- @return markup
 local function entryText(depth, icon, label, suffix)
-    return text.rowHeight(ROW_HEIGHT) .. string.rep("    ", depth) .. sprite(icon) .. "  " .. label
+    return text.rowHeight(look.rowHeight) .. string.rep("    ", depth) .. sprite(icon) .. "  " .. label
         .. (suffix or "")
 end
 
@@ -277,7 +291,7 @@ end
 local function rowTop(index)
     local y = 0
     for i = 1, index - 1 do
-        y = y + ((rows[i] and rows[i].kind == "section") and SECTION_HEIGHT or ROW_HEIGHT)
+        y = y + ((rows[i] and rows[i].kind == "section") and look.sectionHeight or look.rowHeight)
     end
 
     return y
@@ -553,7 +567,7 @@ function navigator.addWorktree()
     dialog.show({
         title = "Add a worktree",
         message = "A worktree is a second working folder for this repository, with another "
-            .. "branch checked out — work on two branches at once without stashing.",
+            .. "branch checked out: work on two branches at once without stashing.",
         fields = {
             { label = "Branch (created from HEAD if it doesn't exist)", value = "" },
             { label = "Folder", value = parent, browse = true },
@@ -746,7 +760,7 @@ function navigator.init()
         end
 
         local lx, ly, lw = gitgud.getRect("NavList")
-        local y = ly + rowTop(tonumber(toRow) + 1) - gitgud.getScroll("NavList") + ROW_HEIGHT
+        local y = ly + rowTop(tonumber(toRow) + 1) - gitgud.getScroll("NavList") + look.rowHeight
         gitgud.selectListItem("NavList", tonumber(toRow) + 1, false)
         menu.popup(dropMenu(source.branch, target.branch), lx + math.min(lw - 40, 60), y)
     end)

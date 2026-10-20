@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <utility>
 
 namespace gitgud::app
 {
@@ -15,6 +16,8 @@ namespace gitgud::app
 
         constexpr const char* kPathPrefix = "path:";
         constexpr const char* kConfigFile = "ui";
+
+        std::string g_OverlayBase;
 
         std::string Trim(const std::string& _S)
         {
@@ -79,6 +82,44 @@ namespace gitgud::app
 
     } // namespace
 
+    void SetUiOverlayBase(const std::string& _ConfigDir)
+    {
+        g_OverlayBase = _ConfigDir.empty() ? std::string() : Slashes(_ConfigDir);
+    }
+
+    std::string PackageFile(const UiPackage& _Package, const std::string& _Relative)
+    {
+        if (!_Package.m_OverlayRoot.empty())
+        {
+            const fs::path over = fs::u8path(_Package.m_OverlayRoot) / fs::u8path(_Relative);
+            if (IsFile(over))
+            {
+                return Slashes(over.u8string());
+            }
+        }
+        return _Package.m_Root + "/" + _Relative;
+    }
+
+    std::vector<std::string> OverlayFiles(const UiPackage& _Package)
+    {
+        std::vector<std::string> out;
+        if (_Package.m_OverlayRoot.empty())
+        {
+            return out;
+        }
+        const fs::path root = fs::u8path(_Package.m_OverlayRoot);
+        std::error_code ec;
+        for (fs::recursive_directory_iterator it(root, ec), end; !ec && it != end; it.increment(ec))
+        {
+            if (it->is_regular_file(ec))
+            {
+                out.push_back(Slashes(it->path().lexically_relative(root).u8string()));
+            }
+        }
+        std::sort(out.begin(), out.end());
+        return out;
+    }
+
     std::optional<UiPackage> LoadUiPackage(const std::string& _Root, const std::string& _Id)
     {
         const fs::path root = fs::u8path(_Root);
@@ -123,6 +164,13 @@ namespace gitgud::app
             {
                 package->m_bBuiltIn = true;
                 out.push_back(*package);
+            }
+        }
+        if (!g_OverlayBase.empty())
+        {
+            for (UiPackage& package : out)
+            {
+                package.m_OverlayRoot = g_OverlayBase + "/" + package.m_Id + "/ui";
             }
         }
         return out;
@@ -178,6 +226,128 @@ namespace gitgud::app
         }
         out << "ui=" << _Spec << "\n";
         return static_cast<bool>(out);
+    }
+
+    std::vector<std::string> ListThemes(const UiPackage& _Package)
+    {
+        std::vector<std::string> names;
+        for (const std::string& root : {_Package.m_Root, _Package.m_OverlayRoot})
+        {
+            if (root.empty())
+            {
+                continue;
+            }
+            std::error_code ec;
+            for (fs::directory_iterator it(fs::u8path(root) / "themes", ec), end;
+                !ec && it != end; it.increment(ec))
+            {
+                if (it->is_regular_file(ec) && it->path().extension() == ".ini")
+                {
+                    names.push_back(it->path().stem().u8string());
+                }
+            }
+        }
+        std::sort(names.begin(), names.end());
+        names.erase(std::unique(names.begin(), names.end()), names.end());
+        return names;
+    }
+
+    namespace
+    {
+
+        constexpr const char* kThemeFile = "theme";
+
+        // "<package id>=<theme>" lines.
+        std::vector<std::pair<std::string, std::string>> ReadThemeChoices(
+            const std::string& _ConfigDir)
+        {
+            std::vector<std::pair<std::string, std::string>> out;
+            std::ifstream in(fs::u8path(_ConfigDir) / kThemeFile, std::ios::binary);
+            std::string line;
+            while (std::getline(in, line))
+            {
+                const auto neq = line.rfind('=');
+                if (neq != std::string::npos)
+                {
+                    out.emplace_back(Trim(line.substr(0, neq)), Trim(line.substr(neq + 1)));
+                }
+            }
+            return out;
+        }
+
+    } // namespace
+
+    std::string ReadThemeChoice(const std::string& _ConfigDir, const std::string& _PackageId)
+    {
+        for (const auto& [id, theme] : ReadThemeChoices(_ConfigDir))
+        {
+            if (id == _PackageId)
+            {
+                return theme;
+            }
+        }
+        return {};
+    }
+
+    bool WriteThemeChoice(
+        const std::string& _ConfigDir, const std::string& _PackageId, const std::string& _Theme)
+    {
+        auto choices = ReadThemeChoices(_ConfigDir);
+        bool bfound = false;
+        for (auto& [id, theme] : choices)
+        {
+            if (id == _PackageId)
+            {
+                theme = _Theme;
+                bfound = true;
+            }
+        }
+        if (!bfound)
+        {
+            choices.emplace_back(_PackageId, _Theme);
+        }
+
+        std::error_code ec;
+        fs::create_directories(fs::u8path(_ConfigDir), ec);
+        std::ofstream out(fs::u8path(_ConfigDir) / kThemeFile, std::ios::binary | std::ios::trunc);
+        if (!out)
+        {
+            return false;
+        }
+        for (const auto& [id, theme] : choices)
+        {
+            out << id << "=" << theme << "\n";
+        }
+        return static_cast<bool>(out);
+    }
+
+    std::string ResolveTheme(const UiPackage& _Package, const std::string& _ConfigDir)
+    {
+        const std::vector<std::string> themes = ListThemes(_Package);
+        if (themes.empty())
+        {
+            return {};
+        }
+        const std::string chosen = ReadThemeChoice(_ConfigDir, _Package.m_Id);
+        for (const char* szname : {chosen.c_str(), kDefaultTheme})
+        {
+            if (std::find(themes.begin(), themes.end(), szname) != themes.end())
+            {
+                return szname;
+            }
+        }
+        return themes.front();
+    }
+
+    std::string ThemeFile(const UiPackage& _Package, const std::string& _Theme)
+    {
+        if (_Package.m_Root.empty())
+        {
+            return {};
+        }
+        const std::string file =
+            PackageFile(_Package, _Theme.empty() ? std::string("colours.ini") : "themes/" + _Theme + ".ini");
+        return IsFile(fs::u8path(file)) ? file : std::string();
     }
 
 } // namespace gitgud::app

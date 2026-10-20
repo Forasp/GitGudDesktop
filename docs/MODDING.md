@@ -140,6 +140,7 @@ a time, Escape closes, and what was underneath repaints afterwards.
 | `ui/dialog.lua` | `dialog.show{title, message, fields, checks, ok, onOk}`, `dialog.confirm`, `dialog.prompt`, `dialog.alert`, `dialog.showModal` / `hideModal` for your own modal windows |
 | `ui/popup.lua` | `popup.open(name, {anchor, focus, onClose})` — dropdowns that close on click-away / Escape |
 | `ui/placeholder.lua` | grey hint text in empty editboxes |
+| `ui/splitter.lua` | `splitter.create(name, parent, direction, onDrag, onEnd)` for a draggable seam between panes; `splitter.column{name, parent, pane, edge, key, default, min, max, relayout, done}` for a side column whose width is dragged and remembered |
 | `core/keys.lua` | `keys.bind("ctrl+alt+x", fn)` (menu items with a `shortcut` bind automatically), `keys.label(combo)` for showing one ("Ctrl+Alt+X", or "⌥⌘X" on macOS), `keys.text(s)` to show the shortcuts written in a text the macOS way, `keys.adaptTooltips(names)` for layout tooltips |
 | `core/status.lua` | `status.ok / info / warn / error(msg)`, `status.report(okMsg, gitgud.call(...))` |
 | `core/settings.lua` | `settings.get(key, default)` / `settings.set(key, value)`, persisted per user |
@@ -231,10 +232,12 @@ throwaway repository.
 ## 9. Your own interface
 
 Mods extend the interface you have; a **UI package** replaces it. GitGud
-ships two: the GitGud UI (`resources/` itself, id `default`) and the Depot UI
-(`resources/uis/depot/`, see `docs/DEPOT.md`). Switch with **File ▸ Switch user
-interface…** (GitGud UI) or **Edit ▸ Preferences ▸ Switch User
-Interface…** (Depot UI); the first launch asks.
+ships three: the GitGud UI (`resources/` itself, id `default`), the Depot UI
+(`resources/uis/depot/`, see `docs/DEPOT.md`), and Bragi
+(`resources/uis/bragi/`, an agent view beside the GitGud UI). Switch with
+**File ▸ Switch user interface…** (GitGud UI), **Edit ▸ Preferences ▸ Switch
+User Interface…** (Depot UI), or **Settings ▸ Switch interface…** (Bragi);
+the first launch asks.
 
 A package is a folder:
 
@@ -244,6 +247,7 @@ my-ui/
                          description=What it's for (shown in the picker)
   scripts/main.lua       the entry point, like resources/scripts/main.lua
   layouts/main.xml       the window's root layout (a "Root" window)
+  colours.ini            optional: recolour the GitGud UI's files (below)
   looknfeel/*.xml        optional: skin overrides, loaded over the base skin
   imagesets/*.xml        optional: your own images (with resourceGroup="ui-imagesets")
 ```
@@ -261,7 +265,12 @@ What a package gets for free:
   clone/open. A file of your own with the same name wins: the Depot UI's
   `scripts/core/palette.lua` recolours every shared widget.
 - **The GitGud UI's layouts.** Your `layouts/` is where layout files
-  resolve; the GitGud UI's are resource group `gitgud-layouts`:
+  resolve, and a file it doesn't have comes from the GitGud UI's
+  (`resources/layouts`), imports inside that file included. So
+  `<LayoutImport filename="main/sidebar.xml"/>` brings in the GitGud UI's
+  sidebar, and a `layouts/main/titlebar.xml` of your own replaces just that
+  file wherever it's imported. The GitGud UI's files are also resource group
+  `gitgud-layouts`, to name one explicitly:
   ```xml
   <LayoutImport filename="dialogs/dialog.xml" resourceGroup="gitgud-layouts"/>
   ```
@@ -275,6 +284,19 @@ What a package gets for free:
   away. Fonts you can name in looks and layouts: `Gitgud-UI` (Inter),
   `Gitgud-UI-Bold`, `-Small`, `-Title`, `-Large`, `Gitgud-Mono` (JetBrains
   Mono), and the platform font `Gitgud-System` (Segoe UI), `-Bold`, `-Small`.
+- **A palette of its own for the shared files.** The GitGud UI's layouts and
+  skin spell their colours out (`FF17102B`). A `colours.ini` at the package
+  root swaps them, one `FROM = TO` pair per line (AARRGGBB, `#` comments):
+  ```ini
+  # the canvas, in teal
+  FF17102B = FF0E2F2C
+  ```
+  It applies to every layout and look as it loads and to the colours scripts
+  set (`setProperty`, `setText` markup, list rows), so the GitGud UI's views
+  take your palette unchanged. Images aren't recoloured. Pair it with your
+  own `scripts/core/palette.lua` naming the same colours. A package with
+  themes keeps one such file per theme in `themes/` instead (Bragi's
+  `themes/dark.ini` and `light.ini` are complete examples).
 - **Pop-out windows.** `gitgud.openWindow{id, title, layout, width, height}`
   opens a real OS window showing a layout from your `layouts/`; its widgets
   are named `"<id>:<name>"` (so one layout can back several windows), and
@@ -326,6 +348,32 @@ remembered package is missing or incomplete at launch, GitGud starts the
 picker instead. Everything hot-reloads as
 usual; `looknfeel/` and `imagesets/` changes take a restart (or a switch
 away and back).
+
+### Customizing a built-in interface
+
+You don't need your own package to change one that ships. Each built-in
+interface has a customizations folder in your settings folder,
+`%APPDATA%\Gitgud\<id>\ui\` (for Bragi, `...\Gitgud\bragi\ui\`),
+laid out like the interface's own folder (`resources/uis/<id>/`, or
+`resources/` for the GitGud UI). A file there is used instead of the
+shipped file with the same path: `scripts/...` (any module, the shared
+`core/` and `ui/` ones too), `layouts/`, `looknfeel/`, `imagesets/`,
+`schemes/`, `fonts.ini` and `fonts/`, `prompts/`, and `themes/<name>.ini`
+(a new name is a new theme, offered beside the shipped ones). The shipped
+install is never changed, so an update never overwrites your files, and
+they hot-reload like the shipped ones.
+
+Start from a copy of the shipped file and change as little as you can.
+A customized script or layout that fails to load is set aside for that
+run and the shipped one is used instead; `gitgud.uiOverlay().errors` says
+which file and why (Bragi shows a note, and lists them in Settings ▸ Git ▸
+Interface customizations, with Open the folder and Reset all). Reset all
+moves the folder aside to `ui.backup-<date>-<time>` beside it.
+
+In the Bragi interface the agent can do this for you: ask it to change
+the interface ("make it dark blue"). Its `bragi_ui_paths` tool gives it
+both folders, and it edits files with its usual tools and permission
+prompts.
 
 ## 10. Pitfalls
 

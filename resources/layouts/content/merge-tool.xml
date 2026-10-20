@@ -55,8 +55,8 @@
                 <Property name="NormalFillColour" value="FF7C93FF"/>
                 <Property name="HoverFillColour" value="FF93A4FF"/>
                 <Property name="DisabledFillColour" value="FF291F47"/>
-                <Property name="NormalTextColour" value="FF0E0A1A"/>
-                <Property name="HoverTextColour" value="FF0E0A1A"/>
+                <Property name="NormalTextColour" value="FF0E0A1B"/>
+                <Property name="HoverTextColour" value="FF0E0A1B"/>
             </Window>
             <Window type="Gitgud/Button" name="MergeCloseButton">
                 <Property name="Area" value="{{1,-104},{0,8},{1,-12},{1,-8}}"/>

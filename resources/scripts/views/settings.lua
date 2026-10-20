@@ -108,7 +108,7 @@ function settingsView.signing()
         width = 600,
         message = "Signed commits prove they came from you (hosts show them as \"Verified\"). "
             .. "Use a GPG key (format openpgp; the key id from gpg --list-secret-keys) or an SSH "
-            .. "key (format ssh; the path of the key, e.g. ~/.ssh/id_ed25519) — and add the "
+            .. "key (format ssh; the path of the key, e.g. ~/.ssh/id_ed25519), and add the "
             .. "same key to your Git host as a signing key.\n\n" .. table.concat(tools, "    "),
         fields = {
             { label = "Format: openpgp or ssh", value = format },
@@ -225,7 +225,7 @@ function settingsView.repository()
         ignore = gitgud.readRepoFile(".gitignore") or "",
     }
 
-    gitgud.setText("RepoSettingsTitle", text.escape("Repository settings — " .. repo.state().name))
+    gitgud.setText("RepoSettingsTitle", text.escape("Repository settings: " .. repo.state().name))
     gitgud.setText("RepoSettingsRemoteEdit", shownValues.url)
     gitgud.setText("RepoSettingsNameEdit", shownValues.name)
     gitgud.setText("RepoSettingsEmailEdit", shownValues.email)

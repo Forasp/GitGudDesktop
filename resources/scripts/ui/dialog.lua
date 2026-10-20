@@ -279,9 +279,9 @@ layout = function(s)
             gitgud.setProperty(name, "NormalFillColour", on and C.blue or C.bg1)
             gitgud.setProperty(name, "HoverFillColour", on and "FF93A4FF" or C.bg0)
             gitgud.setProperty(name, "BorderColour", on and "FF93A4FF" or C.border)
-            gitgud.setProperty(name, "NormalTextColour", on and C.bg0 or C.text2)
-            gitgud.setProperty(name, "HoverTextColour", on and C.bg0 or C.text)
-            gitgud.setProperty(name, "PushedTextColour", on and C.bg0 or C.text)
+            gitgud.setProperty(name, "NormalTextColour", on and C.onAccent or C.text2)
+            gitgud.setProperty(name, "HoverTextColour", on and C.onAccent or C.text)
+            gitgud.setProperty(name, "PushedTextColour", on and C.onAccent or C.text)
             gitgud.setVisible(name, true)
         end
         y = y + 44

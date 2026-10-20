@@ -25,6 +25,7 @@ local changelists = require("depot.changelists")
 local commands = require("ui.commands")
 local dialog = require("ui.dialog")
 local keys = require("core.keys")
+require("core.display") -- renews the window after the displays change
 local menu = require("ui.menu")
 local popup = require("ui.popup")
 

@@ -48,9 +48,9 @@ local function styleModeButtons(mode)
         gitgud.setProperty(name, "NormalFillColour", active and C.blue or C.bg3)
         gitgud.setProperty(name, "HoverFillColour", active and "FF93A4FF" or C.bg4)
         gitgud.setProperty(name, "PushedFillColour", active and "FF6F84E6" or C.bg2)
-        gitgud.setProperty(name, "NormalTextColour", active and C.bg0 or C.text)
-        gitgud.setProperty(name, "HoverTextColour", active and C.bg0 or "FFFFFFFF")
-        gitgud.setProperty(name, "PushedTextColour", active and C.bg0 or C.text)
+        gitgud.setProperty(name, "NormalTextColour", active and C.onAccent or C.text)
+        gitgud.setProperty(name, "HoverTextColour", active and C.onAccent or C.bright)
+        gitgud.setProperty(name, "PushedTextColour", active and C.onAccent or C.text)
     end
 end
 

@@ -232,6 +232,11 @@ function sync.pushTags(name)
     end)
 end
 
+-- Clones that stay closed when done, by path key (core/shell.pathKey):
+-- started elsewhere for later (the Bragi UI's projects, cloned without
+-- switching the open repository).
+sync.dontOpen = {}
+
 --- Clone into a folder; the clone opens when it finishes.
 -- @param url   what to clone
 -- @param path  destination folder
@@ -426,6 +431,11 @@ function sync.init()
     gitgud.on("clone.done", function(path)
         status.ok("Cloned into " .. path)
         finished()
+        local key = require("core.shell").pathKey(path or "")
+        if sync.dontOpen[key] then
+            sync.dontOpen[key] = nil
+            return
+        end
         gitgud.openRepo(path)
     end)
 
@@ -433,7 +443,7 @@ function sync.init()
         gitgud.on(op .. ".error", function(detail)
             local message = detail or "unknown error"
             if op == "push" and message:lower():find("non%-fast%-forward") then
-                message = message .. " — pull first, or force push if you rewrote history."
+                message = message .. "; pull first, or force push if you rewrote history."
             end
             status.error(op:sub(1, 1):upper() .. op:sub(2) .. " failed: " .. message)
             finished()

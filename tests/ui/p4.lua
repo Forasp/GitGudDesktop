@@ -68,7 +68,7 @@ local steps = {
         local tags = gitgud.tags() or {}
         check("labels are tags", tags[1] and tags[1].name == "v1")
         local info = gitgud.p4Info()
-        check("p4Info knows the user", info and info.userName == "tim")
+        check("p4Info knows the user", info and info.userName == "sam")
     end,
     function()
         gitgud.emit("window.close", "")

@@ -1,8 +1,11 @@
 #include "lua/LuaEngine.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
+#include <filesystem>
 
 extern "C"
 {
@@ -11,7 +14,12 @@ extern "C"
 #include <lualib.h>
 }
 
+#include "agent/ToolServer.h"
+#include "app/EventBus.h"
+#include "app/Json.h"
+#include "app/Profiler.h"
 #include "lua/LuaBindings.h"
+#include "lua/LuaProfiler.h"
 #include "p4/P4Workspace.h"
 
 namespace gitgud::lua
@@ -49,12 +57,17 @@ namespace gitgud::lua
 
     } // namespace
 
-    LuaEngine::LuaEngine() = default;
+    LuaEngine::LuaEngine() : m_pProfiler(std::make_unique<LuaProfiler>())
+    {
+    }
 
     LuaEngine::~LuaEngine()
     {
+        bindings::StopVoice();
+        bindings::StopAgents();
         if (m_pL)
         {
+            m_pProfiler->Detach();
             lua_close(m_pL);
             m_pL = nullptr;
         }
@@ -82,6 +95,7 @@ namespace gitgud::lua
         {
             return false;
         }
+        m_pProfiler->Attach(m_pL);
         luaL_openlibs(m_pL);
         InstallBindings();
         ApplyScriptRoot();
@@ -90,15 +104,138 @@ namespace gitgud::lua
 
     bool LuaEngine::Reset()
     {
+        GITGUD_PROFILE_SCOPE("LuaEngine::Reset");
         if (m_pL)
         {
+            m_pProfiler->Detach();
             lua_close(m_pL);
             m_pL = nullptr;
         }
         // Registry refs died with the VM.
         m_Handlers.clear();
+        m_ReleaseLater.clear();
         m_Timers.clear();
+        // The tools the old scripts declared went with them; the new ones
+        // declare their own.
+        if (m_pTools)
+        {
+            std::string error;
+            m_pTools->SetUiTools(app::Json::Array(), error);
+        }
         return Initialize();
+    }
+
+
+    namespace
+    {
+        // The overlay searcher (SetScriptOverlay), installed second in
+        // package.searchers: before the path searcher, after preload.
+        constexpr const char* kOverlaySearcher = R"lua(
+local overlay, report = ...
+local searchers = package.searchers
+for i = #searchers, 1, -1 do
+    if searchers[i] == package.gitgudOverlaySearcher then
+        table.remove(searchers, i)
+    end
+end
+package.gitgudOverlaySearcher = nil
+if overlay == "" then
+    return
+end
+local function exists(path)
+    local f = io.open(path, "rb")
+    if f then
+        f:close()
+        return true
+    end
+    return false
+end
+-- The shipped module, for when the overlay's fails.
+local function shipped(name, why)
+    local path = package.searchpath(name, package.path)
+    if not path then
+        error(why, 0)
+    end
+    local chunk = assert(loadfile(path))
+    return chunk(name, path)
+end
+local function searcher(name)
+    local rel = name:gsub("%.", "/")
+    local file = overlay .. "/" .. rel .. ".lua"
+    if not exists(file) then
+        file = overlay .. "/" .. rel .. "/init.lua"
+        if not exists(file) then
+            return nil
+        end
+    end
+    local chunk, err = loadfile(file)
+    if not chunk then
+        report(file, err)
+        return function(modname)
+            return shipped(modname, err)
+        end, file
+    end
+    return function(modname)
+        local ok, result = pcall(chunk, modname, file)
+        if ok then
+            return result
+        end
+        report(file, tostring(result))
+        return shipped(modname, result)
+    end, file
+end
+package.gitgudOverlaySearcher = searcher
+table.insert(searchers, 2, searcher)
+)lua";
+
+        int LReportOverlay(lua_State* _pL)
+        {
+            auto* pengine = static_cast<LuaEngine*>(lua_touserdata(_pL, lua_upvalueindex(1)));
+            const char* szfile = luaL_checkstring(_pL, 1);
+            const char* szerror = luaL_optstring(_pL, 2, "");
+            pengine->AddOverlayError(szfile, szerror);
+            return 0;
+        }
+    } // namespace
+
+    void LuaEngine::SetScriptOverlay(const std::string& _Directory)
+    {
+        m_ScriptOverlay = _Directory;
+        ApplyScriptRoot();
+    }
+
+    void LuaEngine::AddOverlayError(const std::string& _File, const std::string& _Error)
+    {
+        std::fprintf(stderr, "[lua] customized file '%s' failed, using the shipped one: %s\n",
+            _File.c_str(), _Error.c_str());
+        m_OverlayErrors.emplace_back(_File, _Error);
+        if (m_pBus)
+        {
+            m_pBus->Publish({"ui.overlayError",
+                app::Json::Object().Set("file", _File).Set("error", _Error).Dump()});
+        }
+    }
+
+    bool LuaEngine::RunFileOrShipped(const std::string& _Overlay, const std::string& _Shipped)
+    {
+        std::error_code ec;
+        if (_Overlay.empty() || !std::filesystem::is_regular_file(std::filesystem::u8path(_Overlay), ec))
+        {
+            return RunFile(_Shipped);
+        }
+        if (luaL_loadfile(m_pL, _Overlay.c_str()) != LUA_OK)
+        {
+            AddOverlayError(_Overlay, lua_tostring(m_pL, -1));
+            lua_pop(m_pL, 1);
+            return RunFile(_Shipped);
+        }
+        if (lua_pcall(m_pL, 0, 0, 0) != LUA_OK)
+        {
+            AddOverlayError(_Overlay, lua_tostring(m_pL, -1) ? lua_tostring(m_pL, -1) : "error");
+            lua_pop(m_pL, 1);
+            return RunFile(_Shipped);
+        }
+        return true;
     }
 
     void LuaEngine::SetScriptRoot(const std::string& _Directory)
@@ -135,6 +272,19 @@ namespace gitgud::lua
         lua_pushliteral(m_pL, "");
         lua_setfield(m_pL, -2, "cpath");
         lua_pop(m_pL, 1);
+
+        // The overlay's modules first, falling back to the shipped ones.
+        if (luaL_loadstring(m_pL, kOverlaySearcher) == LUA_OK)
+        {
+            lua_pushlstring(m_pL, m_ScriptOverlay.data(), m_ScriptOverlay.size());
+            lua_pushlightuserdata(m_pL, this);
+            lua_pushcclosure(m_pL, LReportOverlay, 1);
+            ProtectedCall(m_pL, 2, "installing the overlay searcher");
+        }
+        else
+        {
+            lua_pop(m_pL, 1);
+        }
     }
 
     void LuaEngine::InstallBindings()
@@ -144,10 +294,18 @@ namespace gitgud::lua
         std::vector<luaL_Reg> functions;
         bindings::AddRepoBindings(functions);
         bindings::AddUiBindings(functions);
+        bindings::AddStoreBindings(functions);
         bindings::AddFeatureBindings(functions);
         bindings::AddAppBindings(functions);
         bindings::AddUpdateBindings(functions);
         bindings::AddP4Bindings(functions);
+        bindings::AddJsonBindings(functions);
+        bindings::AddVoiceBindings(functions);
+        bindings::AddLocalDataBindings(functions);
+        bindings::AddAgentBindings(functions);
+        bindings::AddAgentHistoryBindings(functions);
+        bindings::AddImageBindings(functions);
+        bindings::AddProfilerBindings(functions);
         functions.push_back({nullptr, nullptr});
 
         lua_newtable(m_pL);
@@ -204,25 +362,61 @@ namespace gitgud::lua
         // Copy: a handler may register more handlers for the same event.
         const std::vector<int> refs = it->second;
         const std::string context = "error in handler for '" + _Name + "'";
+        ++m_iDispatching;
         for (int iref : refs)
         {
             lua_rawgeti(m_pL, LUA_REGISTRYINDEX, iref);
             lua_pushlstring(m_pL, _Value.data(), _Value.size());
             CallTimed(iref, 1, context.c_str(), _Name);
         }
+        if (--m_iDispatching == 0 && !m_ReleaseLater.empty())
+        {
+            for (int iref : m_ReleaseLater)
+            {
+                luaL_unref(m_pL, LUA_REGISTRYINDEX, iref);
+            }
+            m_ReleaseLater.clear();
+        }
+    }
+
+    void LuaEngine::UnregisterHandlers(const std::string& _EventName)
+    {
+        const auto it = m_Handlers.find(_EventName);
+        if (it == m_Handlers.end())
+        {
+            return;
+        }
+        for (int iref : it->second)
+        {
+            if (m_iDispatching > 0)
+            {
+                m_ReleaseLater.push_back(iref);
+            }
+            else
+            {
+                luaL_unref(m_pL, LUA_REGISTRYINDEX, iref);
+            }
+        }
+        m_Handlers.erase(it);
     }
 
     void LuaEngine::CallTimed(
         int _iRef, int _iArgs, const char* _szContext, const std::string& _What)
     {
+        // A zone per handler, named after its event and where it's defined:
+        // the stall watchdog and the profiler's reports name it.
+        const int idepth = prof::Depth();
+        prof::Begin(m_pProfiler->CallbackZone(_What, -(_iArgs + 1)));
         if (m_iSlowCallMs <= 0)
         {
             ProtectedCall(m_pL, _iArgs, _szContext);
+            m_pProfiler->Unwind(idepth);
             return;
         }
 
         const auto started = std::chrono::steady_clock::now();
         ProtectedCall(m_pL, _iArgs, _szContext);
+        m_pProfiler->Unwind(idepth);
         const double fms =
             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started)
                 .count();
@@ -239,14 +433,40 @@ namespace gitgud::lua
         {
             where = std::string(info.short_src) + ":" + std::to_string(info.linedefined);
         }
-        std::printf("[perf] lua %-28s %7.1f ms  %s\n", _What.c_str(), fms, where.c_str());
+        std::printf("[perf] lua %-28s %7.1f ms  %s\n", _What.empty() ? "(timer)" : _What.c_str(), fms, where.c_str());
     }
+
+    void LuaEngine::SetCallProfiling(bool _bOn)
+    {
+        m_pProfiler->SetCalls(_bOn);
+    }
+
+    double LuaEngine::MemoryKb() const
+    {
+        return m_pL ? static_cast<double>(lua_gc(m_pL, LUA_GCCOUNT, 0)) + lua_gc(m_pL, LUA_GCCOUNTB, 0) / 1024.0 : 0.0;
+    }
+
+    namespace
+    {
+        // Time the test harness skipped ahead (SkipClock), on top of the
+        // steady clock.
+        std::atomic<std::uint64_t> s_uiSkippedMs{0};
+    } // namespace
 
     std::uint64_t LuaEngine::NowMs()
     {
         using namespace std::chrono;
         return static_cast<std::uint64_t>(
-            duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
+                   duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count()) +
+               s_uiSkippedMs.load();
+    }
+
+    void LuaEngine::SkipClock(int _iMs)
+    {
+        if (_iMs > 0)
+        {
+            s_uiSkippedMs += static_cast<std::uint64_t>(_iMs);
+        }
     }
 
     int LuaEngine::AddTimer(int _iDelayMs, bool _bRepeat, int _iRef)
@@ -273,9 +493,10 @@ namespace gitgud::lua
 
     bool LuaEngine::Tick()
     {
+        const bool bpictures = bindings::ShowDecodedImages(m_pUi);
         if (m_Timers.empty())
         {
-            return false;
+            return bpictures;
         }
 
         const std::uint64_t now = NowMs();
@@ -307,7 +528,7 @@ namespace gitgud::lua
                 it->m_bCancelled = true;
             }
             lua_rawgeti(m_pL, LUA_REGISTRYINDEX, iref);
-            CallTimed(iref, 0, "error in timer", "(timer)");
+            CallTimed(iref, 0, "error in timer", "");
         }
 
         // Drop finished timers and release their callbacks.
@@ -323,7 +544,7 @@ namespace gitgud::lua
                 ++it;
             }
         }
-        return !due.empty();
+        return bpictures || !due.empty();
     }
 
     int LuaEngine::MillisecondsUntilNextTimer() const

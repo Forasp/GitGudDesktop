@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  sidepanel.xml - the Agent view's session panel, on the right of the
+  conversation: cards about the conversation shown,
+  Environment, Context, Outputs, Changes, Background tasks. Loaded into
+  AgentRoot by scripts/bragi/sidepanel.lua, which places it, builds the
+  cards at run time, and makes room for it beside AgentMain
+  (scripts/bragi/agent.lua's relayout). Hidden until placed.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="AgentPanel">
+        <Property name="Area" value="{{1,-288},{0,0},{1,0},{1,0}}"/>
+        <Property name="PanelColour" value="$rail"/>
+        <Property name="Text" value=""/>
+        <Property name="Visible" value="false"/>
+
+        <!-- Level with the conversation's top bar; the window buttons sit
+             over its right end. -->
+        <Window type="Gitgud/StaticText" name="AgentPanelHeader">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,56}}"/>
+            <Property name="PanelColour" value="$rail"/>
+            <Property name="Text" value=""/>
+            <UserString name="AppDrag" value="true"/>
+            <Window type="Gitgud/Label" name="AgentPanelTitle">
+                <Property name="Area" value="{{0,20},{0,0},{1,-150},{1,0}}"/>
+                <Property name="Text" value=""/>
+                <Property name="Font" value="Bragi-Caps"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/StaticText" name="AgentPanelHeaderRule">
+                <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+                <Property name="PanelColour" value="$border"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+        </Window>
+
+        <!-- The cards: created here at run time. -->
+        <Window type="Gitgud/ScrollablePane" name="AgentPanelScroll">
+            <Property name="Area" value="{{0,0},{0,56},{1,0},{1,0}}"/>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="AgentPanelEdge">
+            <Property name="Area" value="{{0,0},{0,0},{0,1},{1,0}}"/>
+            <Property name="PanelColour" value="$border"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

@@ -14,6 +14,7 @@ local C = require("core.palette")
 local dialog = require("ui.dialog")
 local geometry = require("ui.geometry")
 local keys = require("core.keys")
+require("core.display") -- renews the window after the displays change
 local popup = require("ui.popup")
 local text = require("core.text")
 
@@ -30,6 +31,11 @@ local previews = {
     default = "GitGud-Previews/Default",
     depot = "GitGud-Previews/Depot",
 }
+
+-- Interfaces that set themselves up, without a repository or working
+-- folder first: the Bragi interface runs its own welcome flow, and its
+-- master conversation finds projects later.
+local OWN_SETUP = { bragi = true }
 
 local cards = {}      -- { id, name } per card, in order
 local current = gitgud.currentUi()
@@ -48,7 +54,8 @@ local function choose(spec)
 
     -- First launch: also ask whether new repositories should use Git or
     -- Perforce (core/p4setup.lua; changeable later from the File menu).
-    if firstLaunch then
+    -- Interfaces with a setup of their own skip it (OWN_SETUP).
+    if firstLaunch and not OWN_SETUP[spec] then
         require("core.p4setup").askDefaultBackend(switch, { firstLaunch = true })
         return
     end
@@ -151,21 +158,22 @@ end
 
 --- Fill the window.
 local function build()
-    gitgud.setWindowTitle("", "GitGud Desktop — choose an interface")
+    gitgud.setWindowTitle("", "GitGud Desktop: choose an interface")
 
     if firstLaunch then
         gitgud.setText("PickerHeading", "Welcome to GitGud Desktop")
         gitgud.setText("PickerSubtitle", text.escape(
-            "Pick the interface you'd like to start with. Both work on the same repositories "
-                .. "and settings; you can switch at any time from the File menu (GitGud) or "
-                .. "Edit > Preferences (Depot), or build your own interface in XML and Lua."))
+            "Pick the interface you'd like to start with. They all work on the same repositories "
+                .. "and settings; you can switch at any time from the File menu (GitGud), "
+                .. "Edit > Preferences (Depot), or Settings (Bragi), or build your own interface "
+                .. "in XML and Lua."))
     else
         gitgud.setText("PickerHeading", "Choose your interface")
         gitgud.setText("PickerSubtitle", text.escape(
             "Switching restarts the interface; your repositories, tabs, and settings stay."))
     end
     gitgud.setText("PickerNote", text.escape(
-        "Your own interface: a folder with scripts/main.lua and layouts/main.xml — see the Modding guide."))
+        "Your own interface: a folder with scripts/main.lua and layouts/main.xml. See the Modding guide."))
     gitgud.setVisible("PickerBackButton", previous ~= "")
 
     for i, ui in ipairs(gitgud.uiList()) do
@@ -175,7 +183,7 @@ local function build()
 end
 
 gitgud.on("PickerFolderButton.clicked", function()
-    local folder = gitgud.pickFolder("Choose a GitGud interface folder")
+    local folder = gitgud.pickFolder("Choose an interface folder")
     if folder then
         choose("path:" .. folder)
     end

@@ -232,7 +232,7 @@ function rebase.open(baseOid)
     end
     selected = 1
 
-    gitgud.setText("RebaseTitle", text.escape("Interactive rebase — " .. state.branch))
+    gitgud.setText("RebaseTitle", text.escape("Interactive rebase: " .. state.branch))
     gitgud.setText("RebaseError", "")
     render()
     loadMessage()

@@ -137,7 +137,7 @@ end
 local function rebuild()
     local state = repo.state()
     if not state.open then
-        tree.setRoots(TREE, { { id = "none", label = "No workspace open — Connection > Open Workspace…", colour = C.dim } })
+        tree.setRoots(TREE, { { id = "none", label = "No workspace open. Use Connection > Open Workspace…", colour = C.dim } })
         return
     end
 

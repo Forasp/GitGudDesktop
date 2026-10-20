@@ -11,6 +11,7 @@
 // -----------------------------------------------------------------------------
 
 #include <string>
+#include <vector>
 
 namespace gitgud::platform
 {
@@ -31,8 +32,25 @@ namespace gitgud::platform
     // Native "choose a folder" dialog. Returns "" when cancelled.
     std::string PickFolder(const std::string& _Title);
 
+    // Native "choose a file" dialog, showing files matching `_Pattern`
+    // ("*.wav"; empty: all) under `_FilterName` ("Recordings"). Returns ""
+    // when cancelled.
+    std::string PickFile(const std::string& _Title, const std::string& _FilterName, const std::string& _Pattern);
+
     // Replace the clipboard's text.
     bool SetClipboardText(const std::string& _Text);
+
+    // True when the clipboard holds text (an app may put a picture of it
+    // there too, as office apps do).
+    bool ClipboardHasText();
+
+    // The picture on the clipboard, encoded (PNG, or BMP from a bitmap);
+    // false when there is none. Windows only for now: false elsewhere.
+    bool ClipboardImage(std::string& _Bytes);
+
+    // The files copied to the clipboard in a file manager (UTF-8 paths);
+    // empty when none. Windows only for now.
+    std::vector<std::string> ClipboardFiles();
 
     // Folder of the running executable (UTF-8), where its resources/ and
     // docs/ are. On macOS, inside an app bundle, the bundle's Resources folder.
@@ -43,6 +61,18 @@ namespace gitgud::platform
     // (~/.config/gitgud) on Linux (UTF-8; may not exist yet). Everything the app writes for
     // itself goes under here, never next to the exe, which may be read only.
     std::string ConfigDirectory();
+
+    // Per-user folder for large files the app fetches for itself (voice
+    // models): %LOCALAPPDATA%\Gitgud on Windows, the settings folder on macOS,
+    // $XDG_DATA_HOME/gitgud (~/.local/share/gitgud) on Linux (UTF-8; may not
+    // exist yet).
+    std::string LocalDataDirectory();
+
+    // Write `_Data` to `_Path` so that a crash or power cut leaves either the
+    // old file or the new one, never part of one: a temporary file beside
+    // it, flushed, then renamed over it. Its folder is made if needed. False
+    // with `_Error` when it can't be written.
+    bool WriteFileAtomically(const std::string& _Path, const std::string& _Data, std::string& _Error);
 
     // ConfigDirectory()/logs, created if needed (the temp folder if it can't
     // be): CEGUI.log and crash dumps.

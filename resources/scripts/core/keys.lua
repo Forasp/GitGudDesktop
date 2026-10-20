@@ -23,6 +23,24 @@ function keys.bind(combo, handler, description)
     bindings[combo] = { handler = handler, description = description }
 end
 
+--- The handler bound to a combo, or nil (to wrap it in another).
+-- @param combo  combo string
+-- @return function or nil
+function keys.handler(combo)
+    local binding = bindings[combo]
+
+    return binding and binding.handler
+end
+
+local gate = nil
+
+--- Decide which bound combos run. An interface that hides a view uses it
+-- to keep that view's shortcuts quiet. Escape's closers always run.
+-- @param fn  function(combo) -> false to drop the combo, or nil for none
+function keys.setGate(fn)
+    gate = fn
+end
+
 -- On macOS C++ reports the Command key as "ctrl" (so every binding works
 -- unchanged), and labels use the Mac's symbols in its order: Option, Shift,
 -- Command ("ctrl+shift+p" reads as "⇧⌘P").
@@ -127,7 +145,7 @@ local function onKey(combo)
     end
 
     local binding = bindings[combo]
-    if binding then
+    if binding and (gate == nil or gate(combo) ~= false) then
         binding.handler()
     end
 end

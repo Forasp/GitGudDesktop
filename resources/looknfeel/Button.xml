@@ -14,7 +14,7 @@
     <!-- ============================ Button =========================== -->
     <WidgetLook name="Gitgud/Button">
         <PropertyDefinition redrawOnWrite="true" initialValue="FFF3EEFC" type="ColourRect" name="NormalTextColour"/>
-        <PropertyDefinition redrawOnWrite="true" initialValue="FFFFFFFF" type="ColourRect" name="HoverTextColour"/>
+        <PropertyDefinition redrawOnWrite="true" initialValue="FFFFFFFE" type="ColourRect" name="HoverTextColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="FFF3EEFC" type="ColourRect" name="PushedTextColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="FF4D4470" type="ColourRect" name="DisabledTextColour"/>
         <PropertyDefinition redrawOnWrite="true" initialValue="FF291F47" type="ColourRect" name="NormalFillColour"/>

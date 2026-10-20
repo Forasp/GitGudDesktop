@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  chrome.xml - the window buttons (minimise, maximise, close), top right,
+  over every view's top bar. The design has no title bar: each view's 56px
+  top bar is the caption (AppDrag) and leaves 140px free for these.
+  The names are the GitGud UI's; its views/titlebar.lua wires them.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="BragiChrome">
+        <Property name="Area" value="{{1,-138},{0,0},{1,0},{0,36}}"/>
+
+        <Window type="Gitgud/Button" name="WindowMinButton">
+            <Property name="Area" value="{{0,0},{0,0},{0,46},{1,0}}"/>
+            <Property name="Text" value="–"/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="HoverFillColour" value="$hover"/>
+            <Property name="PushedFillColour" value="$sel"/>
+            <Property name="NormalTextColour" value="$sub"/>
+            <Property name="HoverTextColour" value="$text"/>
+            <Property name="TooltipText" value="Minimize"/>
+        </Window>
+        <Window type="Gitgud/Button" name="WindowMaxButton">
+            <Property name="Area" value="{{0,46},{0,0},{0,92},{1,0}}"/>
+            <Property name="Text" value="□"/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="HoverFillColour" value="$hover"/>
+            <Property name="PushedFillColour" value="$sel"/>
+            <Property name="NormalTextColour" value="$sub"/>
+            <Property name="HoverTextColour" value="$text"/>
+            <Property name="TooltipText" value="Maximize"/>
+        </Window>
+        <Window type="Gitgud/Button" name="WindowCloseButton">
+            <Property name="Area" value="{{0,92},{0,0},{0,138},{1,0}}"/>
+            <Property name="Text" value="×"/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="HoverFillColour" value="FFE81123"/>
+            <Property name="PushedFillColour" value="FFB20D1C"/>
+            <Property name="NormalTextColour" value="$sub"/>
+            <Property name="HoverTextColour" value="FFFFFFFF"/>
+            <Property name="TooltipText" value="Close"/>
+        </Window>
+    </Window>
+</GUILayout>

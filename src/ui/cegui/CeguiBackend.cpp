@@ -1,6 +1,10 @@
 #include "ui/cegui/CeguiBackend.h"
 
+#include "app/Profiler.h"
+
 #include <algorithm>
+#include <cmath>
+#include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -8,6 +12,7 @@
 #include <functional>
 #include <iterator>
 #include <string>
+#include <vector>
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -28,6 +33,7 @@
 #include <CEGUI/widgets/Scrollbar.h>
 #include <CEGUI/widgets/Thumb.h>
 #include <CEGUI/widgets/ToggleButton.h>
+#include <CEGUI/WindowRendererSets/Core/StaticText.h>
 
 // SDL scancode -> DirectInput keynum table (public domain, copied from
 // third_party/cegui/application_templates). CEGUI's Key::Scan values are
@@ -36,8 +42,11 @@
 #include <SDL_events.h> // SDL_ENABLE / SDL_DISABLE
 #include <SDL_mouse.h>
 #include <SDL_scancode.h>
+#include <SDL_timer.h>
 
 #include "ui/cegui/sdl_scancode_to_dinput_mappings.h"
+#include "ui/cegui/PackageResourceProvider.h"
+#include "ui/TextSpans.h"
 
 #include "platform/Shell.h"
 
@@ -219,6 +228,151 @@ namespace gitgud::ui
         };
 #endif // _WIN32
 
+        // A window's UserString, or "" when it has none.
+        std::string UserStringOf(const CEGUI::Window* _pWindow, const char* _szName)
+        {
+            const CEGUI::String name(_szName);
+            return _pWindow->isUserStringDefined(name) ? ToStdString(_pWindow->getUserString(name))
+                                                       : std::string();
+        }
+
+        // A window that raises "hovered" ("1" over it, "0" off it): the
+        // UserString a script sets through SetProperty("ReportHover", ...).
+        constexpr const char* kReportHover = "ReportHover";
+
+        // Whether Tab and Shift+Tab stop at a window: a visible, enabled,
+        // writable text box. Single-line boxes take part unless their layout
+        // says <UserString name="TabStop" value="false"/>; multi-line boxes
+        // only with TabStop="true", so editors keep Tab unless they opt in.
+        bool IsTabStop(const CEGUI::Window* _pWindow)
+        {
+            const auto* pedit = dynamic_cast<const CEGUI::EditboxBase*>(_pWindow);
+            if (!pedit || pedit->isReadOnly() || !pedit->isEffectiveVisible() ||
+                pedit->isEffectiveDisabled())
+            {
+                return false;
+            }
+            const std::string stop = UserStringOf(_pWindow, "TabStop");
+            if (dynamic_cast<const CEGUI::MultiLineEditbox*>(_pWindow))
+            {
+                return stop == "true";
+            }
+            return stop != "false";
+        }
+
+        // A window Tab stays inside: one marked TabGroup="true", or an
+        // always-on-top one (a dialog or popup).
+        bool IsTabGroup(const CEGUI::Window* _pWindow)
+        {
+            return _pWindow->isAlwaysOnTop() || UserStringOf(_pWindow, "TabGroup") == "true";
+        }
+
+        // The group Tab moves within: the nearest tab group above the window,
+        // or else its top-level view (a child of the context's root).
+        CEGUI::Window* TabScope(CEGUI::Window* _pWindow, const CEGUI::Window* _pRoot)
+        {
+            CEGUI::Window* pscope = _pWindow;
+            while (pscope->getParent() && pscope->getParent() != _pRoot)
+            {
+                if (pscope != _pWindow && IsTabGroup(pscope))
+                {
+                    return pscope;
+                }
+                pscope = pscope->getParent();
+            }
+            return pscope;
+        }
+
+        void CollectTabStops(CEGUI::Window* _pWindow, std::vector<CEGUI::Window*>& _Out)
+        {
+            if (!_pWindow->isVisible())
+            {
+                return;
+            }
+            if (IsTabStop(_pWindow))
+            {
+                _Out.push_back(_pWindow);
+            }
+            for (size_t i = 0; i < _pWindow->getChildCount(); ++i)
+            {
+                CollectTabStops(_pWindow->getChildAtIndex(i), _Out);
+            }
+        }
+
+        // Tab order: boxes with a TabIndex UserString first, by index; then
+        // the rest top to bottom, then left to right (tops within a few
+        // pixels of each other count as one row).
+        void SortTabStops(std::vector<CEGUI::Window*>& _Windows)
+        {
+            struct Stop
+            {
+                CEGUI::Window* m_pWindow;
+                int m_iIndex;
+                int m_iRow;
+                float m_fTop;
+                float m_fLeft;
+            };
+
+            constexpr float kRowSlack = 8.0f;
+            std::vector<Stop> stops;
+            stops.reserve(_Windows.size());
+            for (CEGUI::Window* pw : _Windows)
+            {
+                const std::string index = UserStringOf(pw, "TabIndex");
+                const CEGUI::Rectf rect = pw->getUnclippedOuterRect().get();
+                stops.push_back({pw, index.empty() ? INT_MAX : std::atoi(index.c_str()), 0,
+                    rect.top(), rect.left()});
+            }
+            std::stable_sort(stops.begin(), stops.end(),
+                [](const Stop& _A, const Stop& _B) { return _A.m_fTop < _B.m_fTop; });
+            float frowTop = 0.0f;
+            int irow = -1;
+            for (Stop& stop : stops)
+            {
+                if (irow < 0 || stop.m_fTop > frowTop + kRowSlack)
+                {
+                    ++irow;
+                    frowTop = stop.m_fTop;
+                }
+                stop.m_iRow = irow;
+            }
+            std::stable_sort(stops.begin(), stops.end(),
+                [](const Stop& _A, const Stop& _B)
+                {
+                    if (_A.m_iIndex != _B.m_iIndex)
+                    {
+                        return _A.m_iIndex < _B.m_iIndex;
+                    }
+                    if (_A.m_iRow != _B.m_iRow)
+                    {
+                        return _A.m_iRow < _B.m_iRow;
+                    }
+                    return _A.m_fLeft < _B.m_fLeft;
+                });
+            for (size_t i = 0; i < stops.size(); ++i)
+            {
+                _Windows[i] = stops[i].m_pWindow;
+            }
+        }
+
+        // The name an imageset file gives its images (<Imageset name="...">),
+        // or "".
+        std::string ImagesetName(const std::filesystem::path& _Path)
+        {
+            std::ifstream in(_Path, std::ios::binary);
+            const std::string xml(
+                (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            const size_t ntag = xml.find("<Imageset");
+            const size_t nname = ntag == std::string::npos ? ntag : xml.find(" name=\"", ntag);
+            if (nname == std::string::npos)
+            {
+                return {};
+            }
+            const size_t nstart = nname + 7;
+            const size_t nend = xml.find('"', nstart);
+            return nend == std::string::npos ? std::string() : xml.substr(nstart, nend - nstart);
+        }
+
     } // namespace
 
     CeguiBackend::CeguiBackend() = default;
@@ -274,8 +428,12 @@ namespace gitgud::ui
         }
 #endif
 
-        m_pRenderer = &OpenGL3Renderer::bootstrapSystem(
+        // bootstrapSystem with our own resource provider (layout fallback and
+        // package recolouring); destroySystem still deletes it.
+        m_pRenderer = &OpenGL3Renderer::create(
             Sizef(static_cast<float>(_iWindowWidth), static_cast<float>(_iWindowHeight)));
+        m_pResourceProvider = new PackageResourceProvider();
+        System::create(*m_pRenderer, m_pResourceProvider);
         m_pGuiContext =
             &System::getSingleton().createGUIContext(m_pRenderer->getDefaultRenderTarget());
         m_ResourceRoot = _ResourceRoot;
@@ -323,6 +481,15 @@ namespace gitgud::ui
         prp->setResourceGroupDirectory("gitgud-looknfeel", _ResourceRoot + "/looknfeel/");
         prp->setResourceGroupDirectory("gitgud-fonts", _ResourceRoot + "/fonts/");
         prp->setResourceGroupDirectory("gitgud-imagesets", _ResourceRoot + "/imagesets/");
+        // A package's layout imports a GitGud UI layout by plain name, and that
+        // layout's own imports resolve too: files the package doesn't have
+        // come from the GitGud UI. Layouts and skins take the package's
+        // colours.ini (ApplySkin).
+        m_pResourceProvider->SetFallback("layouts", "gitgud-layouts");
+        for (const char* szgroup : {"layouts", "gitgud-layouts", "gitgud-looknfeel", "ui-looknfeel"})
+        {
+            m_pResourceProvider->AddRecolouredGroup(szgroup);
+        }
 
         ImageManager::setImagesetDefaultResourceGroup("imagesets");
         Font::setDefaultResourceGroup("fonts");
@@ -423,6 +590,14 @@ namespace gitgud::ui
         // Without a default tooltip type CEGUI silently ignores every
         // TooltipText property in the layouts.
         _Context.setDefaultTooltipType("Gitgud/Tooltip");
+        // Under the test harness (GITGUD_SCRIPT) steps go on as soon as they
+        // can, so two clicks on one button from separate steps may come
+        // within CEGUI's double-click time; only a "double" simulated click
+        // (two clicks at once) counts as one.
+        if (std::getenv("GITGUD_SCRIPT"))
+        {
+            _Context.setMouseButtonMultiClickTimeout(0.001f);
+        }
     }
 
     void CeguiBackend::Shutdown()
@@ -450,6 +625,7 @@ namespace gitgud::ui
         m_WidgetCache.clear();
         CEGUI::OpenGL3Renderer::destroySystem();
         m_pRenderer = nullptr;
+        m_pResourceProvider = nullptr;
         delete m_pLogger;
         m_pLogger = nullptr;
         m_bInitialized = false;
@@ -457,23 +633,67 @@ namespace gitgud::ui
 
     CEGUI::Window* CeguiBackend::LoadLayoutFile(const std::string& _LayoutFile) const
     {
-        CEGUI::Window* proot = nullptr;
-        try
+        GITGUD_PROFILE_FUNCTION();
+        // An overlay file in it that breaks the layout is set aside and the
+        // layout loads again with the package's own (app/UiPackages.h).
+        for (int iattempt = 0; iattempt < 4; ++iattempt)
         {
-            proot = CEGUI::WindowManager::getSingleton().loadLayoutFromFile(_LayoutFile);
+            if (m_pResourceProvider)
+            {
+                m_pResourceProvider->TakeOverlayReads();
+            }
+            CEGUI::Window* proot = nullptr;
+            std::string error;
+            try
+            {
+                proot = CEGUI::WindowManager::getSingleton().loadLayoutFromFile(_LayoutFile);
+            }
+            catch (const CEGUI::Exception& e)
+            {
+                error = e.what();
+            }
+            if (proot)
+            {
+                return proot;
+            }
+            const std::vector<std::string> overlays =
+                m_pResourceProvider ? m_pResourceProvider->TakeOverlayReads() : std::vector<std::string>();
+            std::fprintf(stderr, "[CeguiBackend] layout '%s' failed: %s\n", _LayoutFile.c_str(),
+                error.empty() ? "no window" : error.c_str());
+            if (overlays.empty())
+            {
+                return nullptr;
+            }
+            for (const std::string& file : overlays)
+            {
+                m_pResourceProvider->Disable(file);
+                m_OverlayErrors.emplace_back(file, error.empty() ? "it made no window" : error);
+            }
         }
-        catch (const CEGUI::Exception& e)
+        return nullptr;
+    }
+
+    void CeguiBackend::SetOverlayRoot(const std::string& _Root)
+    {
+        m_OverlayRoot = _Root;
+        if (!m_pResourceProvider)
         {
-            std::fprintf(
-                stderr, "[CeguiBackend] layout '%s' failed: %s\n", _LayoutFile.c_str(), e.what());
-            return nullptr;
+            return;
         }
-        if (!proot)
+        const std::pair<const char*, const char*> groups[] = {{"layouts", "layouts"},
+            {"ui-looknfeel", "looknfeel"}, {"ui-imagesets", "imagesets"}, {"ui-schemes", "schemes"},
+            {"ui-fonts", "fonts"}};
+        for (const auto& [szgroup, szsub] : groups)
         {
-            std::fprintf(
-                stderr, "[CeguiBackend] failed to load layout '%s'\n", _LayoutFile.c_str());
+            m_pResourceProvider->SetOverlay(szgroup, _Root.empty() ? std::string() : _Root + "/" + szsub);
         }
-        return proot;
+    }
+
+    std::vector<std::pair<std::string, std::string>> CeguiBackend::TakeOverlayErrors()
+    {
+        std::vector<std::pair<std::string, std::string>> out;
+        out.swap(m_OverlayErrors);
+        return out;
     }
 
     std::string CeguiBackend::FindNameClash(CEGUI::Window* _pWindow) const
@@ -567,7 +787,7 @@ namespace gitgud::ui
         prp->setResourceGroupDirectory("layouts", _Directory + "/");
     }
 
-    void CeguiBackend::ApplySkin(const std::string& _PackageRoot)
+    void CeguiBackend::ApplySkin(const std::string& _PackageRoot, const std::string& _ColourFile)
     {
         namespace fs = std::filesystem;
         using CEGUI::WidgetLookManager;
@@ -582,16 +802,22 @@ namespace gitgud::ui
                 return names;
             }
             const std::string dir = _PackageRoot + "/" + _szSub;
-            std::error_code ec;
-            for (fs::directory_iterator it(fs::u8path(dir), ec), end; !ec && it != end;
-                it.increment(ec))
+            // The overlay's own files too (the provider reads them first).
+            for (const std::string& from :
+                {dir, m_OverlayRoot.empty() ? std::string() : m_OverlayRoot + "/" + _szSub})
             {
-                if (it->is_regular_file(ec) && it->path().extension() == ".xml")
+                std::error_code ec;
+                for (fs::directory_iterator it(fs::u8path(from), ec), end; !from.empty() && !ec && it != end;
+                    it.increment(ec))
                 {
-                    names.push_back(it->path().filename().u8string());
+                    if (it->is_regular_file(ec) && it->path().extension() == ".xml")
+                    {
+                        names.push_back(it->path().filename().u8string());
+                    }
                 }
             }
             std::sort(names.begin(), names.end());
+            names.erase(std::unique(names.begin(), names.end()), names.end());
             auto* prp = static_cast<CEGUI::DefaultResourceProvider*>(
                 CEGUI::System::getSingleton().getResourceProvider());
             prp->setResourceGroupDirectory(_szGroup, dir + "/");
@@ -599,9 +825,41 @@ namespace gitgud::ui
         };
 
         // A package's own icons. Imagesets stay loaded once defined (image
-        // names are the package's own, so they don't disturb other UIs).
+        // names are the package's own, so they don't disturb other UIs). One
+        // whose file changed since it was loaded is loaded again, so a
+        // hot-reload shows new icons; every window is gone
+        // by now (UnloadAll), and the looks that use the images are parsed
+        // again below.
+        // A file's path: the overlay's when it has one.
+        auto resolved = [&](const std::string& _Relative)
+        {
+            std::error_code ec;
+            if (!m_OverlayRoot.empty() &&
+                fs::is_regular_file(fs::u8path(m_OverlayRoot + "/" + _Relative), ec))
+            {
+                return m_OverlayRoot + "/" + _Relative;
+            }
+            return _PackageRoot + "/" + _Relative;
+        };
         for (const std::string& file : packageFiles("imagesets", "ui-imagesets"))
         {
+            const fs::path path = fs::u8path(resolved("imagesets/" + file));
+            std::error_code tec;
+            const fs::file_time_type written = fs::last_write_time(path, tec);
+            const auto known = m_ImagesetTimes.find(path.u8string());
+            if (known != m_ImagesetTimes.end())
+            {
+                if (known->second == written)
+                {
+                    continue; // loaded, and unchanged
+                }
+                const std::string name = ImagesetName(path);
+                if (!name.empty())
+                {
+                    CEGUI::ImageManager::getSingleton().destroyImageCollection(name);
+                }
+            }
+            m_ImagesetTimes[path.u8string()] = written;
             try
             {
                 CEGUI::ImageManager::getSingleton().loadImageset(file, "ui-imagesets");
@@ -613,8 +871,87 @@ namespace gitgud::ui
             }
         }
 
+        // A package's own window types: schemes/*.xml with FalagardMapping
+        // lines (type -> base type, renderer, look; the looks come from its
+        // looknfeel/). Like imagesets they stay defined; loading one again
+        // returns the existing scheme.
+        for (const std::string& file : packageFiles("schemes", "ui-schemes"))
+        {
+            try
+            {
+                CEGUI::SchemeManager::getSingleton().createFromFile(file, "ui-schemes");
+            }
+            catch (const CEGUI::Exception& e)
+            {
+                std::fprintf(stderr, "[CeguiBackend] scheme '%s' failed: %s\n", file.c_str(), e.what());
+            }
+        }
+
+        // A package's own fonts: fonts.ini lines "Name = file.ttf, size" (size
+        // in pixels), the file from <package>/fonts, else the GitGud UI's
+        // fonts. Like imagesets they stay defined; a name already defined
+        // keeps its first definition.
+        if (!_PackageRoot.empty())
+        {
+            std::ifstream in(fs::u8path(resolved("fonts.ini")), std::ios::binary);
+            auto* prp = static_cast<CEGUI::DefaultResourceProvider*>(
+                CEGUI::System::getSingleton().getResourceProvider());
+            prp->setResourceGroupDirectory("ui-fonts", _PackageRoot + "/fonts/");
+            CEGUI::FontManager& fonts = CEGUI::FontManager::getSingleton();
+            std::string line;
+            while (std::getline(in, line))
+            {
+                const auto neq = line.find('=');
+                const auto ncomma = line.find(',', neq == std::string::npos ? 0 : neq);
+                if (line.empty() || line[0] == '#' || neq == std::string::npos ||
+                    ncomma == std::string::npos)
+                {
+                    continue;
+                }
+                auto trim = [](std::string _S)
+                {
+                    const auto nfirst = _S.find_first_not_of(" \t\r\n");
+                    const auto nlast = _S.find_last_not_of(" \t\r\n");
+                    return nfirst == std::string::npos ? std::string()
+                                                       : _S.substr(nfirst, nlast - nfirst + 1);
+                };
+                const std::string name = trim(line.substr(0, neq));
+                const std::string file = trim(line.substr(neq + 1, ncomma - neq - 1));
+                const float fsize = std::strtof(trim(line.substr(ncomma + 1)).c_str(), nullptr);
+                if (name.empty() || file.empty() || fsize <= 0.0f || fonts.isDefined(name))
+                {
+                    continue;
+                }
+                // Look before loading: CEGUI logs a missing file as an error
+                // even when the next folder has it.
+                std::error_code ec;
+                const char* szgroup =
+                    fs::exists(fs::u8path(resolved("fonts/" + file)), ec) ? "ui-fonts" : "gitgud-fonts";
+                try
+                {
+                    fonts.createFreeTypeFont(
+                        name, fsize, CEGUI::FontSizeUnit::Pixels, true, file, szgroup);
+                }
+                catch (...)
+                {
+                    // reported below
+                }
+                if (!fonts.isDefined(name))
+                {
+                    std::fprintf(stderr, "[CeguiBackend] font '%s' (%s) failed\n", name.c_str(),
+                        file.c_str());
+                }
+            }
+        }
+
+        // The package's palette swap, used by every layout and look loaded
+        // from here on (ui/ColourMap.h).
+        ColourMap colours = LoadColourFile(_ColourFile);
+        const bool brecolour = !colours.empty();
+        m_pResourceProvider->SetColourMap(std::move(colours));
+
         const std::vector<std::string> looks = packageFiles("looknfeel", "ui-looknfeel");
-        if (looks.empty() && m_SkinOverride.empty())
+        if (looks.empty() && m_SkinOverride.empty() && !brecolour && !m_bSkinRecoloured)
         {
             return; // the base skin is what's loaded
         }
@@ -622,7 +959,7 @@ namespace gitgud::ui
         // CEGUI's addWidgetLook logs "Replacing previous definition" but
         // keeps the old one (it emplaces), so erase every look a file defines
         // before parsing it. No window is alive to be using them.
-        auto parse = [](const std::string& _File, const char* _szGroup, const std::string& _Path)
+        auto parse = [this](const std::string& _File, const char* _szGroup, const std::string& _Path)
         {
             std::ifstream in(fs::u8path(_Path), std::ios::binary);
             const std::string xml(
@@ -642,15 +979,31 @@ namespace gitgud::ui
                     }
                 }
             }
-            try
+            for (int iattempt = 0; iattempt < 2; ++iattempt)
             {
-                WidgetLookManager::getSingleton().parseLookNFeelSpecificationFromFile(
-                    _File, _szGroup);
-            }
-            catch (const CEGUI::Exception& e)
-            {
-                std::fprintf(
-                    stderr, "[CeguiBackend] looknfeel '%s' failed: %s\n", _File.c_str(), e.what());
+                m_pResourceProvider->TakeOverlayReads();
+                try
+                {
+                    WidgetLookManager::getSingleton().parseLookNFeelSpecificationFromFile(
+                        _File, _szGroup);
+                    return;
+                }
+                catch (const CEGUI::Exception& e)
+                {
+                    std::fprintf(stderr, "[CeguiBackend] looknfeel '%s' failed: %s\n",
+                        _File.c_str(), e.what());
+                    // A broken overlay file: the package's own instead.
+                    const std::vector<std::string> overlays = m_pResourceProvider->TakeOverlayReads();
+                    if (overlays.empty())
+                    {
+                        return;
+                    }
+                    for (const std::string& file : overlays)
+                    {
+                        m_pResourceProvider->Disable(file);
+                        m_OverlayErrors.emplace_back(file, e.what());
+                    }
+                }
             }
         };
 
@@ -672,10 +1025,11 @@ namespace gitgud::ui
             }
         }
 
+        m_bSkinRecoloured = brecolour;
         m_SkinOverride = looks.empty() ? std::string() : _PackageRoot;
         for (const std::string& file : looks)
         {
-            parse(file, "ui-looknfeel", _PackageRoot + "/looknfeel/" + file);
+            parse(file, "ui-looknfeel", resolved("looknfeel/" + file));
         }
     }
 
@@ -818,6 +1172,7 @@ namespace gitgud::ui
 
     void CeguiBackend::RenderSurface(const std::string& _SurfaceId)
     {
+        GITGUD_PROFILE_FUNCTION();
         const auto it = m_Surfaces.find(_SurfaceId);
         if (it == m_Surfaces.end())
         {
@@ -1127,6 +1482,23 @@ namespace gitgud::ui
                 });
         }
 
+        // The mouse coming over a window (or its children) and leaving it,
+        // for the windows a script asked about (ReportHover, SetProperty).
+        for (const auto& [event, value] : {std::pair{&CEGUI::Window::EventCursorEntersArea, "1"},
+                 std::pair{&CEGUI::Window::EventCursorLeavesArea, "0"}})
+        {
+            _pWindow->subscribeEvent(*event,
+                [widgetId, pwindow = _pWindow, value = std::string(value), raise](
+                    const CEGUI::EventArgs&) -> bool
+                {
+                    if (UserStringOf(pwindow, kReportHover) == "true")
+                    {
+                        raise(widgetId, "hovered", value);
+                    }
+                    return false;
+                });
+        }
+
         _pWindow->subscribeEvent(CEGUI::Window::EventDoubleClick,
             [this, widgetId, plistForRows, raise](const CEGUI::EventArgs& _Args) -> bool
             {
@@ -1159,6 +1531,7 @@ namespace gitgud::ui
 
     void CeguiBackend::Update(float _fElapsed)
     {
+        GITGUD_PROFILE_FUNCTION();
         CEGUI::System::getSingleton().injectTimePulse(_fElapsed);
         m_pGuiContext->injectTimePulse(_fElapsed);
         for (auto& [id, surface] : m_Surfaces)
@@ -1174,6 +1547,7 @@ namespace gitgud::ui
 
     void CeguiBackend::Render()
     {
+        GITGUD_PROFILE_FUNCTION();
         m_bForceRedraw = false;
         RenderContext(*m_pGuiContext);
     }
@@ -1182,6 +1556,7 @@ namespace gitgud::ui
     {
         InputContext()->injectMousePosition(_fX, _fY);
         UpdateCursorShape();
+        PointerMoved();
     }
 
     void CeguiBackend::InjectMouseButton(int _iButton, bool _bDown)
@@ -1193,11 +1568,13 @@ namespace gitgud::ui
         }
         if (_bDown)
         {
+            PointerButton(_iButton, true);
             InputContext()->injectMouseButtonDown(mapped);
         }
         else
         {
             InputContext()->injectMouseButtonUp(mapped);
+            PointerButton(_iButton, false);
         }
         // A drag ending can leave the mouse over something else.
         UpdateCursorShape();
@@ -1227,12 +1604,133 @@ namespace gitgud::ui
         }
         if (_bDown)
         {
+            if ((scan == CEGUI::Key::Scan::Return || scan == CEGUI::Key::Scan::NumpadEnter) &&
+                SubmitOnEnter())
+            {
+                return;
+            }
+            if (scan == CEGUI::Key::Scan::Tab && MoveFocusOnTab())
+            {
+                return;
+            }
             InputContext()->injectKeyDown(scan);
         }
         else
         {
             InputContext()->injectKeyUp(scan);
         }
+    }
+
+    // A multi-line box whose layout sets <UserString name="SubmitOnEnter"
+    // value="true"/> works like a chat box: Enter raises "accepted" and
+    // Shift+Enter breaks the line. Ctrl+Enter and Alt+Enter are left to the
+    // key bindings.
+    bool CeguiBackend::SubmitOnEnter()
+    {
+        CEGUI::GUIContext* pcontext = InputContext();
+        auto* pedit = pcontext ? dynamic_cast<CEGUI::MultiLineEditbox*>(pcontext->getActiveWindow())
+                               : nullptr;
+        static const CEGUI::String kSubmitOnEnter("SubmitOnEnter");
+        if (!pedit || !pedit->isUserStringDefined(kSubmitOnEnter) ||
+            ToStdString(pedit->getUserString(kSubmitOnEnter)) != "true" || pedit->isReadOnly() ||
+            pedit->isEffectiveDisabled())
+        {
+            return false;
+        }
+
+        const CEGUI::ModifierKeys mods = pcontext->getModifierKeys();
+        if (mods.hasCtrl() || mods.hasAlt())
+        {
+            return false;
+        }
+        if (mods.hasShift())
+        {
+            // The box itself only breaks lines on a bare Enter: replace the
+            // selection with a line break here.
+            CEGUI::String text = pedit->getText();
+            const size_t start = pedit->getSelectionStart();
+            const size_t length = pedit->getSelectionLength();
+            if (text.length() - length + 1 > pedit->getMaxTextLength())
+            {
+                return true;
+            }
+            text.replace(start, length, 1, '\n');
+            pedit->setText(text);
+            pedit->setCaretIndex(start + 1);
+            pedit->ensureCaretIsVisible();
+            return true;
+        }
+
+        if (m_EventHandler && !m_bSuppressEvents)
+        {
+            m_EventHandler(WidgetEvent{ToStdString(pedit->getName()), "accepted", ""});
+        }
+        return true;
+    }
+
+    // Tab and Shift+Tab move to the next and previous text box of the same
+    // dialog or view, wrapping around, and select its text (see IsTabStop,
+    // TabScope and SortTabStops). From a checkbox or button inside a dialog
+    // they go to the nearest box after or before it. Ctrl+Tab and Alt+Tab
+    // stay with the key bindings, and a box that isn't a tab stop (the agent
+    // prompt, document editors) keeps its Tab.
+    bool CeguiBackend::MoveFocusOnTab()
+    {
+        CEGUI::GUIContext* pcontext = InputContext();
+        CEGUI::Window* pactive = pcontext ? pcontext->getActiveWindow() : nullptr;
+        if (!pactive)
+        {
+            return false;
+        }
+        const CEGUI::ModifierKeys mods = pcontext->getModifierKeys();
+        if (mods.hasCtrl() || mods.hasAlt())
+        {
+            return false;
+        }
+
+        const bool bfield = IsTabStop(pactive);
+        if (!bfield && dynamic_cast<CEGUI::EditboxBase*>(pactive))
+        {
+            return false;
+        }
+        CEGUI::Window* pscope = TabScope(pactive, pcontext->getRootWindow());
+        if (!bfield && !IsTabGroup(pscope))
+        {
+            return false;
+        }
+
+        std::vector<CEGUI::Window*> stops;
+        CollectTabStops(pscope, stops);
+        if (!bfield)
+        {
+            stops.push_back(pactive); // sorted in, to find its neighbours
+        }
+        if (stops.size() < 2)
+        {
+            return false;
+        }
+        SortTabStops(stops);
+
+        const auto it = std::find(stops.begin(), stops.end(), pactive);
+        if (it == stops.end())
+        {
+            return false;
+        }
+        const size_t nindex = static_cast<size_t>(it - stops.begin());
+        const size_t ncount = stops.size();
+        const size_t nnext =
+            mods.hasShift() ? (nindex + ncount - 1) % ncount : (nindex + 1) % ncount;
+        CEGUI::Window* ptarget = stops[nnext];
+
+        ptarget->activate();
+        if (auto* pedit = dynamic_cast<CEGUI::EditboxBase*>(ptarget))
+        {
+            const size_t nlength = pedit->getText().length();
+            pedit->setCaretIndex(nlength);
+            pedit->setSelection(0, nlength);
+            pedit->ensureCaretIsVisible();
+        }
+        return true;
     }
 
     CEGUI::Window* CeguiBackend::FindWidget(const std::string& _WidgetId) const
@@ -1287,12 +1785,46 @@ namespace gitgud::ui
         {
             // No "changed" echo for text the app itself pushes.
             m_bSuppressEvents = true;
-            pw->setText(_Text);
+            pw->setText(ThemedText(_Text));
             m_bSuppressEvents = false;
         }
     }
 
+    std::string CeguiBackend::Themed(const std::string& _Text) const
+    {
+        return m_pResourceProvider ? Recolour(_Text, m_pResourceProvider->GetColourMap()) : _Text;
+    }
+
+    std::string CeguiBackend::ThemedText(const std::string& _Text) const
+    {
+        return m_pResourceProvider ? RecolourMarkup(_Text, m_pResourceProvider->GetColourMap())
+                                   : _Text;
+    }
+
+    std::string CeguiBackend::ThemeColour(const std::string& _Name) const
+    {
+        return m_pResourceProvider ? TokenColour(m_pResourceProvider->GetColourMap(), _Name)
+                                   : std::string();
+    }
+
     void CeguiBackend::SetList(const std::string& _WidgetId, const std::vector<std::string>& _Items)
+    {
+        GITGUD_PROFILE_FUNCTION();
+        if (!m_pResourceProvider || m_pResourceProvider->GetColourMap().empty())
+        {
+            FillList(_WidgetId, _Items);
+            return;
+        }
+        std::vector<std::string> themed;
+        themed.reserve(_Items.size());
+        for (const std::string& item : _Items)
+        {
+            themed.push_back(ThemedText(item));
+        }
+        FillList(_WidgetId, themed);
+    }
+
+    void CeguiBackend::FillList(const std::string& _WidgetId, const std::vector<std::string>& _Items)
     {
         auto* plist = dynamic_cast<CEGUI::ListWidget*>(FindWidget(_WidgetId));
         if (!plist)
@@ -1379,9 +1911,15 @@ namespace gitgud::ui
         {
             return;
         }
+        if (_Property == kReportHover)
+        {
+            // Not a CEGUI property: kept as the window's UserString.
+            pw->setUserString(kReportHover, _Value);
+            return;
+        }
         try
         {
-            pw->setProperty(_Property, _Value);
+            pw->setProperty(_Property, Themed(_Value));
         }
         catch (const CEGUI::Exception& e)
         {
@@ -1554,7 +2092,7 @@ namespace gitgud::ui
         m_ListFingerprints.erase(plist); // no longer what SetList filled in
         m_bSuppressEvents = true;
         plist->getModel()->updateItemText(
-            plist->getItemAtIndex(static_cast<size_t>(_iIndex)), _Text);
+            plist->getItemAtIndex(static_cast<size_t>(_iIndex)), ThemedText(_Text));
         m_bSuppressEvents = false;
     }
 
@@ -1720,6 +2258,14 @@ namespace gitgud::ui
         {
             ishape = SDL_SYSTEM_CURSOR_HAND;
         }
+        else if (_Shape == "ibeam")
+        {
+            ishape = SDL_SYSTEM_CURSOR_IBEAM;
+        }
+        else if (_Shape == "arrow")
+        {
+            ishape = SDL_SYSTEM_CURSOR_ARROW;
+        }
         if (ishape < 0)
         {
             m_CursorShapes.erase(pw);
@@ -1851,6 +2397,117 @@ namespace gitgud::ui
         }
     }
 
+    float CeguiBackend::GetScrollMax(const std::string& _WidgetId, bool _bHorizontal) const
+    {
+        const CEGUI::Scrollbar* psb = ScrollbarOf(FindWidget(_WidgetId), _bHorizontal);
+        return psb ? std::max(0.0f, psb->getDocumentSize() - psb->getPageSize()) : 0.0f;
+    }
+
+    void CeguiBackend::WatchScroll(const std::string& _WidgetId)
+    {
+        static const CEGUI::String kWatched("AppScrollWatched");
+        CEGUI::Window* pw = FindWidget(_WidgetId);
+        CEGUI::Scrollbar* psb = ScrollbarOf(pw, false);
+        if (!psb || pw->isUserStringDefined(kWatched))
+        {
+            return;
+        }
+        pw->setUserString(kWatched, "true");
+        psb->subscribeEvent(CEGUI::Scrollbar::EventScrollPositionChanged,
+            [this, psb, _WidgetId](const CEGUI::EventArgs&) -> bool
+            {
+                if (m_EventHandler)
+                {
+                    m_EventHandler(WidgetEvent{
+                        _WidgetId, "scrolled", std::to_string(psb->getScrollPosition())});
+                }
+                return false;
+            });
+    }
+
+    void CeguiBackend::WatchPointer(const std::string& _WidgetId)
+    {
+        if (std::find(m_PointerWatched.begin(), m_PointerWatched.end(), _WidgetId) ==
+            m_PointerWatched.end())
+        {
+            m_PointerWatched.push_back(_WidgetId);
+        }
+    }
+
+    void CeguiBackend::PointerButton(int _iButton, bool _bDown)
+    {
+        CEGUI::GUIContext* pcontext = InputContext();
+        if (!pcontext || !m_EventHandler || m_PointerWatched.empty())
+        {
+            return;
+        }
+        const glm::vec2 pos = pcontext->getCursorPosition();
+        const std::string at =
+            std::to_string(static_cast<int>(pos.x)) + "," + std::to_string(static_cast<int>(pos.y));
+        if (!_bDown)
+        {
+            if (!m_PointerHeld.empty() && _iButton == m_iPointerButton)
+            {
+                const std::string id = m_PointerHeld;
+                m_PointerHeld.clear();
+                m_EventHandler(WidgetEvent{id, "pointerUp", at + "," + std::to_string(_iButton)});
+            }
+            return;
+        }
+        if (!m_PointerHeld.empty() || (_iButton != 1 && _iButton != 3))
+        {
+            return;
+        }
+        // The deepest widget under the mouse that takes input (static texts
+        // let it through), then up its parents to a watched one.
+        CEGUI::Window* proot = pcontext->getRootWindow();
+        CEGUI::Window* pw = proot ? proot->getTargetChildAtPosition(pos) : nullptr;
+        bool bcontrol = false;
+        for (; pw; pw = pw->getParent())
+        {
+            if (dynamic_cast<CEGUI::ButtonBase*>(pw) || dynamic_cast<CEGUI::Editbox*>(pw) ||
+                dynamic_cast<CEGUI::MultiLineEditbox*>(pw) || dynamic_cast<CEGUI::ItemView*>(pw) ||
+                dynamic_cast<CEGUI::Scrollbar*>(pw))
+            {
+                bcontrol = true;
+            }
+            const std::string name = ToStdString(pw->getName());
+            const auto it = std::find(m_PointerWatched.begin(), m_PointerWatched.end(), name);
+            if (it == m_PointerWatched.end() || FindWidget(name) != pw)
+            {
+                continue;
+            }
+            // Presses close together in time and place count up to three.
+            const std::uint64_t unow = SDL_GetTicks64();
+            const bool bagain = _iButton == m_iPointerButton && unow - m_uPointerLastMs <= 500 &&
+                                std::fabs(pos.x - m_fPointerLastX) <= 4.0f &&
+                                std::fabs(pos.y - m_fPointerLastY) <= 4.0f;
+            m_iPointerClicks = bagain ? (m_iPointerClicks % 3) + 1 : 1;
+            m_uPointerLastMs = unow;
+            m_fPointerLastX = pos.x;
+            m_fPointerLastY = pos.y;
+            m_iPointerButton = _iButton;
+            m_PointerHeld = name;
+            m_EventHandler(WidgetEvent{name, "pointerDown",
+                at + "," + std::to_string(_iButton) + "," + std::to_string(m_iPointerClicks) + "," +
+                    (bcontrol ? "1" : "0")});
+            return;
+        }
+    }
+
+    void CeguiBackend::PointerMoved()
+    {
+        CEGUI::GUIContext* pcontext = InputContext();
+        if (m_PointerHeld.empty() || !pcontext || !m_EventHandler)
+        {
+            return;
+        }
+        const glm::vec2 pos = pcontext->getCursorPosition();
+        m_EventHandler(WidgetEvent{m_PointerHeld, "pointerMoved",
+            std::to_string(static_cast<int>(pos.x)) + "," +
+                std::to_string(static_cast<int>(pos.y))});
+    }
+
     void CeguiBackend::Focus(const std::string& _WidgetId)
     {
         if (auto* pw = FindWidget(_WidgetId))
@@ -1880,6 +2537,7 @@ namespace gitgud::ui
             return false;
         }
 
+        bool bredefined = true;
         try
         {
             const CEGUI::String textureName = "gitgud-texture:" + _ImageName;
@@ -1890,7 +2548,8 @@ namespace gitgud::ui
             ptexture->loadFromMemory(_Rgba.data(), size, CEGUI::Texture::PixelFormat::Rgba);
 
             auto& images = CEGUI::ImageManager::getSingleton();
-            if (!images.isDefined(_ImageName))
+            bredefined = images.isDefined(_ImageName);
+            if (!bredefined)
             {
                 images.create("BitmapImage", _ImageName);
             }
@@ -1907,8 +2566,27 @@ namespace gitgud::ui
         }
 
         // Widgets already showing this image name cached its old geometry.
-        InvalidateAll();
+        // A new name has none showing it: every window drawn again for each
+        // new picture made opening a conversation with screenshots slow.
+        if (bredefined && m_bHoldImageRedraws)
+        {
+            m_bImageRedrawHeld = true;
+        }
+        else if (bredefined)
+        {
+            InvalidateAll();
+        }
         return true;
+    }
+
+    void CeguiBackend::HoldImageRedraws(bool _bHold)
+    {
+        m_bHoldImageRedraws = _bHold;
+        if (!_bHold && m_bImageRedrawHeld)
+        {
+            m_bImageRedrawHeld = false;
+            InvalidateAll();
+        }
     }
 
     bool CeguiBackend::DefineImageAtlas(const std::string& _TextureName, int _iWidth, int _iHeight,
@@ -1958,8 +2636,32 @@ namespace gitgud::ui
         return true;
     }
 
+    void CeguiBackend::CountWindows(int& _iTotal, int& _iDrawn) const
+    {
+        _iTotal = 0;
+        _iDrawn = 0;
+        if (!m_pRootWindow)
+        {
+            return;
+        }
+        std::vector<std::pair<const CEGUI::Window*, bool>> stack{{m_pRootWindow, m_pRootWindow->isVisible()}};
+        while (!stack.empty())
+        {
+            const auto [pwindow, bdrawn] = stack.back();
+            stack.pop_back();
+            ++_iTotal;
+            _iDrawn += bdrawn ? 1 : 0;
+            for (std::size_t i = 0; i < pwindow->getChildCount(); ++i)
+            {
+                const CEGUI::Window* pchild = pwindow->getChildAtIndex(i);
+                stack.emplace_back(pchild, bdrawn && pchild->isVisible());
+            }
+        }
+    }
+
     void CeguiBackend::InvalidateAll()
     {
+        GITGUD_PROFILE_FUNCTION();
         if (m_pRootWindow)
         {
             m_pRootWindow->invalidate(true);
@@ -2001,6 +2703,160 @@ namespace gitgud::ui
         _Out.m_fWidth = rect.getWidth();
         _Out.m_fHeight = rect.getHeight();
         return true;
+    }
+
+    namespace
+    {
+
+        // A static text keeps its laid-out text, its text area and its
+        // scrollbar to itself (protected). A class derived from it may name
+        // them, and the member pointers it takes work on any static text.
+        struct StaticTextParts : CEGUI::FalagardStaticText
+        {
+            static const CEGUI::RenderedText& Text(const CEGUI::FalagardStaticText& _Text)
+            {
+                return _Text.*(&StaticTextParts::d_renderedText);
+            }
+            static CEGUI::Rectf Area(const CEGUI::FalagardStaticText& _Text)
+            {
+                return (_Text.*(&StaticTextParts::getTextRenderArea))();
+            }
+            static CEGUI::Scrollbar* VertScrollbar(const CEGUI::FalagardStaticText& _Text)
+            {
+                return (_Text.*(&StaticTextParts::getVertScrollbar))();
+            }
+        };
+
+    } // namespace
+
+    namespace
+    {
+
+        // Where a static text's laid-out text is drawn: its renderer, and the
+        // top left of the text in the same pixels as the widget's children's
+        // areas (origin) and on screen (screen).
+        struct TextPlace
+        {
+            const CEGUI::FalagardStaticText* m_pText = nullptr;
+            glm::vec2 m_Origin{0.0f, 0.0f};
+            glm::vec2 m_Screen{0.0f, 0.0f};
+        };
+
+        bool PlaceText(CEGUI::Window* _pW, TextPlace& _Out)
+        {
+            auto* ptext =
+                _pW ? dynamic_cast<CEGUI::FalagardStaticText*>(_pW->getWindowRenderer()) : nullptr;
+            if (!ptext)
+            {
+                return false;
+            }
+            // Where the text is drawn, as FalagardStaticText::createRenderGeometry
+            // places it (getTextRenderArea lays it out first).
+            const CEGUI::Rectf area = StaticTextParts::Area(*ptext);
+            const CEGUI::RenderedText& rendered = StaticTextParts::Text(*ptext);
+            float fy = area.top();
+            const CEGUI::Scrollbar* pscroll = StaticTextParts::VertScrollbar(*ptext);
+            if (pscroll && pscroll->isEffectiveVisible())
+            {
+                fy -= pscroll->getScrollPosition();
+            }
+            else if (ptext->getActualVerticalFormatting() ==
+                     CEGUI::VerticalTextFormatting::CentreAligned)
+            {
+                fy += CEGUI::CoordConverter::alignToPixels(
+                    (area.getHeight() - rendered.getExtents().d_height) * 0.5f);
+            }
+            else if (ptext->getActualVerticalFormatting() ==
+                     CEGUI::VerticalTextFormatting::BottomAligned)
+            {
+                fy = area.bottom() - rendered.getExtents().d_height;
+            }
+            // Children are placed from the widget's content area, not its edge.
+            const glm::vec2 edge = _pW->getUnclippedOuterRect().get().getPosition();
+            const glm::vec2 origin = edge - _pW->getChildContentArea(false).get().getPosition();
+            _Out.m_pText = ptext;
+            _Out.m_Origin = glm::vec2(origin.x + area.left(), origin.y + fy);
+            _Out.m_Screen = glm::vec2(edge.x + area.left(), edge.y + fy);
+            return true;
+        }
+
+        std::vector<PixelRect> IndexRects(CEGUI::Window* _pW, const std::vector<size_t>& _Indices)
+        {
+            TextPlace place;
+            if (!PlaceText(_pW, place))
+            {
+                return {};
+            }
+            const CEGUI::RenderedText& rendered = StaticTextParts::Text(*place.m_pText);
+            std::vector<PixelRect> boxes;
+            for (const size_t nindex : _Indices)
+            {
+                CEGUI::Rectf box;
+                if (rendered.getTextIndexBounds(nindex, box))
+                {
+                    boxes.push_back(PixelRect{place.m_Origin.x + box.left(),
+                        place.m_Origin.y + box.top(), box.getWidth(), box.getHeight()});
+                }
+            }
+            return JoinLineBoxes(boxes);
+        }
+
+    } // namespace
+
+    std::vector<PixelRect> CeguiBackend::TextRects(
+        const std::string& _WidgetId, size_t _nFirst, size_t _nLast) const
+    {
+        auto* pw = FindWidget(_WidgetId);
+        if (!pw)
+        {
+            return {};
+        }
+        return IndexRects(pw, ShownIndices(ToStdString(pw->getText()), _nFirst, _nLast));
+    }
+
+    std::vector<PixelRect> CeguiBackend::ShownRects(
+        const std::string& _WidgetId, size_t _nFirst, size_t _nLast) const
+    {
+        auto* pw = FindWidget(_WidgetId);
+        if (!pw || _nLast < _nFirst)
+        {
+            return {};
+        }
+        std::vector<size_t> indices;
+        for (size_t ni = _nFirst; ni <= _nLast; ++ni)
+        {
+            indices.push_back(ni);
+        }
+        return IndexRects(pw, indices);
+    }
+
+    long CeguiBackend::TextIndexAt(const std::string& _WidgetId, float _fX, float _fY) const
+    {
+        TextPlace place;
+        if (!PlaceText(FindWidget(_WidgetId), place))
+        {
+            return -1;
+        }
+        const CEGUI::RenderedText& rendered = StaticTextParts::Text(*place.m_pText);
+        const glm::vec2 pt(_fX - place.m_Screen.x, _fY - place.m_Screen.y);
+        const size_t nshown = ShownLength(ToStdString(place.m_pText->getWindow()->getText()));
+        if (pt.y < 0.0f)
+        {
+            return 0;
+        }
+        if (pt.y > rendered.getExtents().d_height)
+        {
+            return static_cast<long>(nshown);
+        }
+        float frel = 0.0f;
+        const size_t nindex = rendered.getTextIndexAtPoint(pt, &frel);
+        if (nindex == CEGUI::RenderedText::npos)
+        {
+            return static_cast<long>(nshown);
+        }
+        // Past the middle of a character, the caret goes after it.
+        const size_t ncaret = nindex + (frel >= 0.5f ? 1 : 0);
+        return static_cast<long>(std::min(ncaret, nshown));
     }
 
     bool CeguiBackend::IsTextInputFocused() const

@@ -12,6 +12,7 @@
 #include "ui/IUiBackend.h"
 
 #include <cstdint>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -30,6 +31,8 @@ namespace CEGUI
 namespace gitgud::ui
 {
 
+    class PackageResourceProvider;
+
     class CeguiBackend final : public IUiBackend
     {
       public:
@@ -44,7 +47,10 @@ namespace gitgud::ui
         bool LoadLayoutInto(const std::string& _LayoutFile, const std::string& _ParentId) override;
 
         void SetLayoutDirectory(const std::string& _Directory) override;
-        void ApplySkin(const std::string& _PackageRoot) override;
+        void ApplySkin(const std::string& _PackageRoot, const std::string& _ColourFile) override;
+        std::string ThemeColour(const std::string& _Name) const override;
+        void SetOverlayRoot(const std::string& _Root) override;
+        std::vector<std::pair<std::string, std::string>> TakeOverlayErrors() override;
         void UnloadAll() override;
 
         bool CreateSurface(const std::string& _SurfaceId, int _iWidth, int _iHeight,
@@ -87,10 +93,14 @@ namespace gitgud::ui
         float GetScroll(const std::string& _WidgetId, bool _bHorizontal = false) const override;
         void SetScroll(
             const std::string& _WidgetId, float _fPosition, bool _bHorizontal = false) override;
+        float GetScrollMax(const std::string& _WidgetId, bool _bHorizontal = false) const override;
+        void WatchScroll(const std::string& _WidgetId) override;
+        void WatchPointer(const std::string& _WidgetId) override;
         void Focus(const std::string& _WidgetId) override;
         void BringToFront(const std::string& _WidgetId) override;
         bool DefineImage(const std::string& _ImageName, int _iWidth, int _iHeight,
             const std::vector<std::uint8_t>& _Rgba) override;
+        void HoldImageRedraws(bool _bHold) override;
         bool DefineImageAtlas(const std::string& _TextureName, int _iWidth, int _iHeight,
             const std::vector<std::uint8_t>& _Rgba, const std::vector<ImageRegion>& _Regions,
             float _fDensity) override;
@@ -104,6 +114,11 @@ namespace gitgud::ui
         std::string GetProperty(
             const std::string& _WidgetId, const std::string& _Property) const override;
         bool GetRect(const std::string& _WidgetId, PixelRect& _Out) const override;
+        std::vector<PixelRect> TextRects(
+            const std::string& _WidgetId, size_t _nFirst, size_t _nLast) const override;
+        std::vector<PixelRect> ShownRects(
+            const std::string& _WidgetId, size_t _nFirst, size_t _nLast) const override;
+        long TextIndexAt(const std::string& _WidgetId, float _fX, float _fY) const override;
         bool IsTextInputFocused() const override;
 
         bool IsDragRegion(float _fX, float _fY) const override;
@@ -111,6 +126,19 @@ namespace gitgud::ui
         void OnEvent(EventHandler _Handler) override;
 
       private:
+        // Text or a property value from the scripts, through the running
+        // package's colour map (ui/ColourMap.h).
+        std::string Themed(const std::string& _Text) const;
+        // Display text: only colours inside its markup tags are swapped.
+        std::string ThemedText(const std::string& _Text) const;
+        // SetList with the rows already themed.
+        void FillList(const std::string& _WidgetId, const std::vector<std::string>& _Items);
+        // Enter in a multi-line box marked SubmitOnEnter: true when it was used.
+        bool SubmitOnEnter();
+        // Tab or Shift+Tab in a text box: move to the next or previous one of
+        // its dialog or view. True when focus moved.
+        bool MoveFocusOnTab();
+
         // One pop-out window: its own GUI context drawing into a viewport of
         // the shared GL context.
         struct Surface
@@ -132,6 +160,7 @@ namespace gitgud::ui
         void RenderContext(CEGUI::GUIContext& _Context);
         // Drop cached geometry in every window (an image they show changed).
         void InvalidateAll();
+        void CountWindows(int& _iTotal, int& _iDrawn) const override;
         void SubscribeWidgetEvents(CEGUI::Window* _pWindow);
         CEGUI::Window* FindWidget(const std::string& _WidgetId) const;
         void CacheWidget(const std::string& _WidgetId, CEGUI::Window* _pWindow) const;
@@ -163,6 +192,20 @@ namespace gitgud::ui
         // mid-drag. Keyed by window so a recreated widget subscribes afresh.
         std::unordered_map<CEGUI::Window*, bool> m_Draggable;
 
+        // Widgets whose mouse presses are reported (WatchPointer), the one a
+        // held button went down over ("" when none) and that button, and the
+        // last press, for counting double and triple presses.
+        std::vector<std::string> m_PointerWatched;
+        std::string m_PointerHeld;
+        int m_iPointerButton = 0;
+        int m_iPointerClicks = 0;
+        std::uint64_t m_uPointerLastMs = 0;
+        float m_fPointerLastX = 0.0f;
+        float m_fPointerLastY = 0.0f;
+        // Raise the pointer events for a button going down or up, or a move.
+        void PointerButton(int _iButton, bool _bDown);
+        void PointerMoved();
+
         // System cursor shapes asked for per widget (SetCursorShape), as SDL
         // system cursor ids, and the one showing now (-1: CEGUI's own cursor).
         std::unordered_map<CEGUI::Window*, int> m_CursorShapes;
@@ -191,6 +234,15 @@ namespace gitgud::ui
         std::string m_InputSurface; // "" = the main window
         std::string m_ResourceRoot;
         std::string m_SkinOverride; // package whose looknfeel is applied over the base skin
+        std::string m_OverlayRoot;  // the package's overlay ("" for none)
+        // Overlay files that failed to load, with why (TakeOverlayErrors).
+        mutable std::vector<std::pair<std::string, std::string>> m_OverlayErrors;
+        bool m_bSkinRecoloured = false; // the loaded base skin went through a colour map
+        // Package imageset files loaded, and when each was written then (a
+        // changed one is loaded again: ApplySkin).
+        std::map<std::string, std::filesystem::file_time_type> m_ImagesetTimes;
+        // Owned by CEGUI's System (destroySystem deletes it).
+        PackageResourceProvider* m_pResourceProvider = nullptr;
         // OS clipboard bridge; CEGUI does not take ownership.
         std::unique_ptr<CEGUI::NativeClipboardProvider> m_ClipboardProvider;
         // Created before CEGUI's System so its log lands in platform::LogDirectory().
@@ -199,6 +251,8 @@ namespace gitgud::ui
         // Set when something outside CEGUI's own dirty tracking (a resize)
         // requires a fresh frame.
         bool m_bForceRedraw = true;
+        bool m_bHoldImageRedraws = false;
+        bool m_bImageRedrawHeld = false;
     };
 
 } // namespace gitgud::ui

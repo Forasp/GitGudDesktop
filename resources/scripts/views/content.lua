@@ -14,9 +14,11 @@
 --   content.showWorkingFile(path, force)   diff of one changed file
 --   content.showCommitFile(oid, fileDiff)  one file of a commit/stash
 --   content.showEmpty({ title, body, actions = { {label, action}, ... } })
---   content.setTitle(markup)
+--   content.setTitle(markup)               publishes "content.title"
+--   content.arrangement()  content.setLook(fields)
 
 local C = require("core.palette")
+local app = require("core.app")
 local diff = require("views.diff")
 local geometry = require("ui.geometry")
 local imagediff = require("views.imagediff")
@@ -29,12 +31,18 @@ local content = { name = "content" }
 
 local LARGE_DIFF_LINES = 4000
 local FILES_WIDTH = 260
-local COMMIT_HEADER_HEIGHT = 96
-local COMMIT_HEADER_COMPACT = 74
-local DIFF_HEADER_HEIGHT = 44
+
+-- The diff header's height and the commit header's (with and without a body
+-- line): the GitGud UI's. A UI package with its own content/diff-header.xml
+-- or content/commit-header.xml can change them with content.setLook.
+local look = {
+    commitHeader = 96,
+    commitHeaderCompact = 74,
+    diffHeader = 44,
+}
 
 local arrangement = "plain"
-local headerHeight = COMMIT_HEADER_HEIGHT
+local headerHeight = look.commitHeader
 local emptyActions = {}
 local shownSignature = nil   -- what the text diff currently shows
 local shownTarget = nil      -- which file (and commit) that diff is of
@@ -50,15 +58,15 @@ local function applyArrangement()
         gitgud.setProperty("CommitFilesBorder", "Area",
             geometry.area(0, FILES_WIDTH, 0, top, 0, FILES_WIDTH + 1, 1, 0))
         gitgud.setProperty("DiffHeader", "Area",
-            geometry.area(0, FILES_WIDTH + 1, 0, top, 1, 0, 0, top + DIFF_HEADER_HEIGHT))
+            geometry.area(0, FILES_WIDTH + 1, 0, top, 1, 0, 0, top + look.diffHeader))
         gitgud.setProperty("DiffBody", "Area",
-            geometry.area(0, FILES_WIDTH + 1, 0, top + DIFF_HEADER_HEIGHT + 1, 1, 0, 1, 0))
+            geometry.area(0, FILES_WIDTH + 1, 0, top + look.diffHeader + 1, 1, 0, 1, 0))
         return
     end
 
     gitgud.setVisible("CommitView", false)
-    gitgud.setProperty("DiffHeader", "Area", geometry.area(0, 0, 0, 0, 1, 0, 0, DIFF_HEADER_HEIGHT))
-    gitgud.setProperty("DiffBody", "Area", geometry.area(0, 0, 0, DIFF_HEADER_HEIGHT + 1, 1, 0, 1, 0))
+    gitgud.setProperty("DiffHeader", "Area", geometry.area(0, 0, 0, 0, 1, 0, 0, look.diffHeader))
+    gitgud.setProperty("DiffBody", "Area", geometry.area(0, 0, 0, look.diffHeader + 1, 1, 0, 1, 0))
 end
 
 --- Switch between the plain and commit arrangements.
@@ -67,14 +75,30 @@ end
 --                 commit with no body text)
 function content.arrange(mode, compact)
     arrangement = mode
-    headerHeight = compact and COMMIT_HEADER_COMPACT or COMMIT_HEADER_HEIGHT
+    headerHeight = compact and look.commitHeaderCompact or look.commitHeader
     applyArrangement()
 end
 
---- Set the diff header text.
+--- Restyle (see `look` at the top).
+-- @param fields  any of look's fields
+function content.setLook(fields)
+    for key, value in pairs(fields) do
+        look[key] = value
+    end
+    applyArrangement()
+end
+
+--- The arrangement in use.
+-- @return "plain" | "commit"
+function content.arrangement()
+    return arrangement
+end
+
+--- Set the diff header text (and tell subscribers: "content.title").
 -- @param markup  CEGUI markup (escape your own text)
 function content.setTitle(markup)
     gitgud.setText("DiffTitle", markup)
+    app.publish("content.title", markup)
 end
 
 --- A "dir/name  +3 −1" title for a file.
@@ -125,8 +149,8 @@ function content.showEmpty(spec)
             gitgud.setText(button, text.escape(action.label))
             gitgud.setProperty(button, "NormalFillColour", action.primary and C.blue or C.bg3)
             gitgud.setProperty(button, "HoverFillColour", action.primary and "FF93A4FF" or C.bg4)
-            gitgud.setProperty(button, "NormalTextColour", action.primary and C.bg0 or C.text)
-            gitgud.setProperty(button, "HoverTextColour", action.primary and C.bg0 or "FFFFFFFF")
+            gitgud.setProperty(button, "NormalTextColour", action.primary and C.onAccent or C.text)
+            gitgud.setProperty(button, "HoverTextColour", action.primary and C.onAccent or C.bright)
         end
     end
 end

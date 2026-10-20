@@ -18,6 +18,7 @@
 #include <fstream>
 
 #include "app/EventBus.h"
+#include "app/Json.h"
 #include "app/TaskRunner.h"
 #include "git/Repository.h"
 #include "platform/ICredentialStore.h"
@@ -1288,6 +1289,47 @@ namespace gitgud::lua::bindings
             return 1;
         }
 
+        // gitgud.folderSummary(name, folder) -> true | nil, msg: the Git
+        // repository holding `folder`, summed up on a worker (any folder,
+        // not only the open repository): "<name>.done" carries JSON text
+        // {root, commonDir, branch, head, worktree, files, added, removed,
+        // remotes = { {name, url} }}, "<name>.error" the reason.
+        int LFolderSummary(lua_State* _pL)
+        {
+            const std::string name = luaL_checkstring(_pL, 1);
+            const std::string folder = luaL_checkstring(_pL, 2);
+            auto* ptasks = Self(_pL)->TaskRunner();
+            if (!ptasks)
+            {
+                return FailWith(_pL, "No task runner");
+            }
+            ptasks->Run(name,
+                [folder]() -> std::string
+                {
+                    const gitgud::git::FolderSummary summary = Repository::Summarize(folder);
+                    gitgud::app::Json remotes = gitgud::app::Json::Array();
+                    for (const auto& remote : summary.m_Remotes)
+                    {
+                        remotes.Push(gitgud::app::Json::Object()
+                                .Set("name", remote.m_Name)
+                                .Set("url", remote.m_Url));
+                    }
+                    return gitgud::app::Json::Object()
+                        .Set("root", summary.m_Root)
+                        .Set("commonDir", summary.m_CommonDir)
+                        .Set("branch", summary.m_Branch)
+                        .Set("head", summary.m_Head)
+                        .Set("worktree", summary.m_Worktree)
+                        .Set("files", summary.m_iFiles)
+                        .Set("added", summary.m_iAdded)
+                        .Set("removed", summary.m_iRemoved)
+                        .Set("remotes", std::move(remotes))
+                        .Dump();
+                });
+            lua_pushboolean(_pL, 1);
+            return 1;
+        }
+
         // ---- repo open/init (handled by main.cpp, which owns the Repository) ----------
 
         int LOpenRepo(lua_State* _pL)
@@ -1524,6 +1566,7 @@ namespace gitgud::lua::bindings
             {"pushTags", LPushTags},
             {"deleteRemoteBranch", LDeleteRemoteBranch},
             {"pushBranch", LPushBranch},
+            {"folderSummary", LFolderSummary},
             {"updateSubmodule", LUpdateSubmodule},
             {"clone", LClone},
             // repo lifecycle

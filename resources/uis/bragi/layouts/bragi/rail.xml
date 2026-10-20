@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  rail.xml - the 72px icon rail (design D): the logo, the four views, then
+  at the bottom the theme toggle and Settings.
+  scripts/bragi/shell.lua paints the active item (sel fill, accent-text
+  icon and label) and handles the clicks.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="BragiRail">
+        <Property name="Area" value="{{0,0},{0,0},{0,72},{1,0}}"/>
+        <Property name="PanelColour" value="$rail"/>
+        <Property name="Text" value=""/>
+        <UserString name="AppDrag" value="true"/>
+
+        <Window type="Gitgud/StaticText" name="BragiRailEdge">
+            <Property name="Area" value="{{1,-1},{0,0},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="$border"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <!-- The logo: petals and centre tinted from the theme. -->
+        <Window type="Gitgud/Icon" name="BragiLogoPetals">
+            <Property name="Area" value="{{0,21},{0,14},{0,51},{0,44}}"/>
+            <Property name="IconImage" value="Bragi-Icons/MarkPetals"/>
+            <Property name="IconColour" value="$petal"/>
+            <Property name="GlowColour" value="00000000"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+        </Window>
+        <Window type="Gitgud/Icon" name="BragiLogoCentre">
+            <Property name="Area" value="{{0,21},{0,14},{0,51},{0,44}}"/>
+            <Property name="IconImage" value="Bragi-Icons/MarkCentre"/>
+            <Property name="IconColour" value="$logo-centre"/>
+            <Property name="GlowColour" value="00000000"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+        </Window>
+
+        <!-- ================= views ================= -->
+        <Window type="Bragi/Button10" name="BragiRailAgent">
+            <Property name="Area" value="{{0,8},{0,58},{0,64},{0,112}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="BorderColour" value="00000000"/>
+            <Property name="TooltipText" value="Agent  (Ctrl+1)"/>
+            <Window type="Gitgud/Icon" name="BragiRailAgentIcon">
+                <Property name="Area" value="{{0.5,-10},{0,8},{0.5,10},{0,28}}"/>
+                <Property name="IconImage" value="Bragi-Icons/Agent"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="BragiRailAgentLabel">
+                <Property name="Area" value="{{0,0},{0,31},{1,0},{0,47}}"/>
+                <Property name="Text" value="Agent"/>
+                <Property name="Font" value="Bragi-Rail"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+
+        <Window type="Bragi/Button10" name="BragiRailRepo">
+            <Property name="Area" value="{{0,8},{0,118},{0,64},{0,172}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="BorderColour" value="00000000"/>
+            <Property name="TooltipText" value="Repository  (Ctrl+2)"/>
+            <Window type="Gitgud/Icon" name="BragiRailRepoIcon">
+                <Property name="Area" value="{{0.5,-10},{0,8},{0.5,10},{0,28}}"/>
+                <Property name="IconImage" value="Bragi-Icons/Repo"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="BragiRailRepoLabel">
+                <Property name="Area" value="{{0,0},{0,31},{1,0},{0,47}}"/>
+                <Property name="Text" value="Repo"/>
+                <Property name="Font" value="Bragi-Rail"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+
+        <Window type="Bragi/Button10" name="BragiRailBoards">
+            <Property name="Area" value="{{0,8},{0,178},{0,64},{0,232}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="BorderColour" value="00000000"/>
+            <Property name="TooltipText" value="Boards  (Ctrl+3)"/>
+            <Window type="Gitgud/Icon" name="BragiRailBoardsIcon">
+                <Property name="Area" value="{{0.5,-10},{0,8},{0.5,10},{0,28}}"/>
+                <Property name="IconImage" value="Bragi-Icons/Boards"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="BragiRailBoardsLabel">
+                <Property name="Area" value="{{0,0},{0,31},{1,0},{0,47}}"/>
+                <Property name="Text" value="Boards"/>
+                <Property name="Font" value="Bragi-Rail"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+
+        <Window type="Bragi/Button10" name="BragiRailWiki">
+            <Property name="Area" value="{{0,8},{0,238},{0,64},{0,292}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="BorderColour" value="00000000"/>
+            <Property name="TooltipText" value="Wiki  (Ctrl+4)"/>
+            <Window type="Gitgud/Icon" name="BragiRailWikiIcon">
+                <Property name="Area" value="{{0.5,-10},{0,8},{0.5,10},{0,28}}"/>
+                <Property name="IconImage" value="Bragi-Icons/Wiki"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="BragiRailWikiLabel">
+                <Property name="Area" value="{{0,0},{0,31},{1,0},{0,47}}"/>
+                <Property name="Text" value="Wiki"/>
+                <Property name="Font" value="Bragi-Rail"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+
+        <!-- ================= bottom ================= -->
+        <Window type="Bragi/Button10" name="BragiThemeToggle">
+            <Property name="Area" value="{{0,8},{1,-160},{0,64},{1,-112}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="$panel"/>
+            <Property name="HoverFillColour" value="$hover"/>
+            <Property name="BorderColour" value="$border"/>
+            <Property name="TooltipText" value="Switch between the light and dark themes"/>
+            <Window type="Gitgud/Label" name="BragiThemeToggleLabel">
+                <Property name="Area" value="{{0,0},{0,8},{1,0},{0,24}}"/>
+                <Property name="Text" value=""/>
+                <Property name="Font" value="Bragi-Rail"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="NormalTextColour" value="$text"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="BragiThemeToggleSub">
+                <Property name="Area" value="{{0,0},{0,23},{1,0},{0,39}}"/>
+                <Property name="Text" value="theme"/>
+                <Property name="Font" value="Bragi-12"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+
+        <Window type="Bragi/Button10" name="BragiRailSettings">
+            <Property name="Area" value="{{0,8},{1,-106},{0,64},{1,-52}}"/>
+            <Property name="Text" value=""/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="BorderColour" value="00000000"/>
+            <Property name="TooltipText" value="Settings  (Ctrl+,)"/>
+            <Window type="Gitgud/Icon" name="BragiRailSettingsIcon">
+                <Property name="Area" value="{{0.5,-10},{0,8},{0.5,10},{0,28}}"/>
+                <Property name="IconImage" value="Bragi-Icons/Gear"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Label" name="BragiRailSettingsLabel">
+                <Property name="Area" value="{{0,0},{0,31},{1,0},{0,47}}"/>
+                <Property name="Text" value="Settings"/>
+                <Property name="Font" value="Bragi-Rail"/>
+                <Property name="HorzFormatting" value="CentreAligned"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+    </Window>
+</GUILayout>

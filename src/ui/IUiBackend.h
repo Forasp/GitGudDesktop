@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace gitgud::ui
@@ -87,9 +88,25 @@ namespace gitgud::ui
         // Re-apply the skin for a UI package ("" = the base skin only): the base
         // looknfeel, then every .xml in <package>/looknfeel on top — a package
         // restyles "Gitgud/Button" and friends by redefining those looks — and
-        // every imageset in <package>/imagesets (its own icons). Call with no
-        // windows alive (after UnloadAll).
-        virtual void ApplySkin(const std::string& _PackageRoot) = 0;
+        // every imageset in <package>/imagesets (its own icons), and every
+        // scheme in <package>/schemes (its own window types). A package's
+        // colours.ini (ui/ColourMap.h) then recolours the skin, every layout,
+        // and the text and properties scripts set, until the next ApplySkin.
+        // _ColourFile is that colour file: the package's colours.ini or the
+        // chosen theme's themes/<name>.ini ("" for none; app/UiPackages.h).
+        // Call with no windows alive (after UnloadAll).
+        virtual void ApplySkin(const std::string& _PackageRoot, const std::string& _ColourFile) = 0;
+        // A named token of the applied colour file ("accent" -> "FFE8B866"), or
+        // "" when it doesn't define one.
+        virtual std::string ThemeColour(const std::string& _Name) const = 0;
+        // The running package's overlay folder (app/UiPackages.h; "" for none):
+        // its layouts/, looknfeel/, imagesets/, schemes/, and fonts/ files are
+        // used instead of the package's own. Set before ApplySkin and
+        // SetLayoutDirectory. An overlay file that fails to load is set aside
+        // and the package's own loads instead; TakeOverlayErrors says which,
+        // as {file, error} pairs (and forgets them).
+        virtual void SetOverlayRoot(const std::string& _Root) = 0;
+        virtual std::vector<std::pair<std::string, std::string>> TakeOverlayErrors() = 0;
         // Destroy the main window's widgets and every surface.
         virtual void UnloadAll() = 0;
 
@@ -125,6 +142,14 @@ namespace gitgud::ui
         // True when something changed since the last Render() — lets the main
         // loop skip drawing (and sleep) while the app is idle.
         virtual bool NeedsRedraw() const = 0;
+
+        // How many windows the main surface has, and how many of them are
+        // drawn (visible, with every parent visible): for the profiler.
+        virtual void CountWindows(int& _iTotal, int& _iDrawn) const
+        {
+            _iTotal = 0;
+            _iDrawn = 0;
+        }
         virtual void Render() = 0;
 
         // Feed raw input from the windowing layer. Kept generic so backends can map
@@ -180,14 +205,31 @@ namespace gitgud::ui
         virtual void SetDraggable(const std::string& _WidgetId, bool _bDraggable) = 0;
         // The system mouse cursor shown over a widget (and its children), and
         // kept while it is being dragged: "sizewe" (left-right arrows),
-        // "sizens" (up-down), "sizeall" (four arrows), "hand", or "" for the
-        // UI's own cursor.
+        // "sizens" (up-down), "sizeall" (four arrows), "hand", "ibeam"
+        // (text), "arrow" (a button inside one of those), or "" for the UI's
+        // own cursor.
         virtual void SetCursorShape(const std::string& _WidgetId, const std::string& _Shape) = 0;
         // Scroll offset (pixels) of a list or scrollable pane: vertical, or
         // horizontal with `_bHorizontal`.
         virtual float GetScroll(const std::string& _WidgetId, bool _bHorizontal = false) const = 0;
         virtual void SetScroll(
             const std::string& _WidgetId, float _fPosition, bool _bHorizontal = false) = 0;
+        // The furthest that scroll goes: the content's size less the part in
+        // view (0 when it all fits), as the widget knows it right now.
+        virtual float GetScrollMax(const std::string& _WidgetId, bool _bHorizontal = false) const = 0;
+        // Raise "<id>.scrolled" (value: the new vertical offset) whenever a
+        // list's or pane's vertical scroll moves: the user's wheel or drag,
+        // SetScroll, or the widget keeping it in range as its content shrinks.
+        virtual void WatchScroll(const std::string& _WidgetId) = 0;
+        // Report the mouse over a widget and its children (selecting text in
+        // it): a press there raises "<id>.pointerDown" (value "x,y,button,
+        // clicks,control": window pixels, 1 left / 3 right, 1 to 3 for a
+        // double or triple press, control 1 when it landed on a button, a
+        // list, an editbox or a scrollbar). Until that button is released,
+        // moves raise "<id>.pointerMoved" ("x,y", also outside the widget)
+        // and the release "<id>.pointerUp" ("x,y,button"). The widget still
+        // gets its own input as before.
+        virtual void WatchPointer(const std::string& _WidgetId) = 0;
         // Give keyboard focus to a widget (e.g. the filter box of a popup).
         virtual void Focus(const std::string& _WidgetId) = 0;
         // Raise a widget above its siblings (popups opened over each other).
@@ -196,6 +238,13 @@ namespace gitgud::ui
         // an "Image" property; re-defining a name replaces the pixels in place.
         virtual bool DefineImage(const std::string& _ImageName, int _iWidth, int _iHeight,
             const std::vector<std::uint8_t>& _Rgba) = 0;
+        // While held, re-defined images don't make every window draw again
+        // at once: they do it once, when the hold ends (several pictures
+        // finished decoding in one frame).
+        virtual void HoldImageRedraws(bool _bHold)
+        {
+            (void)_bHold;
+        }
         // Upload ONE texture and publish several images cut from it (the
         // commit graph: hundreds of row pictures, one texture). Region names
         // are image names like DefineImage's; re-defining replaces them. The
@@ -240,6 +289,21 @@ namespace gitgud::ui
         virtual bool IsTextInputFocused() const = 0;
         // Absolute rectangle (for anchoring popups); false if the widget is missing.
         virtual bool GetRect(const std::string& _WidgetId, PixelRect& _Out) const = 0;
+        // Where bytes _nFirst to _nLast (1-based, of the UTF-8 text as set,
+        // markup included) of a static text's text are drawn: one rectangle
+        // per line they wrap onto, relative to the widget like its
+        // children's areas. Empty when the widget isn't a static text or
+        // shows none of them.
+        virtual std::vector<PixelRect> TextRects(
+            const std::string& _WidgetId, size_t _nFirst, size_t _nLast) const = 0;
+        // The same for the characters it shows at indices _nFirst to _nLast
+        // (0-based, inclusive; see ShownText in ui/TextSpans.h).
+        virtual std::vector<PixelRect> ShownRects(
+            const std::string& _WidgetId, size_t _nFirst, size_t _nLast) const = 0;
+        // Where a caret at window pixel (_fX, _fY) goes in a static text:
+        // 0 before its first shown character, N after its Nth. Above the
+        // text 0, below it the end; -1 when it isn't a static text.
+        virtual long TextIndexAt(const std::string& _WidgetId, float _fX, float _fY) const = 0;
 
         // Window-chrome support ---------------------------------------------------
         // True when the point (window coordinates) falls on a widget marked as a

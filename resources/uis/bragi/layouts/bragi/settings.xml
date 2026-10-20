@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  settings.xml - the Settings view (design D, plus the sections the design
+  didn't draw): a top bar, the section list on the left, and the open
+  section on the right. scripts/bragi/settings.lua builds each section's
+  cards and rows (bragi/ui.lua) and saves every control as it changes.
+
+    Appearance and voice   theme; voice input; voice output
+    Claude                 model, permissions
+    Git                    identity and defaults, commit signing, interface
+    Projects               where Bragi clones repositories
+    Shortcuts              the keys that matter most
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="SettingsRoot">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+        <Property name="PanelColour" value="$bg"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/StaticText" name="SettingsHeader">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,56}}"/>
+            <Property name="PanelColour" value="$bg"/>
+            <Property name="Text" value=""/>
+            <UserString name="AppDrag" value="true"/>
+            <Window type="Gitgud/Label" name="SettingsTitle">
+                <Property name="Area" value="{{0,24},{0,0},{0,400},{1,0}}"/>
+                <Property name="Text" value="Settings"/>
+                <Property name="Font" value="Bragi-15-Bold"/>
+                <Property name="NormalTextColour" value="$text"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Bragi/Button8" name="SettingsSearch">
+                <Property name="Area" value="{{1,-388},{0,10},{1,-148},{0,46}}"/>
+                <Property name="Text" value=""/>
+                <Property name="NormalFillColour" value="$well"/>
+                <Property name="HoverFillColour" value="$well"/>
+                <Property name="PushedFillColour" value="$well"/>
+                <Property name="BorderColour" value="$border"/>
+                <Property name="TooltipText" value="Search, or run any command  (Ctrl+K)"/>
+                <Window type="Gitgud/Label" name="SettingsSearchLabel">
+                    <Property name="Area" value="{{0,12},{0,0},{1,-60},{1,0}}"/>
+                    <Property name="Text" value="Search or run a command"/>
+                    <Property name="Font" value="Bragi-13"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+                <Window type="Gitgud/Label" name="SettingsSearchKey">
+                    <Property name="Area" value="{{1,-60},{0,0},{1,-12},{1,0}}"/>
+                    <Property name="Text" value="Ctrl K"/>
+                    <Property name="Font" value="Bragi-Mono-11"/>
+                    <Property name="HorzFormatting" value="RightAligned"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+            </Window>
+            <Window type="Gitgud/StaticText" name="SettingsHeaderRule">
+                <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+                <Property name="PanelColour" value="$border"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+        </Window>
+
+        <!-- The section list; settings.lua adds a button per section. -->
+        <Window type="Gitgud/StaticText" name="SettingsNav">
+            <Property name="Area" value="{{0,0},{0,56},{0,240},{1,0}}"/>
+            <Property name="PanelColour" value="$rail"/>
+            <Property name="Text" value=""/>
+            <Window type="Gitgud/StaticText" name="SettingsNavEdge">
+                <Property name="Area" value="{{1,-1},{0,0},{1,0},{1,0}}"/>
+                <Property name="PanelColour" value="$border"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+        </Window>
+
+        <!-- The open section; settings.lua builds the cards in here. -->
+        <Window type="Gitgud/ScrollablePane" name="SettingsContent">
+            <Property name="Area" value="{{0,240},{0,56},{1,0},{1,0}}"/>
+        </Window>
+    </Window>
+</GUILayout>

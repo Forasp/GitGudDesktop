@@ -9,7 +9,8 @@
 --
 -- Public API: history.compareWith(branch), history.stopCompare(),
 --             history.reload(), history.showCommit(commit),
---             history.commitMenu(commit) (shared with the commit graph)
+--             history.commitMenu(commit) (shared with the commit graph),
+--             history.revert(commit), history.setLook(fields)
 
 local C = require("core.palette")
 local app = require("core.app")
@@ -29,6 +30,23 @@ local undo = require("core.undo")
 local history = { name = "history" }
 
 local PAGE = 300
+
+-- How the tab looks: the GitGud UI's list geometry and rows. A UI package
+-- with its own sidebar/history.xml can replace any field with
+-- history.setLook.
+--   listTop         the list's top edge in HistoryPanel (a hairline sits
+--                   just above it)
+--   compareTop      the same while comparing branches (CompareBar shows)
+--   rowText         optional function(commit, row, rows) -> a row's markup,
+--                   given its 1-based row and the number of rows
+--   commitMeta      optional function(commit, files, added, removed) -> the
+--                   commit header's metadata line, as markup
+--   commitActions   optional function(commit) -> up to two buttons for the
+--                   commit header ({ {label, action}, ... }, views/commitview.lua)
+local look = {
+    listTop = 77,
+    compareTop = 111,
+}
 
 local commits = {}         -- everything loaded (unfiltered)
 local shown = {}           -- the filtered rows, in list order
@@ -117,8 +135,10 @@ local function renderList()
     for _, commit in ipairs(commits) do
         if matches(commit) then
             shown[#shown + 1] = commit
-            rows[#rows + 1] = commitRow(commit)
         end
+    end
+    for i, commit in ipairs(shown) do
+        rows[i] = look.rowText and look.rowText(commit, i, #shown) or commitRow(commit)
     end
 
     if #rows == 0 then
@@ -156,9 +176,27 @@ local function showCommit(commit)
         meta = commit.author .. " <" .. commit.email .. ">  ·  "
             .. os.date("%Y-%m-%d %H:%M", commit.time) .. "  ·  " .. commit.shortOid
             .. "  ·  " .. text.plural(#files, "file") .. "  +" .. added .. " −" .. removed,
+        metaMarkup = look.commitMeta and look.commitMeta(commit, #files, added, removed),
         oid = commit.oid,
         files = files,
+        actions = look.commitActions and look.commitActions(commit),
     })
+end
+
+--- Revert a commit (a new commit undoing it), reporting how it went.
+-- @param commit  history row
+function history.revert(commit)
+    local oid, err = undo.track("Revert " .. commit.shortOid, function()
+        return gitgud.revert(commit.oid)
+    end)
+    if oid == nil then
+        status.error(err or "Revert failed.")
+    elseif oid == "" then
+        status.warn("The revert has conflicts. Resolve them, then commit.")
+    else
+        status.ok("Reverted " .. commit.shortOid .. ".")
+    end
+    app.requestRefresh()
 end
 
 --- Show a commit's header, files, and diff in the content pane (used by the
@@ -202,6 +240,13 @@ function history.reload(force)
     end
 end
 
+--- Put the list (and the hairline above it) at a top edge.
+-- @param top  px from HistoryPanel's top
+local function placeList(top)
+    gitgud.setProperty("HistoryHairline", "Area", "{{0,0},{0," .. (top - 1) .. "},{1,0},{0," .. top .. "}}")
+    gitgud.setProperty("HistoryList", "Area", "{{0,0},{0," .. top .. "},{1,0},{1,-44}}")
+end
+
 --- Paint the comparison bar.
 local function paintCompare()
     local comparing = compare ~= nil
@@ -211,8 +256,7 @@ local function paintCompare()
 
     if not comparing then
         gitgud.setText("CompareButton", "Compare with a branch…")
-        gitgud.setProperty("HistoryHairline", "Area", "{{0,0},{0,76},{1,0},{0,77}}")
-        gitgud.setProperty("HistoryList", "Area", "{{0,0},{0,77},{1,0},{1,-44}}")
+        placeList(look.listTop)
         return
     end
 
@@ -224,8 +268,18 @@ local function paintCompare()
     local behindActive = compare.direction == "behind"
     gitgud.setProperty("CompareBehindTab", "NormalFillColour", behindActive and C.bg4 or C.bg2)
     gitgud.setProperty("CompareAheadTab", "NormalFillColour", behindActive and C.bg2 or C.bg4)
-    gitgud.setProperty("HistoryHairline", "Area", "{{0,0},{0,110},{1,0},{0,111}}")
-    gitgud.setProperty("HistoryList", "Area", "{{0,0},{0,111},{1,0},{1,-44}}")
+    placeList(look.compareTop)
+end
+
+--- Restyle the tab (see `look` at the top); the list is redrawn when it
+-- next loads.
+-- @param fields  any of look's fields
+function history.setLook(fields)
+    for key, value in pairs(fields) do
+        look[key] = value
+    end
+    placeList(compare and look.compareTop or look.listTop)
+    loadedFor = nil
 end
 
 --- Compare the current branch with another one.
@@ -269,17 +323,7 @@ function history.commitMenu(commit)
         {
             label = "Revert changes in commit",
             action = function()
-                local oid, err = undo.track("Revert " .. commit.shortOid, function()
-                    return gitgud.revert(commit.oid)
-                end)
-                if oid == nil then
-                    status.error(err or "Revert failed.")
-                elseif oid == "" then
-                    status.warn("The revert has conflicts. Resolve them, then commit.")
-                else
-                    status.ok("Reverted " .. commit.shortOid .. ".")
-                end
-                app.requestRefresh()
+                history.revert(commit)
             end,
         },
         {
@@ -328,7 +372,7 @@ function history.commitMenu(commit)
                     title = "Create a tag on " .. commit.shortOid,
                     fields = {
                         { label = "Tag name", value = "" },
-                        { label = "Message (optional — makes an annotated tag)", value = "" },
+                        { label = "Message (optional, makes an annotated tag)", value = "" },
                     },
                     ok = "Create tag",
                     onOk = function(v)

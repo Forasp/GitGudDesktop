@@ -1,11 +1,14 @@
 #include "platform/Shell.h"
 
+#include "app/Profiler.h"
+
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 #include <shellapi.h>
 #include <shlobj.h>
+#include <io.h>
 #include <shobjidl.h>
 #else
 #include "platform/Process.h"
@@ -26,7 +29,10 @@
 #endif
 
 #include <algorithm>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <vector>
 
@@ -59,6 +65,29 @@ namespace gitgud::platform
         // Never the exe's folder: it may be read only (Program Files, /usr).
         std::error_code ec;
         return (fs::temp_directory_path(ec) / "Gitgud").u8string();
+    }
+
+    std::string LocalDataDirectory()
+    {
+        namespace fs = std::filesystem;
+#if defined(_WIN32)
+        if (const char* szlocal = std::getenv("LOCALAPPDATA"); szlocal && *szlocal)
+        {
+            return (fs::u8path(szlocal) / "Gitgud").u8string();
+        }
+#elif defined(__APPLE__)
+        return ConfigDirectory();
+#else
+        if (const char* szdata = std::getenv("XDG_DATA_HOME"); szdata && *szdata)
+        {
+            return (fs::u8path(szdata) / "gitgud").u8string();
+        }
+        if (const char* szhome = std::getenv("HOME"))
+        {
+            return (fs::u8path(szhome) / ".local" / "share" / "gitgud").u8string();
+        }
+#endif
+        return ConfigDirectory();
     }
 
     std::string ExecutableDirectory()
@@ -95,6 +124,52 @@ namespace gitgud::platform
         }
 #endif
         return fs::current_path(ec).u8string();
+    }
+
+    bool WriteFileAtomically(const std::string& _Path, const std::string& _Data, std::string& _Error)
+    {
+        GITGUD_PROFILE_FUNCTION();
+        namespace fs = std::filesystem;
+        const fs::path file = fs::u8path(_Path);
+        std::error_code ec;
+        fs::create_directories(file.parent_path(), ec);
+        fs::path temp = file;
+        temp += ".tmp";
+        {
+            std::FILE* pfile = nullptr;
+#if defined(_WIN32)
+            _wfopen_s(&pfile, temp.c_str(), L"wb");
+#else
+            pfile = std::fopen(temp.c_str(), "wb");
+#endif
+            if (!pfile)
+            {
+                _Error = "could not write " + temp.u8string();
+                return false;
+            }
+            const bool bwritten = std::fwrite(_Data.data(), 1, _Data.size(), pfile) == _Data.size() &&
+                                  std::fflush(pfile) == 0;
+#if defined(_WIN32)
+            const bool bsynced = bwritten && _commit(_fileno(pfile)) == 0;
+#else
+            const bool bsynced = bwritten && fsync(fileno(pfile)) == 0;
+#endif
+            std::fclose(pfile);
+            if (!bsynced)
+            {
+                fs::remove(temp, ec);
+                _Error = "could not write " + temp.u8string();
+                return false;
+            }
+        }
+        fs::rename(temp, file, ec); // replaces the old file in one step
+        if (ec)
+        {
+            fs::remove(temp, ec);
+            _Error = "could not replace " + file.u8string() + ": " + ec.message();
+            return false;
+        }
+        return true;
     }
 
     std::string LogDirectory()
@@ -262,6 +337,51 @@ namespace gitgud::platform
         return result;
     }
 
+    std::string PickFile(const std::string& _Title, const std::string& _FilterName, const std::string& _Pattern)
+    {
+        std::string result;
+        const HRESULT hrInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+
+        IFileOpenDialog* pdialog = nullptr;
+        if (SUCCEEDED(CoCreateInstance(
+                CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pdialog))))
+        {
+            DWORD dwoptions = 0;
+            pdialog->GetOptions(&dwoptions);
+            pdialog->SetOptions(dwoptions | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST);
+            const std::wstring title = Widen(_Title);
+            if (!title.empty())
+            {
+                pdialog->SetTitle(title.c_str());
+            }
+            const std::wstring name = Widen(_FilterName.empty() ? "Files" : _FilterName);
+            const std::wstring pattern = Widen(_Pattern.empty() ? "*.*" : _Pattern);
+            const COMDLG_FILTERSPEC filter = {name.c_str(), pattern.c_str()};
+            pdialog->SetFileTypes(1, &filter);
+            if (SUCCEEDED(pdialog->Show(GetActiveWindow())))
+            {
+                IShellItem* pitem = nullptr;
+                if (SUCCEEDED(pdialog->GetResult(&pitem)))
+                {
+                    PWSTR pszpath = nullptr;
+                    if (SUCCEEDED(pitem->GetDisplayName(SIGDN_FILESYSPATH, &pszpath)))
+                    {
+                        result = Narrow(pszpath);
+                        CoTaskMemFree(pszpath);
+                    }
+                    pitem->Release();
+                }
+            }
+            pdialog->Release();
+        }
+
+        if (SUCCEEDED(hrInit))
+        {
+            CoUninitialize();
+        }
+        return result;
+    }
+
     bool SetClipboardText(const std::string& _Text)
     {
         const std::wstring wide = Widen(_Text);
@@ -288,6 +408,123 @@ namespace gitgud::platform
         }
         CloseClipboard();
         return bok;
+    }
+
+    namespace
+    {
+
+        // A clipboard bitmap (CF_DIB / CF_DIBV5: a header, maybe masks and a
+        // palette, then pixels) as a .bmp file, which stb_image reads.
+        bool BmpFromDib(const std::uint8_t* _pDib, std::size_t _nSize, std::string& _Out)
+        {
+            if (_nSize < sizeof(BITMAPINFOHEADER))
+            {
+                return false;
+            }
+            BITMAPINFOHEADER header;
+            std::memcpy(&header, _pDib, sizeof(header));
+            if (header.biSize < sizeof(BITMAPINFOHEADER) || header.biSize > _nSize)
+            {
+                return false;
+            }
+            std::size_t nmasks = 0;
+            if (header.biSize == sizeof(BITMAPINFOHEADER))
+            {
+                nmasks = header.biCompression == BI_BITFIELDS ? 12 : header.biCompression == 6 ? 16 : 0;
+            }
+            std::size_t ncolours = header.biClrUsed;
+            if (ncolours == 0 && header.biBitCount <= 8)
+            {
+                ncolours = std::size_t{1} << header.biBitCount;
+            }
+            const std::size_t noffset = 14 + header.biSize + nmasks + ncolours * 4;
+            const std::size_t ntotal = 14 + _nSize;
+            _Out.assign(14, '\0');
+            _Out[0] = 'B';
+            _Out[1] = 'M';
+            const auto put32 = [&](std::size_t _nAt, std::uint32_t _uValue)
+            {
+                for (int i = 0; i < 4; ++i)
+                {
+                    _Out[_nAt + i] = static_cast<char>((_uValue >> (8 * i)) & 0xFF);
+                }
+            };
+            put32(2, static_cast<std::uint32_t>(ntotal));
+            put32(10, static_cast<std::uint32_t>(noffset));
+            _Out.append(reinterpret_cast<const char*>(_pDib), _nSize);
+            return true;
+        }
+
+        // A clipboard format's bytes; the clipboard is open.
+        bool ClipboardBytes(UINT _uFormat, std::string& _Out)
+        {
+            HANDLE handle = GetClipboardData(_uFormat);
+            if (!handle)
+            {
+                return false;
+            }
+            const SIZE_T nsize = GlobalSize(handle);
+            const void* pdata = GlobalLock(handle);
+            if (!pdata || nsize == 0)
+            {
+                return false;
+            }
+            _Out.assign(static_cast<const char*>(pdata), nsize);
+            GlobalUnlock(handle);
+            return true;
+        }
+
+    } // namespace
+
+    bool ClipboardHasText()
+    {
+        return IsClipboardFormatAvailable(CF_UNICODETEXT) != 0;
+    }
+
+    bool ClipboardImage(std::string& _Bytes)
+    {
+        _Bytes.clear();
+        if (!OpenClipboard(nullptr))
+        {
+            return false;
+        }
+        static const UINT kPng = RegisterClipboardFormatW(L"PNG");
+        bool bok = kPng != 0 && IsClipboardFormatAvailable(kPng) && ClipboardBytes(kPng, _Bytes);
+        for (const UINT uformat : {static_cast<UINT>(CF_DIBV5), static_cast<UINT>(CF_DIB)})
+        {
+            std::string dib;
+            if (!bok && IsClipboardFormatAvailable(uformat) && ClipboardBytes(uformat, dib))
+            {
+                bok = BmpFromDib(reinterpret_cast<const std::uint8_t*>(dib.data()), dib.size(), _Bytes);
+            }
+        }
+        CloseClipboard();
+        return bok;
+    }
+
+    std::vector<std::string> ClipboardFiles()
+    {
+        std::vector<std::string> files;
+        if (!IsClipboardFormatAvailable(CF_HDROP) || !OpenClipboard(nullptr))
+        {
+            return files;
+        }
+        if (HANDLE handle = GetClipboardData(CF_HDROP))
+        {
+            if (auto hdrop = static_cast<HDROP>(GlobalLock(handle)))
+            {
+                const UINT ncount = DragQueryFileW(hdrop, 0xFFFFFFFF, nullptr, 0);
+                for (UINT i = 0; i < ncount; ++i)
+                {
+                    std::wstring path(DragQueryFileW(hdrop, i, nullptr, 0) + 1, L'\0');
+                    DragQueryFileW(hdrop, i, path.data(), static_cast<UINT>(path.size()));
+                    files.push_back(Narrow(path.c_str()));
+                }
+                GlobalUnlock(handle);
+            }
+        }
+        CloseClipboard();
+        return files;
     }
 
 #else
@@ -566,6 +803,35 @@ namespace gitgud::platform
 #endif
     }
 
+    std::string PickFile(const std::string& _Title, const std::string& _FilterName, const std::string& _Pattern)
+    {
+#if defined(__APPLE__)
+        (void)_FilterName;
+        (void)_Pattern;
+        const std::string script =
+            "POSIX path of (choose file with prompt " + AppleScriptString(_Title) + ")";
+        const ProcessResult result = RunProcess({"osascript", "-e", script}, "");
+#else
+        ProcessResult result;
+        const std::string pattern = _Pattern.empty() ? "*" : _Pattern;
+        if (!FindProgram("zenity").empty())
+        {
+            result = RunProcess({"zenity", "--file-selection", "--title=" + _Title,
+                                    "--file-filter=" + (_FilterName.empty() ? "Files" : _FilterName) + " | " + pattern},
+                "");
+        }
+        else if (!FindProgram("kdialog").empty())
+        {
+            result = RunProcess({"kdialog", "--getopenfilename", ".", pattern, "--title", _Title}, "");
+        }
+#endif
+        if (result.m_iExitCode != 0)
+        {
+            return {};
+        }
+        return Trimmed(result.m_Output);
+    }
+
     std::string PickFolder(const std::string& _Title)
     {
 #if defined(__APPLE__)
@@ -601,6 +867,22 @@ namespace gitgud::platform
     bool SetClipboardText(const std::string& _Text)
     {
         return SDL_SetClipboardText(_Text.c_str()) == 0;
+    }
+
+    bool ClipboardHasText()
+    {
+        return SDL_HasClipboardText() == SDL_TRUE;
+    }
+
+    bool ClipboardImage(std::string& _Bytes)
+    {
+        _Bytes.clear();
+        return false;
+    }
+
+    std::vector<std::string> ClipboardFiles()
+    {
+        return {};
     }
 
 #endif

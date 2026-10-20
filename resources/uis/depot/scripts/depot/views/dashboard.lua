@@ -48,19 +48,19 @@ local function render()
     if ab.hasUpstream then
         if (ab.behind or 0) > 0 then
             line("FileOutdated", text.colour(C.warn, text.plural(ab.behind, "changelist") .. " to get from "
-                .. ab.upstream .. " — Get Latest"), require("depot.actions").getLatest)
+                .. ab.upstream .. ". Get Latest"), require("depot.actions").getLatest)
         else
             line("FileSynced", text.colour(C.ok, "Up to date with " .. ab.upstream))
         end
         if (ab.ahead or 0) > 0 then
-            line("Push", text.colour(C.text, text.plural(ab.ahead, "submitted changelist") .. " not pushed yet — Push"),
+            line("Push", text.colour(C.text, text.plural(ab.ahead, "submitted changelist") .. " not pushed yet. Push"),
                 require("depot.commands").push)
         end
     elseif state.headOid ~= "" then
         line("Info", text.colour(C.dim, "This branch doesn't track a remote branch yet."))
     end
     local fetched = require("views.sync").lastFetched()
-    line("Fetch", text.colour(C.dim, fetched and ("Last fetched " .. text.ago(fetched)) or "Not fetched this session — Fetch"),
+    line("Fetch", text.colour(C.dim, fetched and ("Last fetched " .. text.ago(fetched)) or "Not fetched this session. Fetch"),
         require("depot.commands").fetch)
 
     heading("Pending work")

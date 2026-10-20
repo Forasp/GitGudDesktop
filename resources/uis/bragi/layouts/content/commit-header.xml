@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  commit-header.xml (Bragi UI) - the selected commit (History) or stash, in
+  design D, replacing the GitGud UI's file of that name. It keeps every
+  widget views/commitview.lua drives:
+
+    Update README (6)              [Revert] [Ask Bragi about this commit]
+    Some body text for commit 6.
+    Test User · 2026-10-08 17:50 · 59b02c0 · 1 file · +1 −0
+
+  then the commit's files on the left of the diff. History's buttons come
+  from scripts/bragi/repolook.lua (history.setLook); a stash shows its own
+  (Restore, Discard). repolook.lua sizes the buttons to their labels and
+  sets the heights (content.setLook, commitview.setLook): keep them in step.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="CommitView">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+        <Property name="CursorPassThroughEnabled" value="true"/>
+        <Property name="Visible" value="false"/>
+
+        <Window type="Gitgud/StaticText" name="CommitHeader">
+            <Property name="Area" value="{{0,0},{0,0},{1,0},{0,124}}"/>
+            <Property name="PanelColour" value="$bg"/>
+            <Property name="Text" value=""/>
+
+            <Window type="Gitgud/Label" name="CommitSummaryLabel">
+                <Property name="Area" value="{{0,24},{0,18},{1,-340},{0,54}}"/>
+                <Property name="Font" value="Bragi-20-Bold"/>
+                <Property name="NormalTextColour" value="$text"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/Label" name="CommitBodyLabel">
+                <Property name="Area" value="{{0,24},{0,56},{1,-24},{0,80}}"/>
+                <Property name="Font" value="Bragi-14"/>
+                <Property name="NormalTextColour" value="$text"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/Label" name="CommitMetaLabel">
+                <Property name="Area" value="{{0,24},{0,84},{1,-24},{0,108}}"/>
+                <Property name="Font" value="Bragi-12"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Bragi/Button8" name="CommitAction1">
+                <Property name="Area" value="{{1,-320},{0,18},{1,-232},{0,54}}"/>
+                <Property name="Text" value=""/>
+                <Property name="Font" value="Bragi-13"/>
+                <Property name="NormalFillColour" value="00000000"/>
+                <Property name="BorderColour" value="$border"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+            <Window type="Bragi/Button8" name="CommitAction2">
+                <Property name="Area" value="{{1,-222},{0,18},{1,-24},{0,54}}"/>
+                <Property name="Text" value=""/>
+                <Property name="Font" value="Bragi-13-Bold"/>
+                <Property name="NormalFillColour" value="00000000"/>
+                <Property name="BorderColour" value="$border"/>
+                <Property name="Visible" value="false"/>
+            </Window>
+            <Window type="Gitgud/StaticText" name="CommitHeaderHairline">
+                <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+                <Property name="PanelColour" value="$border"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+        </Window>
+
+        <!-- Files changed by the selected commit (left of the diff). -->
+        <Window type="Gitgud/ListWidget" name="CommitFilesList">
+            <Property name="Area" value="{{0,0},{0,124},{0,260},{1,0}}"/>
+            <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+            <Property name="Font" value="Bragi-13"/>
+            <Property name="BgColour" value="$rail"/>
+            <Property name="BorderColour" value="$rail"/>
+            <Property name="SelectionColour" value="$sel"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="CommitFilesBorder">
+            <Property name="Area" value="{{0,260},{0,124},{0,261},{1,0}}"/>
+            <Property name="PanelColour" value="$border"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

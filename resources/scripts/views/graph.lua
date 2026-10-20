@@ -450,7 +450,7 @@ function graph.init()
 
     app.subscribe("frame.graphChanged", function(on)
         gitgud.setProperty("GraphButtonLabel", "NormalTextColour", on and C.cyan or C.text2)
-        gitgud.setProperty("GraphButtonIcon", "IconColour", on and C.cyan or "FFFFFFFF")
+        gitgud.setProperty("GraphButtonIcon", "IconColour", on and C.cyan or C.icon)
         if on then
             loadedKey = nil
             graph.reload(true)

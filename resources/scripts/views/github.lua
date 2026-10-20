@@ -137,6 +137,11 @@ end
 --- The gh to use: the user's on PATH first, then GitGud's copy.
 -- @return path or nil
 local function findGh()
+    -- UI tests: a stand-in (tests/fake_gh.cpp), so sign-in runs offline.
+    local test = os.getenv("GITGUD_TEST_GH")
+    if test and test ~= "" then
+        return test
+    end
     local onPath = gitgud.findProgram("gh")
     if onPath then
         return onPath

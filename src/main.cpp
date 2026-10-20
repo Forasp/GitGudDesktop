@@ -21,6 +21,7 @@
 // -----------------------------------------------------------------------------
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -48,6 +49,7 @@
 #endif
 #include <windows.h>
 
+#include <SDL_syswm.h>
 #include <fcntl.h>
 #include <io.h>
 #include <share.h>
@@ -58,18 +60,25 @@
 #include <unistd.h>
 #endif
 
+#include "agent/ToolServer.h"
 #include "app/EventBus.h"
 #include "app/IAppHost.h"
+#include "app/Profiler.h"
+#include "app/StallWatchdog.h"
 #include "app/TaskRunner.h"
 #include "app/UiPackages.h"
+#include "speech/LocalEngine.h"
 #include "app/Updater.h"
 #include "git/Repository.h"
 #include "imaging/ImageDiff.h"
+#include "lua/LuaBindings.h"
 #include "lua/LuaEngine.h"
+#include "platform/Attention.h"
 #include "platform/CrashHandler.h"
 #include "platform/ICredentialStore.h"
 #include "platform/MacWindow.h"
 #include "platform/Process.h"
+#include "platform/Relaunch.h"
 #include "platform/Shell.h"
 #include "ui/IUiBackend.h"
 
@@ -119,51 +128,162 @@ namespace
         out << _Path << "\n";
     }
 
-    // Watches the UI resource files and reports when any of them changed —
-    // the trigger for hot-reload (edit the XML/Lua, see it live, no restart).
+    // The Git and P4 tools for Claude Code: a pipe for gitgud-mcp (next to
+    // this exe) and, in the config folder, the MCP config sessions get. Made
+    // when the first session asks, never for an interface that starts none
+    // (only the Bragi interface sets up anything of its own).
+    void StartTools(gitgud::agent::ToolServer& _Tools)
+    {
+        const std::string pipe = gitgud::agent::ToolServer::DefaultPipeName();
+#if defined(_WIN32)
+        const char* szprogram = "gitgud-mcp.exe";
+#else
+        const char* szprogram = "gitgud-mcp";
+#endif
+        const std::string program =
+            (fs::u8path(gitgud::platform::ExecutableDirectory()) / szprogram).u8string();
+        const std::string config = (fs::u8path(gitgud::platform::ConfigDirectory()) / "mcp" /
+                                    (pipe.substr(pipe.rfind('\\') + 1) + ".json"))
+                                       .u8string();
+        _Tools.StartOnDemand(pipe, program, config);
+    }
+
+    // Watches the UI resource files and reports when they changed: the
+    // trigger for hot-reload (edit the XML/Lua, see it live, no restart).
     // Watches the base resources and the running UI package's folder.
+    //
+    // A copy writes many files over a moment (a running copy is updated by
+    // copying its resources folder over), so the reload waits until nothing
+    // has changed for kSettleMs: one reload per copy, never one per file or
+    // one in the middle of it. The program's own files
+    // (the exe and its libraries) are watched the same way, but those can't
+    // be reloaded: a change to them is only reported.
     class ResourceWatcher
     {
       public:
+        static constexpr Uint32 kSettleMs = 1500;
+
         void SetRoots(std::vector<std::string> _Roots)
         {
             // The GitGud UI's package root is the base root: scan it once.
             std::sort(_Roots.begin(), _Roots.end());
             _Roots.erase(std::unique(_Roots.begin(), _Roots.end()), _Roots.end());
             m_Roots = std::move(_Roots);
-            m_uiSnapshot = Scan();
+            m_Resources.Reset(ScanResources(false));
+            m_uiLoaded = ScanResources(true);
         }
 
-        bool Changed()
+        void SetProgramDirectory(std::string _Directory)
         {
-            const std::uint64_t uinow = Scan();
-            if (uinow != m_uiSnapshot)
+            m_ProgramDir = std::move(_Directory);
+            m_Program.Reset(ScanProgram());
+        }
+
+        // Scan once (every watch interval). True when the resources changed
+        // and have been still for kSettleMs since. The listing's times can
+        // lag behind the files' own (NTFS updates them lazily), so a copy
+        // made just before the UI loaded can show up as a change seconds
+        // later: a settled change is checked against the files' own times
+        // as they were at load, and one that isn't real reloads nothing.
+        bool ResourcesSettled(Uint32 _uNow)
+        {
+            if (!m_Resources.Update(ScanResources(false), _uNow))
             {
-                m_uiSnapshot = uinow;
-                return true;
+                return false;
             }
-            return false;
+            const std::uint64_t uiexact = ScanResources(true);
+            if (uiexact == m_uiLoaded)
+            {
+                return false;
+            }
+            m_uiLoaded = uiexact;
+            return true;
+        }
+
+        // Likewise for the program's files.
+        bool ProgramSettled(Uint32 _uNow)
+        {
+            return !m_ProgramDir.empty() && m_Program.Update(ScanProgram(), _uNow);
+        }
+
+        // A change was seen and the files haven't settled yet: scan sooner.
+        bool Pending() const
+        {
+            return m_Resources.m_bPending || m_Program.m_bPending;
         }
 
       private:
-        // A cheap fingerprint: a hash of every watched file's path + mtime,
-        // recursively (layouts and scripts live in sub-folders). The times
-        // come from the directory listing itself, so there is no extra file
-        // system call per file, and nothing is allocated per file.
-        std::uint64_t Scan() const
+        // One fingerprint's state: the one acted on, the latest seen, and
+        // when that last changed.
+        struct Settling
         {
-            std::uint64_t sig = 14695981039346656037ull; // FNV-1a
-            auto mix = [&sig](const void* _pData, std::size_t _uSize)
+            std::uint64_t m_uiActed = 0;
+            std::uint64_t m_uiLatest = 0;
+            Uint32 m_uChangedAt = 0;
+            bool m_bPending = false;
+
+            void Reset(std::uint64_t _uiNow)
+            {
+                m_uiActed = m_uiLatest = _uiNow;
+                m_bPending = false;
+            }
+
+            bool Update(std::uint64_t _uiNow, Uint32 _uTick)
+            {
+                if (_uiNow != m_uiLatest)
+                {
+                    m_uiLatest = _uiNow;
+                    m_uChangedAt = _uTick;
+                    m_bPending = _uiNow != m_uiActed; // changed back: nothing to do
+                    return false;
+                }
+                if (m_bPending && _uTick - m_uChangedAt >= kSettleMs)
+                {
+                    m_bPending = false;
+                    m_uiActed = _uiNow;
+                    return true;
+                }
+                return false;
+            }
+        };
+
+        // FNV-1a over a file's path and modification time. The time comes
+        // from the directory listing itself, so there is no extra file
+        // system call per file, and nothing is allocated per file; unless
+        // `_bExact`, which asks the file.
+        static void Mix(std::uint64_t& _uiSig, const fs::directory_entry& _Entry, bool _bExact = false)
+        {
+            std::error_code tec;
+            const auto t = _bExact ? fs::last_write_time(_Entry.path(), tec) : _Entry.last_write_time(tec);
+            if (tec)
+            {
+                return;
+            }
+            auto mix = [&_uiSig](const void* _pData, std::size_t _uSize)
             {
                 const auto* pbytes = static_cast<const unsigned char*>(_pData);
                 for (std::size_t ui = 0; ui < _uSize; ++ui)
                 {
-                    sig = (sig ^ pbytes[ui]) * 1099511628211ull;
+                    _uiSig = (_uiSig ^ pbytes[ui]) * 1099511628211ull;
                 }
             };
+            const auto& path = _Entry.path().native();
+            mix(path.data(), path.size() * sizeof(path[0]));
+            const auto ticks = t.time_since_epoch().count();
+            mix(&ticks, sizeof(ticks));
+        }
+
+        // A cheap fingerprint: a hash of every watched file's path + mtime,
+        // recursively (layouts and scripts live in sub-folders). Prompts and
+        // imagesets count: scripts read prompts afresh after a reload, and
+        // the skin reloads changed imagesets.
+        std::uint64_t ScanResources(bool _bExact) const
+        {
+            std::uint64_t sig = 14695981039346656037ull;
             for (const std::string& root : m_Roots)
             {
-                for (const char* szsub : {"/layouts", "/scripts", "/looknfeel", "/schemes"})
+                for (const char* szsub : {"/layouts", "/scripts", "/looknfeel", "/schemes",
+                         "/imagesets", "/prompts", "/themes"})
                 {
                     std::error_code ec;
                     fs::recursive_directory_iterator it(fs::u8path(root + szsub), ec);
@@ -177,24 +297,38 @@ namespace
                         {
                             break;
                         }
-                        std::error_code tec;
-                        const auto t = it->last_write_time(tec);
-                        if (tec)
-                        {
-                            continue;
-                        }
-                        const auto& path = it->path().native();
-                        mix(path.data(), path.size() * sizeof(path[0]));
-                        const auto ticks = t.time_since_epoch().count();
-                        mix(&ticks, sizeof(ticks));
+                        Mix(sig, *it, _bExact);
                     }
                 }
             }
             return sig;
         }
 
+        // The exe and its libraries, beside it (not sub-folders: resources
+        // live there).
+        std::uint64_t ScanProgram() const
+        {
+            std::uint64_t sig = 14695981039346656037ull;
+            std::error_code ec;
+            for (fs::directory_iterator it(fs::u8path(m_ProgramDir), ec), end; !ec && it != end;
+                it.increment(ec))
+            {
+                std::string ext = it->path().extension().u8string();
+                std::transform(ext.begin(), ext.end(), ext.begin(),
+                    [](unsigned char _C) { return static_cast<char>(std::tolower(_C)); });
+                if (ext == ".exe" || ext == ".dll" || ext == ".so" || ext == ".dylib")
+                {
+                    Mix(sig, *it);
+                }
+            }
+            return sig;
+        }
+
         std::vector<std::string> m_Roots;
-        std::uint64_t m_uiSnapshot = 0;
+        std::string m_ProgramDir;
+        Settling m_Resources;
+        Settling m_Program;
+        std::uint64_t m_uiLoaded = 0; // the files' own times when the UI loaded
     };
 
     // GITGUD_PERF=<ms>: log every main-loop pass that takes at least that
@@ -286,6 +420,16 @@ namespace
         }
         const int ims = std::atoi(szvalue);
         return ims > 0 ? ims : 25;
+    }
+
+    // A UI test run that stays out of the way (test windows
+    // took the screen): its windows open behind the others, never come
+    // forward, and never take focus. The runner sets GITGUD_TEST_BACKGROUND
+    // (and SDL_WINDOW_NO_ACTIVATION_WHEN_SHOWN) alongside GITGUD_SCRIPT.
+    bool TestInBackground()
+    {
+        static const bool bbackground = std::getenv("GITGUD_SCRIPT") && std::getenv("GITGUD_TEST_BACKGROUND");
+        return bbackground;
     }
 
     // Flags for every window: OpenGL, and on macOS a full-resolution drawable
@@ -578,6 +722,21 @@ namespace
     // would tear down widgets (closing a window, switching UI) can arrive in
     // the middle of that window's own event handler, so they are queued and
     // carried out by ProcessPending() between events.
+    // The theme a UI package runs in: the remembered one, or GITGUD_THEME
+    // (tests, screenshots) when the package has a theme by that name.
+    std::string ActiveTheme(const gitgud::app::UiPackage& _Package)
+    {
+        if (const char* szenv = std::getenv("GITGUD_THEME"); szenv && *szenv)
+        {
+            const std::vector<std::string> themes = gitgud::app::ListThemes(_Package);
+            if (std::find(themes.begin(), themes.end(), szenv) != themes.end())
+            {
+                return szenv;
+            }
+        }
+        return gitgud::app::ResolveTheme(_Package, gitgud::platform::ConfigDirectory());
+    }
+
     class AppShell final : public gitgud::app::IAppHost
     {
       public:
@@ -639,7 +798,10 @@ namespace
             {
                 m_Closing.erase(
                     std::remove(m_Closing.begin(), m_Closing.end(), _Spec.m_Id), m_Closing.end());
-                SDL_RaiseWindow(it->second.m_pWindow);
+                if (!TestInBackground())
+                {
+                    SDL_RaiseWindow(it->second.m_pWindow);
+                }
                 return true;
             }
             if (!m_pUi)
@@ -657,6 +819,10 @@ namespace
             }
             SDL_SetWindowMinimumSize(pwindow, _Spec.m_iMinWidth, _Spec.m_iMinHeight);
             SetIcon(pwindow);
+            if (TestInBackground())
+            {
+                gitgud::platform::SendToBack(pwindow);
+            }
 
             SDL_GL_MakeCurrent(pwindow, m_Gl);
             int iw = 0;
@@ -700,7 +866,7 @@ namespace
 
         void FocusWindow(const std::string& _Id) override
         {
-            if (SDL_Window* pwindow = WindowOf(_Id))
+            if (SDL_Window* pwindow = WindowOf(_Id); pwindow && !TestInBackground())
             {
                 SDL_RestoreWindow(pwindow);
                 SDL_RaiseWindow(pwindow);
@@ -733,6 +899,23 @@ namespace
 #endif
             // A native frame does its own dragging and resizing.
             SDL_SetWindowHitTest(m_pMain, _bBordered ? nullptr : WindowHitTest, m_pUi);
+        }
+
+        bool MainWindowBordered() const
+        {
+            return m_bBordered;
+        }
+
+        // A new main window in place of the old one (renewWindow in main):
+        // the frame's dragging and resizing, and the icon, go with it.
+        void ReplaceMainWindow(SDL_Window* _pWindow)
+        {
+            m_pMain = _pWindow;
+            SetIcon(m_pMain);
+#if defined(__APPLE__)
+            gitgud::platform::AllowMinimize(m_pMain);
+#endif
+            SDL_SetWindowHitTest(m_pMain, m_bBordered ? nullptr : WindowHitTest, m_pUi);
         }
 
         // ---- IAppHost: UI packages --------------------------------------------------
@@ -779,7 +962,7 @@ namespace
             if (!package)
             {
                 _Error = "'" + _Spec +
-                         "' isn't a GitGud UI: it needs scripts/main.lua and layouts/main.xml";
+                         "' isn't a UI package: it needs scripts/main.lua and layouts/main.xml";
                 return false;
             }
             if (_bRemember && package->m_Id != gitgud::app::kUiPickerId)
@@ -800,6 +983,34 @@ namespace
             return m_bFirstLaunch;
         }
 
+        std::vector<std::string> Themes() const override
+        {
+            return gitgud::app::ListThemes(m_Current);
+        }
+
+        std::string CurrentTheme() const override
+        {
+            return ActiveTheme(m_Current);
+        }
+
+        bool RequestThemeSwitch(const std::string& _Theme, std::string& _Error) override
+        {
+            const std::vector<std::string> themes = gitgud::app::ListThemes(m_Current);
+            if (std::find(themes.begin(), themes.end(), _Theme) == themes.end())
+            {
+                _Error = "This interface has no theme called '" + _Theme + "'";
+                return false;
+            }
+            if (!gitgud::app::WriteThemeChoice(
+                    gitgud::platform::ConfigDirectory(), m_Current.m_Id, _Theme))
+            {
+                _Error = "Could not save the choice";
+                return false;
+            }
+            m_Pending = m_Current; // rebuilt like a switch, in the new theme
+            return true;
+        }
+
         // ---- Used by the main loop -----------------------------------------------------
 
         // Close queued windows. Returns a UI switch to perform, if one is pending.
@@ -816,7 +1027,8 @@ namespace
             pending.swap(m_Pending);
             if (pending)
             {
-                if (m_Current.m_Id != gitgud::app::kUiPickerId)
+                // A theme change rebuilds the same UI: the previous one stays.
+                if (m_Current.m_Id != gitgud::app::kUiPickerId && pending->m_Id != m_Current.m_Id)
                 {
                     m_Previous = m_Current.m_Id;
                 }
@@ -973,6 +1185,37 @@ namespace
                next.type == SDL_MOUSEMOTION && next.motion.windowID == _Ev.motion.windowID;
     }
 
+#if defined(_WIN32)
+    // Windows' display and power messages, which SDL doesn't turn into
+    // events (a monitor that comes back on a dock needn't be a new display
+    // to SDL): flagged for the main loop (DisplayMessages), never queued.
+    // Runs in SDL's window procedure, on the UI thread.
+    std::atomic<unsigned> g_uDisplayMessages{0};
+    constexpr unsigned kDisplaySettingsChanged = 1;
+    constexpr unsigned kResumedFromSleep = 2;
+
+    int SDLCALL DisplayMessageFilter(void*, SDL_Event* _pEv)
+    {
+        if (_pEv->type != SDL_SYSWMEVENT)
+        {
+            return 1;
+        }
+        const SDL_SysWMmsg* pmsg = _pEv->syswm.msg;
+        if (pmsg && pmsg->subsystem == SDL_SYSWM_WINDOWS)
+        {
+            if (pmsg->msg.win.msg == WM_DISPLAYCHANGE)
+            {
+                g_uDisplayMessages.fetch_or(kDisplaySettingsChanged);
+            }
+            else if (pmsg->msg.win.msg == WM_POWERBROADCAST && pmsg->msg.win.wParam == PBT_APMRESUMEAUTOMATIC)
+            {
+                g_uDisplayMessages.fetch_or(kResumedFromSleep);
+            }
+        }
+        return 0;
+    }
+#endif
+
     // The SDL window an event concerns (0 when it has none).
     Uint32 EventWindowId(const SDL_Event& _Ev)
     {
@@ -1022,6 +1265,14 @@ int main(int _iArgc, char* _aSzArgv[])
         freopen_s(&punused, "CONOUT$", "w", stderr);
     }
 #endif
+
+    // A restart (gitgud.restartApp): this copy starts once the one that
+    // asked for it has closed (its voice engine, conversations and files).
+    gitgud::platform::RememberLaunch(_iArgc, _aSzArgv);
+    if (!gitgud::platform::WaitForEarlierCopy(60000))
+    {
+        std::fprintf(stderr, "[restart] the earlier copy is still running; starting anyway\n");
+    }
 
     // GITGUD_LOG=<file> sends all output (Lua errors, hot-reload notices) to
     // a file instead — useful when there's no console to watch.
@@ -1105,6 +1356,32 @@ int main(int _iArgc, char* _aSzArgv[])
     // not just focus.
     SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
 
+    // The stall watchdog reports any main-loop pass (startup included) that
+    // keeps the UI thread past GITGUD_STALL_MS (default 200; 0 turns it off)
+    // into logs/perf.log, with what was running.
+    gitgud::prof::SetThreadName("UI");
+    {
+        std::error_code ec;
+        const fs::path logs = fs::u8path(gitgud::platform::ConfigDirectory()) / "logs";
+        fs::create_directories(logs, ec);
+        gitgud::prof::WatchdogOptions watch;
+        const char* szstall = std::getenv("GITGUD_STALL_MS");
+        watch.m_iThresholdMs = szstall && *szstall ? std::max(0, std::atoi(szstall)) : 200;
+        watch.m_LogPath = (logs / "perf.log").u8string();
+        gitgud::prof::StartWatchdog(watch);
+        gitgud::prof::UiBusy();
+    }
+    gitgud::prof::Begin(gitgud::prof::Intern("Startup")); // ends as the main loop begins
+    // GITGUD_PROFILE=1 captures from the start (=zones: without the Lua call
+    // hook); GITGUD_PROFILE_SECONDS=<n> stops it after n seconds.
+    if (const char* szprofile = std::getenv("GITGUD_PROFILE");
+        szprofile && *szprofile && std::strcmp(szprofile, "0") != 0)
+    {
+        gitgud::prof::CaptureOptions options;
+        options.m_bLuaCalls = std::strcmp(szprofile, "zones") != 0;
+        gitgud::prof::StartCapture(options);
+    }
+
     if (SDL_Init(SDL_INIT_VIDEO) != 0)
     {
         std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
@@ -1129,6 +1406,10 @@ int main(int _iArgc, char* _aSzArgv[])
         return 1;
     }
     SDL_SetWindowMinimumSize(pwindow, 1140, 600);
+    if (TestInBackground())
+    {
+        gitgud::platform::SendToBack(pwindow);
+    }
 #if defined(__APPLE__)
     gitgud::platform::AllowMinimize(pwindow);
     gitgud::platform::ReleaseCloseShortcut();
@@ -1147,12 +1428,18 @@ int main(int _iArgc, char* _aSzArgv[])
     SDL_StartTextInput();
     SDL_ShowCursor(SDL_DISABLE); // CEGUI draws its own cursor
     SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
+#if defined(_WIN32)
+    SDL_EventState(SDL_SYSWMEVENT, SDL_ENABLE); // only for DisplayMessageFilter
+    SDL_SetEventFilter(DisplayMessageFilter, nullptr);
+#endif
 
     // --- Subsystems ------------------------------------------------------
     gitgud::git::LibGit2 libgit2; // RAII global Init/Shutdown
     gitgud::app::EventBus bus;
     gitgud::app::TaskRunner tasks(bus);
     auto credentials = gitgud::platform::MakeCredentialStore();
+    gitgud::agent::ToolServer tools; // before lua: its sessions use it
+    StartTools(tools);
 
     // Worker threads publish into the bus; wake the (possibly sleeping) main
     // loop so their results show up immediately.
@@ -1181,6 +1468,9 @@ int main(int _iArgc, char* _aSzArgv[])
     // Window icon (taskbar, Alt-Tab). The exe's own icon resource
     // (resources/icon/gitgud.rc) covers Explorer and pins; this covers the
     // live windows.
+    // The built-in UIs' customizations live in the config folder
+    // (<config>/<id>/ui/, app/UiPackages.h): an update never touches them.
+    gitgud::app::SetUiOverlayBase(gitgud::platform::ConfigDirectory());
     AppShell shell(pwindow, gl, ui.get(), bus, resourceRoot);
     shell.SetIcon(pwindow);
     shell.ChooseStartupUi();
@@ -1200,6 +1490,12 @@ int main(int _iArgc, char* _aSzArgv[])
     else if (!shell.FirstLaunch())
     {
         startRepo = ReadLastRepo();
+        // One that's gone (moved, deleted) is quietly not reopened.
+        std::error_code ec;
+        if (!startRepo.empty() && !fs::exists(fs::u8path(startRepo), ec))
+        {
+            startRepo.clear();
+        }
     }
     if (!startRepo.empty())
     {
@@ -1207,6 +1503,7 @@ int main(int _iArgc, char* _aSzArgv[])
         {
             repo.emplace(gitgud::git::Repository::Open(startRepo));
             WriteLastRepo(repo->WorkDir());
+            tools.SetRepository(repo->WorkDir());
         }
         catch (const gitgud::git::GitError& e)
         {
@@ -1219,12 +1516,27 @@ int main(int _iArgc, char* _aSzArgv[])
     lua.SetSlowCallThreshold(PerfThresholdFromEnv());
     lua.Bind(repo ? &*repo : nullptr, &bus, ui.get(), &tasks, credentials.get());
     lua.SetAppHost(&shell);
+    lua.SetToolServer(&tools);
+    // Calls of the tools the UI declared (gitgud.declareTools) go to the UI
+    // thread as "tools.call"; the script answers with gitgud.toolReply.
+    tools.SetAppHandler(
+        [&bus](const std::string& _Id, const std::string& _Tool, const gitgud::app::Json& _Arguments,
+            const std::string& _Session)
+        {
+            bus.Publish({"tools.call", gitgud::app::Json::Object()
+                                           .Set("id", _Id)
+                                           .Set("tool", _Tool)
+                                           .Set("arguments", _Arguments)
+                                           .Set("session", _Session)
+                                           .Dump()});
+        });
 
     if (!lua.Initialize())
     {
         std::fprintf(stderr, "Lua Init failed\n");
         return 1;
     }
+    lua.SetCallProfiling(gitgud::prof::LuaCallsWanted()); // GITGUD_PROFILE: from the first script
 
     if (ui && !ui->Initialize(ikWidth, ikHeight, resourceRoot))
     {
@@ -1272,6 +1584,7 @@ int main(int _iArgc, char* _aSzArgv[])
             }
 
             WriteLastRepo(repo->WorkDir());
+            tools.SetRepository(repo->WorkDir());
             lua.Bind(&*repo, &bus, ui.get(), &tasks, credentials.get());
             bus.Publish({"repo.changed", repo->WorkDir()});
         }
@@ -1289,6 +1602,7 @@ int main(int _iArgc, char* _aSzArgv[])
         [&](const gitgud::app::AppEvent&)
         {
             repo.reset();
+            tools.SetRepository("");
             lua.Bind(nullptr, &bus, ui.get(), &tasks, credentials.get());
             bus.Publish({"repo.changed", ""});
         });
@@ -1322,6 +1636,21 @@ int main(int _iArgc, char* _aSzArgv[])
             }
         });
 
+    // "Title\nbody": ask for the user while the window is in the background
+    // (an agent session finished or needs a permission); nothing while it has
+    // the focus, or under the test harness (GITGUD_SCRIPT).
+    bus.Subscribe("window.notify",
+        [&](const gitgud::app::AppEvent& _Ev)
+        {
+            if (std::getenv("GITGUD_SCRIPT"))
+            {
+                return;
+            }
+            const size_t nbreak = _Ev.m_Detail.find('\n');
+            gitgud::platform::RequestAttention(pwindow, _Ev.m_Detail.substr(0, nbreak),
+                nbreak == std::string::npos ? std::string() : _Ev.m_Detail.substr(nbreak + 1));
+        });
+
     bus.Subscribe("window.close",
         [&](const gitgud::app::AppEvent&)
         {
@@ -1330,10 +1659,38 @@ int main(int _iArgc, char* _aSzArgv[])
             SDL_PushEvent(&quit);
         });
 
+    // A script may ask for the hot-reload itself (emit("app.reload")): the
+    // main loop does it once the handler is done.
+    bool breloadAsked = false;
+    bus.Subscribe("app.reload", [&](const gitgud::app::AppEvent&) { breloadAsked = true; });
+
+    // The main window renewed (renewWindow, below), asked for by a script
+    // (emit("window.renew", why): core/display.lua, after the displays
+    // change) or by hand (Ctrl+Alt+Shift+R); the main loop does it between
+    // handlers.
+    bool brenewAsked = false;
+    std::string renewWhy;
+    bus.Subscribe("window.renew",
+        [&](const gitgud::app::AppEvent& _Ev)
+        {
+            brenewAsked = true;
+            renewWhy = _Ev.m_Detail;
+        });
+
+    // A change of the displays, told to the scripts ("display.changed") and
+    // the log.
+    auto displayChanged = [&](const std::string& _What)
+    {
+        std::printf("[display] %s\n", _What.c_str());
+        bus.Publish({"display.changed", _What});
+    };
+
     // GITGUD_SCRIPT=<file.lua> runs an extra script after the UI's main.lua -
     // the hook for automated UI tests (see gitgud.simulateClick/screenshot).
+    // It runs again after each hot-reload, like main.lua.
     const char* sztestScript = std::getenv("GITGUD_SCRIPT");
     ResourceWatcher watcher;
+    watcher.SetProgramDirectory(gitgud::platform::ExecutableDirectory());
 
     // Point the backend and the VM at the current UI package and run it.
     auto loadUi = [&](const char* _szReason)
@@ -1346,17 +1703,33 @@ int main(int _iArgc, char* _aSzArgv[])
             scriptRoots.push_back(baseScripts);
         }
         lua.SetScriptRoots(scriptRoots);
-        watcher.SetRoots({resourceRoot, package.m_Root});
+        // The user's customizations first (app/UiPackages.h); each file that
+        // fails falls back to the shipped one, with a note.
+        const std::string overlay = package.m_OverlayRoot;
+        lua.ClearOverlayErrors();
+        lua.SetScriptOverlay(overlay.empty() ? std::string() : overlay + "/scripts");
+        std::vector<std::string> watched{resourceRoot, package.m_Root};
+        if (!overlay.empty())
+        {
+            watched.push_back(overlay);
+        }
+        watcher.SetRoots(watched);
 
         if (ui)
         {
+            ui->SetOverlayRoot(overlay);
             ui->SetLayoutDirectory(package.LayoutsDir());
             if (!ui->LoadLayout(kMainLayout))
             {
                 std::fprintf(stderr, "Failed to load %s\n", kMainLayout);
             }
+            for (const auto& [file, error] : ui->TakeOverlayErrors())
+            {
+                lua.AddOverlayError(file, error);
+            }
         }
-        lua.RunFile(package.ScriptsDir() + "/main.lua");
+        lua.RunFileOrShipped(overlay.empty() ? std::string() : overlay + "/scripts/main.lua",
+            package.ScriptsDir() + "/main.lua");
         if (sztestScript)
         {
             lua.RunFile(sztestScript);
@@ -1364,13 +1737,17 @@ int main(int _iArgc, char* _aSzArgv[])
         bus.Publish({"app.started", _szReason});
     };
 
-    // Apply a package's skin (its looknfeel/ and imagesets/ are optional).
+    // Apply a package's skin (its looknfeel/ and imagesets/ are optional) in
+    // its theme (app/UiPackages.h).
     auto applySkin = [&](const gitgud::app::UiPackage& _Package)
     {
         if (ui)
         {
-            ui->ApplySkin(
-                _Package.m_Id == gitgud::app::kDefaultUiId ? std::string() : _Package.m_Root);
+            const bool bbase = _Package.m_Id == gitgud::app::kDefaultUiId;
+            ui->SetOverlayRoot(_Package.m_OverlayRoot);
+            ui->ApplySkin(bbase ? std::string() : _Package.m_Root,
+                bbase ? std::string()
+                      : gitgud::app::ThemeFile(_Package, ActiveTheme(_Package)));
         }
     };
 
@@ -1392,12 +1769,27 @@ int main(int _iArgc, char* _aSzArgv[])
             }
         });
 
+    // The canvas behind the UI: the default skin's, until a script sets its
+    // theme's ("window.canvas", "AARRGGBB"; the alpha is ignored).
+    glClearColor(0.055f, 0.039f, 0.102f, 1.0f);
+    bus.Subscribe("window.canvas",
+        [](const gitgud::app::AppEvent& _Ev)
+        {
+            const std::string& argb = _Ev.m_Detail;
+            if (argb.size() != 8 || argb.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos)
+            {
+                return;
+            }
+            const unsigned long ulcolour = std::strtoul(argb.c_str(), nullptr, 16);
+            glClearColor(static_cast<float>((ulcolour >> 16) & 0xFF) / 255.0f,
+                static_cast<float>((ulcolour >> 8) & 0xFF) / 255.0f,
+                static_cast<float>(ulcolour & 0xFF) / 255.0f, 1.0f);
+        });
+
     applySkin(shell.CurrentUi());
     loadUi("");
 
     std::printf("Gitgud: window + subsystems online. Close the window to exit.\n");
-
-    glClearColor(0.055f, 0.039f, 0.102f, 1.0f); // matches the skin's canvas
 
     Uint32 lastWatchTick = SDL_GetTicks();
     Uint32 lastInputTick = SDL_GetTicks();
@@ -1410,6 +1802,7 @@ int main(int _iArgc, char* _aSzArgv[])
     constexpr int ikActiveTickMs = 16;
     constexpr int ikIdleTickMs = 250;
     constexpr Uint32 kWatchIntervalMs = 1000;
+    constexpr Uint32 kSettleWatchMs = 250; // while a change settles
     // A focus loss and gain this close together is focus moving between
     // our own windows.
     constexpr Uint32 kOwnFocusSwitchMs = 250;
@@ -1513,6 +1906,21 @@ int main(int _iArgc, char* _aSzArgv[])
 
         switch (_Ev.type)
         {
+        case SDL_DISPLAYEVENT:
+            if (_Ev.display.event == SDL_DISPLAYEVENT_CONNECTED)
+            {
+                displayChanged("a display was connected");
+            }
+            else if (_Ev.display.event == SDL_DISPLAYEVENT_DISCONNECTED)
+            {
+                displayChanged("a display was disconnected");
+            }
+            else if (_Ev.display.event == SDL_DISPLAYEVENT_MOVED)
+            {
+                displayChanged("a display moved");
+            }
+            break;
+
         case SDL_WINDOWEVENT:
             if (ppopOut)
             {
@@ -1577,6 +1985,10 @@ int main(int _iArgc, char* _aSzArgv[])
                 // mean anything changed on disk, and a refresh isn't free.
                 // Pop-outs report which window came forward.
                 const bool bfromOwnWindow = SDL_GetTicks() - lastFocusLostTick < kOwnFocusSwitchMs;
+                if (bmain)
+                {
+                    gitgud::platform::ClearAttention();
+                }
                 if (!bmain)
                 {
                     bus.Publish({"window.focused", target});
@@ -1631,6 +2043,20 @@ int main(int _iArgc, char* _aSzArgv[])
             // AND to the UI, so editboxes keep their own Ctrl+C/V/A handling.
             // A pop-out's shortcuts are its own: "window.key" = "id|combo".
             const std::string combo = KeyCombo(_Ev.key.keysym);
+            // Ctrl+Alt+Shift+P starts or stops a performance capture, in any
+            // interface (handled here, so it works whatever the scripts do).
+            if (combo == "ctrl+alt+shift+p")
+            {
+                gitgud::prof::RequestCapture(gitgud::prof::CaptureRequest::Toggle);
+            }
+            // Ctrl+Alt+Shift+R renews the main window, for when it stops
+            // showing what's drawn (also here, so it works whatever the
+            // scripts do).
+            if (combo == "ctrl+alt+shift+r")
+            {
+                brenewAsked = true;
+                renewWhy = "Ctrl+Alt+Shift+R";
+            }
             if (!combo.empty())
             {
                 if (bmain)
@@ -1711,8 +2137,35 @@ int main(int _iArgc, char* _aSzArgv[])
             ui->UnloadAll();
         }
         applySkin(_Package);
+        lua.ClearKept(); // the next UI starts afresh
         lua.Reset();
         loadUi("ui-switch");
+        bus.Drain();
+        bredraw = true;
+        if (TestInBackground())
+        {
+            gitgud::platform::SendToBack(pwindow); // a rebuilt window stays behind
+        }
+    };
+
+    // Hot-reload: the scripts keep what they need ("app.reloading", then
+    // gitgud.keepForReload), then the windows, the skin, and the script VM
+    // go and the UI loads afresh. Claude Code sessions and voice live
+    // in C++ and carry on through it; the reloaded scripts
+    // take them up again, so a change to Lua, XML, or prompts needs no
+    // restart. The program itself can't be reloaded.
+    auto hotReload = [&]()
+    {
+        bus.Drain(); // the old scripts see everything that came before
+        lua.Dispatch("app.reloading", "hot-reload");
+        shell.CloseAllWindows();
+        if (ui)
+        {
+            ui->UnloadAll();
+        }
+        applySkin(shell.CurrentUi());
+        lua.Reset();
+        loadUi("hot-reload");
         bus.Drain();
         bredraw = true;
     };
@@ -1746,7 +2199,25 @@ int main(int _iArgc, char* _aSzArgv[])
             pendingScreenshotWindow.clear();
         }
         profiler.Mark("draw");
+        static gitgud::prof::Site s_SwapSite{"Swap (vsync wait)", __FILE__, __LINE__};
+        const gitgud::prof::Scope swapZone(s_SwapSite);
+        // A swap that fails leaves SDL's error (SDL 2 doesn't return it).
+        SDL_ClearError();
         SDL_GL_SwapWindow(_pWindow);
+        const std::string swapError = SDL_GetError();
+        if (_Surface.empty())
+        {
+            gitgud::prof::CountFrame(!swapError.empty());
+            // Said once when presenting starts failing, and once when it works again.
+            static bool s_bFailing = false;
+            if (swapError.empty() == s_bFailing)
+            {
+                s_bFailing = !swapError.empty();
+                std::printf(s_bFailing ? "[display] presenting the window failed: %s\n"
+                                       : "[display] presenting the window works again%s\n",
+                    swapError.c_str());
+            }
+        }
         profiler.Mark("swap");
         return true;
     };
@@ -1766,6 +2237,77 @@ int main(int _iArgc, char* _aSzArgv[])
             bredraw = false;
         }
         SDL_GL_MakeCurrent(pwindow, gl);
+    };
+
+    // Renew the main window: a new one in the old one's place (position,
+    // size, frame, maximized or not), the same GL context made current on
+    // it, the old one closed. All the UI drew stays (its textures, shaders
+    // and buffers belong to the context, which pop-outs share the same way);
+    // only the path from the window to the screen is new. For when frames
+    // stop reaching the screen though they're still drawn
+    // (the dock's monitor came back and the window kept its last frame while
+    // input, layout and drawing all went on).
+    auto renewWindow = [&](const std::string& _Why)
+    {
+        int ix = 0;
+        int iy = 0;
+        int iw = 0;
+        int ih = 0;
+        int iminW = 0;
+        int iminH = 0;
+        SDL_GetWindowPosition(pwindow, &ix, &iy);
+        SDL_GetWindowSize(pwindow, &iw, &ih);
+        SDL_GetWindowMinimumSize(pwindow, &iminW, &iminH);
+        const Uint32 uflags = SDL_GetWindowFlags(pwindow);
+        Uint32 ucreate = (kWindowFlags & ~SDL_WINDOW_SHOWN) | SDL_WINDOW_HIDDEN;
+        if (!shell.MainWindowBordered())
+        {
+            ucreate |= SDL_WINDOW_BORDERLESS;
+        }
+        SDL_Window* pnew = SDL_CreateWindow(SDL_GetWindowTitle(pwindow), ix, iy, iw, ih, ucreate);
+        if (!pnew)
+        {
+            std::printf("[display] couldn't renew the window (%s): %s\n", _Why.c_str(), SDL_GetError());
+            return;
+        }
+        if (SDL_GL_MakeCurrent(pnew, gl) != 0)
+        {
+            std::printf("[display] couldn't renew the window (%s): %s\n", _Why.c_str(), SDL_GetError());
+            SDL_DestroyWindow(pnew);
+            SDL_GL_MakeCurrent(pwindow, gl);
+            return;
+        }
+        SDL_SetWindowMinimumSize(pnew, iminW, iminH);
+        SDL_Window* pold = pwindow;
+        pwindow = pnew;
+        shell.ReplaceMainWindow(pnew);
+        if (uflags & SDL_WINDOW_MAXIMIZED)
+        {
+            SDL_MaximizeWindow(pnew);
+        }
+        SDL_ShowWindow(pnew); // tests keep it from taking focus (SDL_WINDOW_NO_ACTIVATION_WHEN_SHOWN)
+        if (TestInBackground())
+        {
+            gitgud::platform::SendToBack(pnew);
+        }
+        else
+        {
+            if (uflags & SDL_WINDOW_MINIMIZED)
+            {
+                SDL_MinimizeWindow(pnew);
+            }
+            else if (uflags & SDL_WINDOW_INPUT_FOCUS)
+            {
+                SDL_RaiseWindow(pnew);
+            }
+        }
+        SDL_DestroyWindow(pold);
+        SDL_GL_MakeCurrent(pwindow, gl);
+        SDL_StartTextInput(); // text input goes with the focused window
+        bmainResizePending = true;
+        bredraw = true;
+        std::printf("[display] window renewed (%s)\n", _Why.c_str());
+        bus.Publish({"window.renewed", _Why});
     };
 
     // --- Live resize -----------------------------------------------------
@@ -1823,10 +2365,110 @@ int main(int _iArgc, char* _aSzArgv[])
         return bgot;
     };
 
+    gitgud::prof::EndTo(0); // Startup
+
+    // --- Profiler ---------------------------------------------------------
+    // Captures start and stop between frames (no script runs then, so the
+    // Lua call hook can come and go). The reports are written on a worker
+    // thread, then announced as "profiler.saved" (the folder).
+    const std::string profileDir = (fs::u8path(gitgud::platform::ConfigDirectory()) / "logs").u8string();
+    const char* szprofileSeconds = std::getenv("GITGUD_PROFILE_SECONDS");
+    const double fprofileSeconds = szprofileSeconds ? std::atof(szprofileSeconds) : 0.0;
+    std::vector<std::thread> profileWriters;
+    auto stopCapture = [&](bool _bWait)
+    {
+        lua.SetCallProfiling(false);
+        auto write = [&bus, profileDir]
+        {
+            gitgud::prof::SetThreadName("profile writer");
+            const std::string folder = gitgud::prof::StopCapture(profileDir);
+            gitgud::prof::SetLastCaptureFolder(folder);
+            std::printf("[perf] capture written to %s\n", folder.c_str());
+            std::fflush(stdout);
+            bus.Publish({folder.empty() ? "profiler.failed" : "profiler.saved", folder});
+        };
+        if (_bWait)
+        {
+            write();
+        }
+        else
+        {
+            profileWriters.emplace_back(write);
+        }
+    };
+    auto pollCapture = [&]()
+    {
+        using gitgud::prof::CaptureRequest;
+        CaptureRequest request = gitgud::prof::TakeCaptureRequest();
+        if (request == CaptureRequest::None && fprofileSeconds > 0.0 && gitgud::prof::Capturing() &&
+            gitgud::prof::CaptureSeconds() >= fprofileSeconds)
+        {
+            request = CaptureRequest::Stop;
+        }
+        if (request == CaptureRequest::Toggle)
+        {
+            request = gitgud::prof::Capturing() ? CaptureRequest::Stop : CaptureRequest::Start;
+        }
+        if (request == CaptureRequest::Start && !gitgud::prof::Capturing())
+        {
+            gitgud::prof::StartCapture();
+            std::printf("[perf] capture started (Ctrl+Alt+Shift+P again to stop)\n");
+            std::fflush(stdout);
+            bus.Publish({"profiler.started", ""});
+        }
+        else if (request == CaptureRequest::Stop && gitgud::prof::Capturing())
+        {
+            stopCapture(false);
+        }
+        lua.SetCallProfiling(gitgud::prof::LuaCallsWanted());
+    };
+    // The main loop's phases, one zone each.
+    struct Phase
+    {
+        bool m_bOpen = false;
+        void Next(gitgud::prof::Site& _Site)
+        {
+            Close();
+            gitgud::prof::Begin(_Site.Id());
+            m_bOpen = true;
+        }
+        void Close()
+        {
+            if (m_bOpen)
+            {
+                gitgud::prof::End();
+                m_bOpen = false;
+            }
+        }
+    } phase;
+    static gitgud::prof::Site s_FrameSite{"Frame", __FILE__, __LINE__};
+    static gitgud::prof::Site s_InputSite{"Input", __FILE__, __LINE__};
+    static gitgud::prof::Site s_EventsSite{"Events (bus.Drain)", __FILE__, __LINE__};
+    static gitgud::prof::Site s_TimersSite{"Timers (lua.Tick)", __FILE__, __LINE__};
+    static gitgud::prof::Site s_SwitchSite{"Pending UI switches", __FILE__, __LINE__};
+    static gitgud::prof::Site s_WatchSite{"Hot-reload watch", __FILE__, __LINE__};
+    static gitgud::prof::Site s_UpdateSite{"ui->Update", __FILE__, __LINE__};
+    static gitgud::prof::Site s_RenderSite{"Render", __FILE__, __LINE__};
+
     // --- Main loop -------------------------------------------------------
     bool brunning = true;
     while (brunning)
     {
+        pollCapture();
+        gitgud::prof::SetLuaMemoryKb(lua.MemoryKb());
+        // During a capture, the UI's size once a second: windows, and the
+        // ones drawn (every drawn window's text goes to the renderer).
+        static Uint32 s_uLastCount = 0;
+        if (gitgud::prof::Capturing() && ui && SDL_GetTicks() - s_uLastCount >= 1000)
+        {
+            s_uLastCount = SDL_GetTicks();
+            int itotal = 0;
+            int idrawn = 0;
+            ui->CountWindows(itotal, idrawn);
+            gitgud::prof::Counter("ui: windows", itotal);
+            gitgud::prof::Counter("ui: windows drawn", idrawn);
+            gitgud::prof::Counter("lua: handlers", static_cast<double>(lua.HandlerCount()));
+        }
         // How long may we sleep before something needs attention?
         const Uint32 nowTick = SDL_GetTicks();
         int itimeout = (nowTick - lastInputTick < kActiveWindowMs) ? ikActiveTickMs : ikIdleTickMs;
@@ -1844,12 +2486,17 @@ int main(int _iArgc, char* _aSzArgv[])
         {
             itimeout = std::min(itimeout, itimerWait);
         }
+        const Uint32 watchEvery = watcher.Pending() ? kSettleWatchMs : kWatchIntervalMs;
         const Uint32 sinceWatch = nowTick - lastWatchTick;
         itimeout = std::min(itimeout,
-            sinceWatch >= kWatchIntervalMs ? 0 : static_cast<int>(kWatchIntervalMs - sinceWatch));
+            sinceWatch >= watchEvery ? 0 : static_cast<int>(watchEvery - sinceWatch));
 
         SDL_Event ev;
+        gitgud::prof::UiIdle();
         const bool bgotEvent = waitEvent(ev, itimeout);
+        gitgud::prof::UiBusy();
+        gitgud::prof::Scope frameZone(s_FrameSite);
+        phase.Next(s_InputSite);
         profiler.Begin();
         if (bgotEvent)
         {
@@ -1862,7 +2509,22 @@ int main(int _iArgc, char* _aSzArgv[])
             } while (pollEvent(ev));
         }
         applyResizes();
+#if defined(_WIN32)
+        // Windows' display and power messages (DisplayMessageFilter).
+        if (const unsigned umessages = g_uDisplayMessages.exchange(0))
+        {
+            if (umessages & kDisplaySettingsChanged)
+            {
+                displayChanged("the display settings changed");
+            }
+            if (umessages & kResumedFromSleep)
+            {
+                displayChanged("the computer woke up");
+            }
+        }
+#endif
         profiler.Mark("input");
+        phase.Next(s_EventsSite);
 
         // Deliver queued events (worker completions, Lua-raised intents, ...)
         // and due timers on this — the UI — thread.
@@ -1871,12 +2533,14 @@ int main(int _iArgc, char* _aSzArgv[])
             bredraw = true;
         }
         profiler.Mark("events");
+        phase.Next(s_TimersSite);
         if (lua.Tick())
         {
             bus.Drain();
             bredraw = true;
         }
         profiler.Mark("timers");
+        phase.Next(s_SwitchSite);
 
         // Window closes and UI switches scripts asked for, now that no widget
         // handler is running.
@@ -1886,37 +2550,52 @@ int main(int _iArgc, char* _aSzArgv[])
         }
         bus.Drain();
 
-        // Hot-reload: poll the resource files ~once a second; on any change
-        // reload the layout, restart the script VM, and re-run the UI's main.lua.
+        // Hot-reload: poll the resource files about once a second (faster
+        // while a change settles); once they've settled, or a script asked,
+        // reload the skin and layout, restart the script VM, and re-run the
+        // UI's main.lua.
         const Uint32 afterTick = SDL_GetTicks();
-        if (afterTick - lastWatchTick >= kWatchIntervalMs)
+        if (breloadAsked || afterTick - lastWatchTick >=
+                                (watcher.Pending() ? kSettleWatchMs : kWatchIntervalMs))
         {
             lastWatchTick = afterTick;
-            const bool bchanged = watcher.Changed();
-            profiler.Mark("watch");
-            if (bchanged)
+            phase.Next(s_WatchSite);
+            const bool bsettled = watcher.ResourcesSettled(afterTick);
+            if (watcher.ProgramSettled(afterTick))
             {
-                std::printf("[hot-reload] resources changed; reloading UI\n");
-                shell.CloseAllWindows();
-                lua.Reset();
-                loadUi("hot-reload");
-                bus.Drain();
-                bredraw = true;
+                std::printf("[hot-reload] the program's files changed; only resources reload "
+                            "live: restart GitGud to run the new program\n");
+            }
+            profiler.Mark("watch");
+            if (bsettled || breloadAsked)
+            {
+                std::printf(bsettled ? "[hot-reload] resources changed; reloading UI\n"
+                                     : "[hot-reload] asked for; reloading UI\n");
+                breloadAsked = false;
+                hotReload();
             }
         }
 
         if (!ui)
         {
+            phase.Close();
             profiler.End();
             continue;
         }
+        if (brenewAsked)
+        {
+            brenewAsked = false;
+            renewWindow(renewWhy);
+        }
         profiler.Mark("other");
+        phase.Next(s_UpdateSite);
 
         // Advance CEGUI's clock (caret blink, tooltips, animations); it marks
         // itself dirty when that changes anything visible.
         ui->Update(static_cast<float>(afterTick - lastPulseTick) / 1000.0f);
         lastPulseTick = afterTick;
         profiler.Mark("update");
+        phase.Next(s_RenderSite);
 
         drawAll();
         // A screenshot of a window that no longer exists can't be taken.
@@ -1928,9 +2607,26 @@ int main(int _iArgc, char* _aSzArgv[])
         }
         profiler.Mark("render");
         profiler.End();
+        phase.Close();
     }
+    gitgud::prof::UiIdle();
+    if (gitgud::prof::Capturing())
+    {
+        stopCapture(true);
+    }
+    for (std::thread& writer : profileWriters)
+    {
+        writer.join();
+    }
+    gitgud::prof::StopWatchdog();
 
     // --- Teardown (RAII handles the rest) --------------------------------
+    // Voice first, while every library it uses is still loaded: the
+    // sessions stop, then the speech engine releases its models (a
+    // release at static-destruction time could hang in the GPU's
+    // libraries and leave a crash marker behind).
+    gitgud::lua::bindings::StopVoice();
+    gitgud::speech::LocalEngine::PrepareForExit(std::chrono::seconds(20));
     SDL_DelEventWatch(CallEventWatch, &liveResize);
     shell.CloseAllWindows();
     if (ui)
@@ -1938,6 +2634,7 @@ int main(int _iArgc, char* _aSzArgv[])
         ui->Shutdown();
     }
 
+    gitgud::platform::ClearAttention();
     SDL_GL_DeleteContext(gl);
     SDL_DestroyWindow(pwindow);
     SDL_Quit();

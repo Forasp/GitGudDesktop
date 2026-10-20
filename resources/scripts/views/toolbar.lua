@@ -67,7 +67,7 @@ end
 function toolbar.refresh(state)
     local title = "GitGud Desktop"
     if state.open then
-        title = title .. "  —  " .. state.name
+        title = title .. "  -  " .. state.name
     end
     gitgud.setText("AppTitleLabel", text.colour(C.dim, title))
 
@@ -77,7 +77,7 @@ function toolbar.refresh(state)
     if state.detached then
         branchValue = "Detached at " .. state.headOid:sub(1, 7)
     elseif branchValue == "" then
-        branchValue = state.open and "(no branch)" or "—"
+        branchValue = state.open and "(no branch)" or "-"
     end
     gitgud.setText("BranchValue", text.escape(branchValue))
     gitgud.setEnabled("BranchButton", state.open)
@@ -115,8 +115,8 @@ local function paintUndo()
             or "Nothing to redo")
     gitgud.setProperty("UndoButtonLabel", "NormalTextColour", nextUndo and C.text2 or C.disabled)
     gitgud.setProperty("RedoButtonLabel", "NormalTextColour", nextRedo and C.text2 or C.disabled)
-    gitgud.setProperty("UndoButtonIcon", "IconColour", nextUndo and "FFFFFFFF" or C.disabled)
-    gitgud.setProperty("RedoButtonIcon", "IconColour", nextRedo and "FFFFFFFF" or C.disabled)
+    gitgud.setProperty("UndoButtonIcon", "IconColour", nextUndo and C.icon or C.disabled)
+    gitgud.setProperty("RedoButtonIcon", "IconColour", nextRedo and C.icon or C.disabled)
 end
 
 --- Undo the last action, reporting the outcome.
@@ -159,7 +159,7 @@ function toolbar.init()
     local function paintConsoleButton()
         local consoleOn = require("views.frame").consoleVisible()
         gitgud.setProperty("ConsoleButtonLabel", "NormalTextColour", consoleOn and C.cyan or C.text2)
-        gitgud.setProperty("ConsoleButtonIcon", "IconColour", consoleOn and C.cyan or "FFFFFFFF")
+        gitgud.setProperty("ConsoleButtonIcon", "IconColour", consoleOn and C.cyan or C.icon)
     end
     app.subscribe("frame.changed", paintConsoleButton)
     paintConsoleButton()

@@ -90,7 +90,7 @@ local function integrationsOf(state, index)
     end
 
     return "Sources (contributing content to this revision):\n"
-        .. (#sources > 0 and table.concat(sources, "\n") or "   (none — the file was added here)") .. "\n\n"
+        .. (#sources > 0 and table.concat(sources, "\n") or "   (none: the file was added here)") .. "\n\n"
         .. "Targets (receiving content from this revision):\n"
         .. (#targets > 0 and table.concat(targets, "\n") or "   (none yet)")
 end

@@ -9,7 +9,14 @@
        the Visual C++ runtime, so no redistributable is required),
        resources\, docs\, and the stock CEGUI data files, plus BUILD-INFO.txt,
        LICENSE, and THIRD_PARTY_NOTICES.txt (checked first against what the
-       build ships; see tools\update-notices.ps1).
+       build ships; see tools\update-notices.ps1). The Bragi interface's
+       speech engine goes in voice\: sherpa-onnx's C API DLL from its pinned
+       CPU release, and ONNX Runtime's core (onnxruntime.dll and
+       onnxruntime_providers_shared.dll) from its pinned CUDA release, the
+       GPU build, which runs on the processor (nothing from NVIDIA is in the
+       package; the optional GPU pack adds the CUDA provider later). Both
+       downloaded once into build\sherpa and checked against their SHA-256.
+       The app loads them only when voice starts in the Bragi interface.
     3. Checks that every DLL the package's binaries import is in the package
        or part of Windows, then smoke-tests it: starts a copy from an empty
        folder with a throwaway settings folder and checks that the UI came up
@@ -62,6 +69,20 @@ $Package = Join-Path $DistRoot "GitGud"
 $Zip = Join-Path $DistRoot "GitGud-win64.zip"
 $SetupName = "GitGud-win64-setup"
 $PackName = "GitGud-win64.pack"
+
+# The speech engine, pinned: sherpa-onnx's shared Windows build (the C API,
+# no text to speech), and ONNX Runtime 1.28.2's core from sherpa-onnx's CUDA
+# release (the GPU build: the same one whose CUDA provider the Bragi
+# interface's optional GPU pack adds, so they match).
+$SherpaVersion = "1.13.8"
+$SherpaAsset = "sherpa-onnx-v$SherpaVersion-win-x64-shared-MD-Release-no-tts-lib.tar.bz2"
+$SherpaUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v$SherpaVersion/$SherpaAsset"
+$SherpaSha256 = "b90992b888710715d613a4fedcd75d5b4db294ef64f3194e4f77ea0a8b387441"
+$SherpaDlls = @("sherpa-onnx-c-api.dll")
+$OrtAsset = "sherpa-onnx-v$SherpaVersion-cuda-13.x-cudnn-9.x-onnxruntime1.28.2-win-x64-cuda.tar.bz2"
+$OrtUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v$SherpaVersion/$OrtAsset"
+$OrtSha256 = "1702e4a1ee68a07422469a7ec1d304a54b43a345ad888daf8e0b0257004a3273"
+$OrtDlls = @("onnxruntime.dll", "onnxruntime_providers_shared.dll")
 
 function Write-Step($Message) {
     Write-Host ""
@@ -139,6 +160,44 @@ function Build-Release {
 
 # --------------------------------------------------------------- assemble --
 
+# A pinned release's lib folder in build\sherpa, with `$Dlls` in it
+# (downloaded the first time, checked every time it's unpacked; only those
+# DLLs are unpacked).
+function Get-PinnedLibraries($Asset, $Url, $Sha256, $Dlls) {
+    $dir = Join-Path $Root "build\sherpa"
+    $name = $Asset -replace "\.tar\.bz2$", ""
+    $lib = Join-Path $dir "$name\lib"
+    $missing = $Dlls | Where-Object { -not (Test-Path (Join-Path $lib $_)) }
+    if (-not $missing) {
+        return $lib
+    }
+    New-Item -ItemType Directory -Force $dir | Out-Null
+    $archive = Join-Path $dir $Asset
+    $good = (Test-Path $archive) -and
+        ((Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant() -eq $Sha256)
+    if (-not $good) {
+        Write-Note "downloading $Url"
+        $ProgressPreference = "SilentlyContinue"
+        Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $archive
+        $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+        if ($hash -ne $Sha256) {
+            Remove-Item -Force $archive
+            throw "$Asset doesn't match its pinned SHA-256 (got $hash)."
+        }
+    }
+    # Windows' own tar (bsdtar) reads .tar.bz2; Git's GNU tar earlier on PATH can't.
+    $members = $Dlls | ForEach-Object { "$name/lib/$_" }
+    & (Join-Path $env:WINDIR "System32\tar.exe") -xf $archive -C $dir @members
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unpacking $Asset failed."
+    }
+    $missing = $Dlls | Where-Object { -not (Test-Path (Join-Path $lib $_)) }
+    if ($missing) {
+        throw "$Asset has no $($missing -join ', ')."
+    }
+    return $lib
+}
+
 # Every file in the package as {Path ('/'-separated, relative), Size, Sha256},
 # in a stable order.
 function Get-PackageFiles {
@@ -183,6 +242,7 @@ function New-Package {
 
     Copy-Item (Join-Path $Bin "gitgud.exe") $Package
     Copy-Item (Join-Path $Bin "gitgud-patcher.exe") $Package
+    Copy-Item (Join-Path $Bin "gitgud-mcp.exe") $Package
     Get-ChildItem $Bin -Filter *.dll | Copy-Item -Destination $Package
     foreach ($folder in @("resources", "docs", "cegui-datafiles")) {
         Copy-Item -Recurse (Join-Path $Bin $folder) (Join-Path $Package $folder)
@@ -194,6 +254,18 @@ function New-Package {
     $crt = Get-CrtFolder
     Get-ChildItem $crt -Filter *.dll | Copy-Item -Destination $Package
     Write-Note "Visual C++ runtime from $crt"
+
+    $sherpaLib = Get-PinnedLibraries $SherpaAsset $SherpaUrl $SherpaSha256 $SherpaDlls
+    $ortLib = Get-PinnedLibraries $OrtAsset $OrtUrl $OrtSha256 $OrtDlls
+    $voice = Join-Path $Package "voice"
+    New-Item -ItemType Directory -Force $voice | Out-Null
+    foreach ($dll in $SherpaDlls) {
+        Copy-Item (Join-Path $sherpaLib $dll) $voice
+    }
+    foreach ($dll in $OrtDlls) {
+        Copy-Item (Join-Path $ortLib $dll) $voice
+    }
+    Write-Note "speech engine: sherpa-onnx $SherpaVersion and ONNX Runtime 1.28.2 (GPU build) in voice\"
 
     $commit = (Invoke-Git $Root @("rev-parse", "HEAD")) | Select-Object -First 1
     $dirty = (Invoke-Git $Root @("status", "--porcelain", "--untracked-files=no", "--ignore-submodules")) -ne $null
@@ -235,10 +307,14 @@ function Test-Imports {
     $dumpbin = Get-Dumpbin
     $system = Join-Path $env:WINDIR "System32"
     $present = @{}
-    Get-ChildItem $Package -File | ForEach-Object { $present[$_.Name.ToLowerInvariant()] = $true }
+    $voice = Join-Path $Package "voice"
+    $binaries = @(Get-ChildItem $Package -File) + @(Get-ChildItem $voice -File -ErrorAction SilentlyContinue)
+    # The speech engine's DLLs load from voice\ with the app's folder's
+    # runtime already in memory.
+    $binaries | ForEach-Object { $present[$_.Name.ToLowerInvariant()] = $true }
 
     $missing = @()
-    foreach ($binary in Get-ChildItem $Package -File | Where-Object { $_.Extension -in ".exe", ".dll" }) {
+    foreach ($binary in $binaries | Where-Object { $_.Extension -in ".exe", ".dll" }) {
         $inList = $false
         foreach ($line in & $dumpbin /nologo /dependents $binary.FullName) {
             if ($line -match "Image has the following (delay load )?dependencies") {

@@ -778,7 +778,7 @@ function actions.unshelve(shelf)
             log.info("Unshelved " .. text.plural(#result.applied, "file") .. " into " .. clName(target) .. ".")
             if #result.conflicted > 0 then
                 log.warn("Conflicts in " .. table.concat(result.conflicted, ", ")
-                    .. " — both you and the shelf changed the same lines; edit the conflict markers.")
+                    .. ": both you and the shelf changed the same lines; edit the conflict markers.")
             end
             if #result.skipped > 0 then
                 log.warn("Left alone (binary or deleted and edited): " .. table.concat(result.skipped, ", "))

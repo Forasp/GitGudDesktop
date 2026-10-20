@@ -36,6 +36,19 @@ endif()
 # ---- Options -------------------------------------------------------------
 option(GITGUD_UI_CEGUI  "Build the CEGUI UI backend" ON)
 option(GITGUD_BUILD_TESTS "Build the unit tests"     ON)
+# Every C++ function of the app becomes a profiler zone (compiler entry/exit
+# hooks; see src/app/ProfilerInstrument.cpp). Slow: for profiling builds only.
+option(GITGUD_PROFILE_INSTRUMENT "Profile every C++ function (slow; profiling builds)" OFF)
+# The Bragi interface's speech engine runs on sherpa-onnx (and ONNX Runtime),
+# loaded at run time from a `voice` folder beside the exe. Point this at the
+# `lib` folder of a sherpa-onnx v1.13.8 shared Windows release (see
+# docs/BUILDING.md) to copy its C API DLL there, and GITGUD_ORT_DIR at the
+# `lib` folder of its CUDA release for ONNX Runtime 1.28.2's core
+# (onnxruntime.dll and onnxruntime_providers_shared.dll: the GPU build, which
+# runs on the processor until the optional GPU pack adds the CUDA provider);
+# without them the build works and voice stays unavailable.
+set(GITGUD_SHERPA_DIR "" CACHE PATH "sherpa-onnx's lib folder (sherpa-onnx-c-api.dll)")
+set(GITGUD_ORT_DIR "" CACHE PATH "ONNX Runtime's GPU build lib folder (onnxruntime.dll, onnxruntime_providers_shared.dll)")
 
 # ---- Dependencies --------------------------------------------------------
 # These resolve via vcpkg (see vcpkg.json) or your system package manager.
@@ -128,6 +141,25 @@ if(GITGUD_UI_CEGUI)
     endif()
 endif()
 
+# ---- Profiler --------------------------------------------------------------
+# Zones, captures and reports (src/app/Profiler.h) and the stall watchdog. Its
+# own library so it is never instrumented: the hooks call into it.
+add_library(gitgud_profiler STATIC
+    src/app/Profiler.cpp
+    src/app/StallWatchdog.cpp
+    src/app/ProfilerInstrument.cpp
+)
+target_include_directories(gitgud_profiler PUBLIC ${CMAKE_SOURCE_DIR}/src)
+if(WIN32)
+    target_link_libraries(gitgud_profiler PUBLIC dbghelp)
+else()
+    target_link_libraries(gitgud_profiler PUBLIC ${CMAKE_DL_LIBS})
+endif()
+if(GITGUD_PROFILE_INSTRUMENT AND MSVC)
+    enable_language(ASM_MASM)
+    target_sources(gitgud_profiler PRIVATE src/app/ProfilerPenter.asm)
+endif()
+
 # ---- Core library --------------------------------------------------------
 # Everything UI-agnostic lives here so BOTH the app and the tests link it. This
 # is the unit-testable heart of the project (Git engine, app state, Lua bridge).
@@ -141,6 +173,8 @@ add_library(gitgud_core STATIC
     src/git/RepositoryRewrite.cpp
     src/git/RepositoryModules.cpp
     src/git/RepositoryTree.cpp
+    src/git/RepositorySummary.cpp
+    src/git/BareStore.cpp
     src/git/RepositoryShelves.cpp
     src/git/RepositoryRevisionGraph.cpp
     src/git/CommitGraph.cpp
@@ -154,6 +188,9 @@ add_library(gitgud_core STATIC
     src/app/EventBus.cpp
     src/app/TaskRunner.cpp
     src/app/UiPackages.cpp
+    src/app/Json.cpp
+    src/ui/ColourMap.cpp
+    src/ui/TextSpans.cpp
     src/app/Updater.cpp
     src/update/UpdateCore.cpp
     src/lua/LuaEngine.cpp
@@ -163,11 +200,52 @@ add_library(gitgud_core STATIC
     src/lua/LuaUiBindings.cpp
     src/lua/LuaFeatureBindings.cpp
     src/lua/LuaAppBindings.cpp
+    src/lua/LuaJsonBindings.cpp
+    src/lua/LuaStoreBindings.cpp
+    src/lua/LuaVoiceBindings.cpp
+    src/lua/LuaLocalDataBindings.cpp
+    src/lua/LuaAgentBindings.cpp
+    src/lua/LuaAgentHistoryBindings.cpp
+    src/lua/LuaImageBindings.cpp
+    src/lua/LuaProfiler.cpp
+    src/agent/ChatImages.cpp
+    src/agent/ClaudeSession.cpp
+    src/agent/ClaudeTranscripts.cpp
+    src/agent/McpProtocol.cpp
+    src/agent/RepoToolDefs.cpp
+    src/agent/RepoTools.cpp
+    src/agent/ToolPipe.cpp
+    src/agent/ToolServer.cpp
+    src/voice/Pcm.cpp
+    src/voice/SendQueue.cpp
+    src/voice/VoiceSession.cpp
+    src/speech/SherpaApi.cpp
+    src/speech/Guard.cpp
+    src/speech/Text.cpp
+    src/speech/Recognizer.cpp
+    src/speech/Voiceprint.cpp
+    src/speech/Listener.cpp
+    src/speech/TextToSpeech.cpp
+    src/speech/LocalEngine.cpp
+    src/speech/FakeEngine.cpp
+    src/speech/SpeechText.cpp
+    src/speech/Gpt2Tokenizer.cpp
+    src/speech/Turbo.cpp
+    src/speech/TurboOnnx.cpp
+    src/speech/OnnxPatch.cpp
+    src/platform/Gpu.cpp
     src/platform/CredentialStore.cpp
     src/platform/Shell.cpp
     src/platform/CrashHandler.cpp
     src/platform/Process.cpp
+    src/platform/ProcessList.cpp
+    src/platform/Relaunch.cpp
+    src/platform/ChildProcess.cpp
+    src/platform/WinSpawn.cpp
     src/platform/Http.cpp
+    src/platform/Audio.cpp
+    src/platform/SpellCheck.cpp
+    src/imaging/ChatImage.cpp
     src/imaging/ImageDiff.cpp
     src/imaging/GraphRenderer.cpp
     src/imaging/Raster.cpp
@@ -177,8 +255,11 @@ add_library(gitgud_core STATIC
 if(WIN32)
     # Windows Credential Manager (CredReadW/CredWriteW) lives in advapi32;
     # the shell helpers (recycle bin, folder picker) need shell32/ole32;
-    # downloads use winhttp, checksums bcrypt.
-    target_link_libraries(gitgud_core PUBLIC advapi32 shell32 ole32 dbghelp winhttp bcrypt)
+    # downloads use winhttp, checksums bcrypt; voice audio is
+    # WASAPI (avrt) and the Voice Capture DSP (msdmo and its GUID libraries);
+    # spoken replies use the system's voices (sapi).
+    target_link_libraries(gitgud_core PUBLIC advapi32 shell32 ole32 dbghelp winhttp bcrypt
+        avrt msdmo dmoguids wmcodecdspuuid strmiids sapi)
 elseif(APPLE)
     # The shell helpers use SDL's clipboard; saved passwords live in the
     # Keychain (Security.framework); MacWindow.mm adjusts SDL's window and
@@ -198,12 +279,19 @@ target_include_directories(gitgud_core PUBLIC
     ${LUA_INCLUDE_DIR}
 )
 target_include_directories(gitgud_core PRIVATE ${STB_INCLUDE_DIRS})
+# sherpa-onnx's C API header only: the library itself is loaded at run time
+# (speech/SherpaApi.cpp), so nothing links against it.
+target_include_directories(gitgud_core PUBLIC ${CMAKE_SOURCE_DIR}/third_party/sherpa-onnx/include)
+# ONNX Runtime's C API header only, for spoken replies (speech/TurboOnnx.cpp):
+# the runtime itself is the one sherpa-onnx loads.
+target_include_directories(gitgud_core PRIVATE ${CMAKE_SOURCE_DIR}/third_party/onnxruntime/include)
 
 # gitgud.version in Lua (About, updates) comes from project(... VERSION).
 target_compile_definitions(gitgud_core PRIVATE GITGUD_VERSION="${PROJECT_VERSION}")
 
 # PUBLIC so consumers (gitgud, gitgud_tests) inherit these transitively.
 target_link_libraries(gitgud_core PUBLIC
+    gitgud_profiler
     libgit2::libgit2package
     ${LUA_LIBRARIES}
     ZLIB::ZLIB
@@ -227,12 +315,30 @@ if(WIN32)
     endif()
 endif()
 
+# ---- MCP server for Claude Code ----------------------------------------------
+# gitgud-mcp.exe gives Claude Code the app's Git and P4 tools (and, with
+# --ui-tools, the tools the app's interface declares): MCP on stdio,
+# each call forwarded over a named pipe to the running app (see
+# src/agent/ToolServer.h). Small on purpose: no libgit2, no Lua.
+add_executable(gitgud-mcp
+    src/mcp/McpMain.cpp
+    src/agent/McpProtocol.cpp
+    src/agent/RepoToolDefs.cpp
+    src/agent/ToolPipe.cpp
+    src/app/Json.cpp)
+target_include_directories(gitgud-mcp PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(gitgud-mcp PRIVATE gitgud_profiler)
+target_compile_definitions(gitgud-mcp PRIVATE GITGUD_VERSION="${PROJECT_VERSION}")
+if(MSVC)
+    target_link_options(gitgud-mcp PRIVATE "/PDBALTPATH:%_PDB%")
+endif()
+
 # ---- Application ---------------------------------------------------------
 # WIN32: GUI subsystem on Windows (no console window pops up). SDL2main
 # provides the WinMain shim that forwards to our regular main(). Dev logging
 # survives: main.cpp re-attaches to the parent shell's console when launched
 # from one, and GITGUD_CONSOLE=1 forces a dedicated console window.
-add_executable(gitgud WIN32 MACOSX_BUNDLE src/main.cpp)
+add_executable(gitgud WIN32 MACOSX_BUNDLE src/main.cpp src/platform/Attention.cpp)
 
 # Windows: embed the Jera-rune app icon (Explorer / taskbar / Alt-Tab).
 if(WIN32)
@@ -246,8 +352,17 @@ if(MSVC)
     target_link_options(gitgud PRIVATE "/PDBALTPATH:%_PDB%")
 endif()
 
+# The voice audio libraries load the first time the Bragi interface's voice
+# uses them, never for an interface that doesn't.
+if(MSVC)
+    target_link_options(gitgud PRIVATE /DELAYLOAD:avrt.dll /DELAYLOAD:msdmo.dll)
+    target_link_libraries(gitgud PRIVATE delayimp)
+endif()
+
 if(GITGUD_UI_CEGUI)
-    target_sources(gitgud PRIVATE src/ui/cegui/CeguiBackend.cpp)
+    target_sources(gitgud PRIVATE
+        src/ui/cegui/CeguiBackend.cpp
+        src/ui/cegui/PackageResourceProvider.cpp)
     target_compile_definitions(gitgud PRIVATE GITGUD_UI_CEGUI=1)
 endif()
 
@@ -257,6 +372,33 @@ target_link_libraries(gitgud PRIVATE
     SDL2::SDL2main
     OpenGL::GL
 )
+
+# GITGUD_PROFILE_INSTRUMENT: entry/exit hooks in every function of the app's
+# own code (not the Lua profiler, whose hook would time itself).
+if(GITGUD_PROFILE_INSTRUMENT)
+    if(MSVC)
+        set(_gitgud_instrument /Gh /GH)
+    else()
+        set(_gitgud_instrument -finstrument-functions)
+    endif()
+    # The hooks go on source files, so a file the patcher compiles too stays
+    # plain: the patcher doesn't link the profiler.
+    set(_gitgud_plain "")
+    if(TARGET gitgud-patcher)
+        get_target_property(_gitgud_plain gitgud-patcher SOURCES)
+    endif()
+    foreach(_target gitgud_core gitgud)
+        get_target_property(_sources ${_target} SOURCES)
+        list(FILTER _sources INCLUDE REGEX "\\.(cpp|mm)$")
+        list(FILTER _sources EXCLUDE REGEX "LuaProfiler\\.cpp$")
+        if(_gitgud_plain)
+            list(REMOVE_ITEM _sources ${_gitgud_plain})
+        endif()
+        set_property(SOURCE ${_sources} TARGET_DIRECTORY ${_target}
+            APPEND PROPERTY COMPILE_OPTIONS ${_gitgud_instrument})
+    endforeach()
+    target_compile_definitions(gitgud_core PUBLIC GITGUD_PROFILE_INSTRUMENT=1)
+endif()
 
 if(GITGUD_UI_CEGUI AND CEGUI_FOUND)
     target_link_libraries(gitgud PRIVATE ${CEGUI_LIBRARIES})
@@ -306,6 +448,34 @@ if(WIN32 AND GITGUD_UI_CEGUI AND CEGUI_FOUND)
     endforeach()
 endif()
 
+# The speech engine's libraries, in their own folder: loaded by full path
+# only when the Bragi interface turns voice on.
+if(WIN32 AND GITGUD_SHERPA_DIR)
+    # package.cmd unpacks the CUDA release's core beside the CPU release.
+    set(_ort_default "${GITGUD_SHERPA_DIR}/../../sherpa-onnx-v1.13.8-cuda-13.x-cudnn-9.x-onnxruntime1.28.2-win-x64-cuda/lib")
+    if(NOT GITGUD_ORT_DIR AND EXISTS "${_ort_default}/onnxruntime.dll")
+        get_filename_component(_ort_default "${_ort_default}" ABSOLUTE)
+        set(GITGUD_ORT_DIR "${_ort_default}" CACHE PATH "ONNX Runtime's GPU build lib folder" FORCE)
+    endif()
+    if(NOT GITGUD_ORT_DIR)
+        message(FATAL_ERROR "GITGUD_SHERPA_DIR needs GITGUD_ORT_DIR too (see docs/BUILDING.md)")
+    endif()
+    foreach(_voice_dll ${GITGUD_SHERPA_DIR}/sherpa-onnx-c-api.dll ${GITGUD_ORT_DIR}/onnxruntime.dll
+            ${GITGUD_ORT_DIR}/onnxruntime_providers_shared.dll)
+        if(NOT EXISTS "${_voice_dll}")
+            message(FATAL_ERROR "Missing ${_voice_dll}")
+        endif()
+    endforeach()
+    add_custom_command(TARGET gitgud POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:gitgud>/voice
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${GITGUD_ORT_DIR}/onnxruntime.dll
+            ${GITGUD_ORT_DIR}/onnxruntime_providers_shared.dll
+            ${GITGUD_SHERPA_DIR}/sherpa-onnx-c-api.dll
+            $<TARGET_FILE_DIR:gitgud>/voice
+        COMMENT "Copying the speech engine's libraries to voice/")
+endif()
+
 # Mirror resources/ (layouts, scripts, skin) and docs/ next to the binary on
 # EVERY build, even when no code changed, and drop files deleted from the
 # source tree. The running app hot-reloads from this copy. (docs/ ships so
@@ -318,7 +488,7 @@ add_custom_target(gitgud_resources ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/docs ${GITGUD_APP_DATA_DIR}/docs
     COMMENT "Syncing resources/ and docs/ to the build output")
-add_dependencies(gitgud gitgud_resources)
+add_dependencies(gitgud gitgud_resources gitgud-mcp)
 if(TARGET gitgud-patcher)
     add_dependencies(gitgud gitgud-patcher)
 endif()

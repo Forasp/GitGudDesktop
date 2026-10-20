@@ -365,11 +365,17 @@ if phase() == "picker" and gitgud.currentUi().id == "picker" then
     step(1500, "the picker came up", function()
         check("picker running", gitgud.currentUi().id == "picker")
         check("not a first launch", not gitgud.firstLaunch())
-        check("two interfaces offered", #gitgud.uiList() == 2)
+        local depotCard = nil
+        for i, ui in ipairs(gitgud.uiList()) do
+            if ui.id == "depot" then
+                depotCard = i
+            end
+        end
+        check("three interfaces offered", #gitgud.uiList() == 3)
         check("Cancel is offered", gitgud.getProperty("PickerBackButton", "Visible") == "true")
         shot("s01-picker")
         setPhase("back")
-        clickWidget("CardButton2")
+        clickWidget("CardButton" .. (depotCard or 0))
     end)
 end
 

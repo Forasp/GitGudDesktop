@@ -34,6 +34,8 @@
             <Property name="Text" value="Description:"/>
         </Window>
         <Window type="Gitgud/MultiLineEditbox" name="ChangeDialogDescription">
+            <!-- Tab moves on to the next field. -->
+            <UserString name="TabStop" value="true"/>
             <Property name="Area" value="{{0,14},{0,78},{1,-14},{0,190}}"/>
             <Property name="Text" value=""/>
         </Window>

@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  wiki.xml - the Wiki view: the wikis and their pages on the left (search,
+  the tree, New page), and on the right, under a top bar (breadcrumb,
+  Page / Graph / History, Edit, Ask Bragi, search), a wiki's front page or
+  a page with what links to it and its history beside it. Pages come from
+  Bragi's store (bragi/server.lua): one wiki per repository plus the shared
+  one; scripts/bragi/wiki.lua shows what's there or why nothing is yet.
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="WikiRoot">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+        <Property name="PanelColour" value="$bg"/>
+        <Property name="Text" value=""/>
+
+        <!-- ================= page tree ================= -->
+        <Window type="Gitgud/StaticText" name="WikiTree">
+            <Property name="Area" value="{{0,0},{0,0},{0,256},{1,0}}"/>
+            <Property name="PanelColour" value="$rail"/>
+            <Property name="Text" value=""/>
+            <Window type="Bragi/Box8" name="WikiFind">
+                <Property name="Area" value="{{0,10},{0,16},{1,-10},{0,56}}"/>
+                <Property name="FillColour" value="$well"/>
+                <Property name="BorderColour" value="$border"/>
+                <Window type="Gitgud/Editbox" name="WikiFindEdit">
+                    <Property name="Area" value="{{0,10},{0,2},{1,-10},{1,-2}}"/>
+                    <Property name="BgColour" value="00000000"/>
+                    <Property name="BorderColour" value="00000000"/>
+                    <Property name="Font" value="Bragi-13"/>
+                    <Property name="Text" value=""/>
+                </Window>
+                <Window type="Gitgud/Label" name="WikiFindPlaceholder">
+                    <Property name="Area" value="{{0,14},{0,0},{1,-14},{1,0}}"/>
+                    <Property name="Text" value="Search all wikis"/>
+                    <Property name="Font" value="Bragi-13"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+            </Window>
+            <Window type="Gitgud/ListWidget" name="WikiPages">
+                <Property name="Area" value="{{0,6},{0,64},{1,-6},{1,-62}}"/>
+                <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+                <Property name="BgColour" value="$rail"/>
+                <Property name="BorderColour" value="$rail"/>
+                <Property name="Font" value="Bragi-14"/>
+            </Window>
+            <Window type="Bragi/Button8" name="WikiNewPage">
+                <Property name="Area" value="{{0,10},{1,-52},{1,-10},{1,-12}}"/>
+                <Property name="Text" value="+ New page"/>
+                <Property name="Font" value="Bragi-13"/>
+                <Property name="NormalFillColour" value="00000000"/>
+                <Property name="DisabledFillColour" value="00000000"/>
+                <Property name="NormalTextColour" value="$sub"/>
+            </Window>
+            <Window type="Gitgud/StaticText" name="WikiTreeEdge">
+                <Property name="Area" value="{{1,-1},{0,0},{1,0},{1,0}}"/>
+                <Property name="PanelColour" value="$border"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+        </Window>
+
+        <!-- ================= the page ================= -->
+        <Window type="Gitgud/StaticText" name="WikiMain">
+            <Property name="Area" value="{{0,256},{0,0},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="$bg"/>
+            <Property name="Text" value=""/>
+
+            <Window type="Gitgud/StaticText" name="WikiHeader">
+                <Property name="Area" value="{{0,0},{0,0},{1,0},{0,56}}"/>
+                <Property name="PanelColour" value="$bg"/>
+                <Property name="Text" value=""/>
+                <UserString name="AppDrag" value="true"/>
+                <Window type="Gitgud/Label" name="WikiCrumbs">
+                    <Property name="Area" value="{{0,24},{0,0},{1,-900},{1,0}}"/>
+                    <Property name="Text" value="Wiki"/>
+                    <Property name="Font" value="Bragi-13"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+                <!-- Page / Graph / History; wiki.lua makes the buttons. -->
+                <Window type="Bragi/Box10" name="WikiTabs">
+                    <Property name="Area" value="{{1,-888},{0,9},{1,-652},{0,47}}"/>
+                    <Property name="FillColour" value="$rail"/>
+                </Window>
+                <Window type="Bragi/Button8" name="WikiEdit">
+                    <Property name="Area" value="{{1,-640},{0,10},{1,-572},{0,46}}"/>
+                    <Property name="Text" value="Edit"/>
+                    <Property name="Font" value="Bragi-13-Bold"/>
+                    <Property name="NormalFillColour" value="00000000"/>
+                    <Property name="DisabledFillColour" value="00000000"/>
+                </Window>
+                <Window type="Bragi/Button8" name="WikiAskBragi">
+                    <Property name="Area" value="{{1,-564},{0,10},{1,-400},{0,46}}"/>
+                    <Property name="Text" value="Ask Bragi to update"/>
+                    <Property name="Font" value="Bragi-13-Bold"/>
+                    <Property name="NormalFillColour" value="$accent"/>
+                    <Property name="HoverFillColour" value="$accent-hover"/>
+                    <Property name="PushedFillColour" value="$accent-pressed"/>
+                    <Property name="BorderColour" value="00000000"/>
+                    <Property name="NormalTextColour" value="$on-accent"/>
+                    <Property name="HoverTextColour" value="$on-accent"/>
+                    <Property name="PushedTextColour" value="$on-accent"/>
+                </Window>
+                <Window type="Bragi/Button8" name="WikiSearch">
+                    <Property name="Area" value="{{1,-388},{0,10},{1,-148},{0,46}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="NormalFillColour" value="$well"/>
+                    <Property name="HoverFillColour" value="$well"/>
+                    <Property name="PushedFillColour" value="$well"/>
+                    <Property name="BorderColour" value="$border"/>
+                    <Property name="TooltipText" value="Search, or run any command  (Ctrl+K)"/>
+                    <Window type="Gitgud/Label" name="WikiSearchLabel">
+                        <Property name="Area" value="{{0,12},{0,0},{1,-60},{1,0}}"/>
+                        <Property name="Text" value="Search or run a command"/>
+                        <Property name="Font" value="Bragi-13"/>
+                        <Property name="NormalTextColour" value="$sub"/>
+                        <Property name="CursorPassThroughEnabled" value="true"/>
+                    </Window>
+                    <Window type="Gitgud/Label" name="WikiSearchKey">
+                        <Property name="Area" value="{{1,-60},{0,0},{1,-12},{1,0}}"/>
+                        <Property name="Text" value="Ctrl K"/>
+                        <Property name="Font" value="Bragi-Mono-11"/>
+                        <Property name="HorzFormatting" value="RightAligned"/>
+                        <Property name="NormalTextColour" value="$sub"/>
+                        <Property name="CursorPassThroughEnabled" value="true"/>
+                    </Window>
+                </Window>
+                <Window type="Gitgud/StaticText" name="WikiHeaderRule">
+                    <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+                    <Property name="PanelColour" value="$border"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                    <Property name="Text" value=""/>
+                </Window>
+            </Window>
+
+            <!-- The page, front page, graph, or history; wiki.lua fills it. -->
+            <Window type="Gitgud/ScrollablePane" name="WikiPage">
+                <Property name="Area" value="{{0,0},{0,56},{1,0},{1,0}}"/>
+            </Window>
+
+            <!-- Beside a page: what links to it, and its history. -->
+            <Window type="Gitgud/StaticText" name="WikiSideBox">
+                <Property name="Area" value="{{1,-300},{0,56},{1,0},{1,0}}"/>
+                <Property name="PanelColour" value="$bg"/>
+                <Property name="Text" value=""/>
+                <Property name="Visible" value="false"/>
+                <Window type="Gitgud/StaticText" name="WikiSideEdge">
+                    <Property name="Area" value="{{0,0},{0,0},{0,1},{1,0}}"/>
+                    <Property name="PanelColour" value="$border"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                    <Property name="Text" value=""/>
+                </Window>
+                <Window type="Gitgud/ScrollablePane" name="WikiSide">
+                    <Property name="Area" value="{{0,1},{0,0},{1,0},{1,0}}"/>
+                </Window>
+            </Window>
+        </Window>
+    </Window>
+</GUILayout>

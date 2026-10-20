@@ -13,14 +13,17 @@
 //                 is an entry point that pulls in any number of modules
 //   * events    — gitgud.on(name, fn) handlers, dispatched by Dispatch()
 //   * timers    — gitgud.after / gitgud.every, advanced by Tick()
+//   * kept text: what scripts keep across a Reset (Keep / TakeKept)
 //
 // Sync repo actions return true/value on success, or (nil, "message") on
 // failure — script code checks and surfaces errors in the UI.
 // -----------------------------------------------------------------------------
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 struct lua_State;
@@ -42,6 +45,11 @@ namespace gitgud::ui
     class IUiBackend;
 }
 
+namespace gitgud::agent
+{
+    class ToolServer;
+}
+
 namespace gitgud::platform
 {
     class ICredentialStore;
@@ -49,6 +57,7 @@ namespace gitgud::platform
 
 namespace gitgud::lua
 {
+    class LuaProfiler;
 
     class LuaEngine
     {
@@ -66,6 +75,39 @@ namespace gitgud::lua
         // re-registers them).
         bool Reset();
 
+        // Text kept for the next scripts across a Reset: on hot-reload a
+        // script keeps what it needs (gitgud.keepForReload, on
+        // "app.reloading") and the reloaded one takes it back
+        // (gitgud.takeKept), so the UI comes back as it was.
+        // Taking removes it; ClearKept drops everything (a UI
+        // switch starts the next UI afresh).
+        void Keep(const std::string& _Key, const std::string& _Value)
+        {
+            m_Kept[_Key] = _Value;
+        }
+
+        bool TakeKept(const std::string& _Key, std::string& _Value)
+        {
+            const auto it = m_Kept.find(_Key);
+            if (it == m_Kept.end())
+            {
+                return false;
+            }
+            _Value = std::move(it->second);
+            m_Kept.erase(it);
+            return true;
+        }
+
+        void ForgetKept(const std::string& _Key)
+        {
+            m_Kept.erase(_Key);
+        }
+
+        void ClearKept()
+        {
+            m_Kept.clear();
+        }
+
         // Wire the binding surface to the app's collaborators. Any pointer may be
         // nullptr (e.g. repo when cwd isn't a git repo; store on platforms without
         // a secure backend); the bindings degrade gracefully. May be called again
@@ -80,6 +122,13 @@ namespace gitgud::lua
             m_pHost = _pHost;
         }
 
+        // The Git and P4 tools for Claude Code (agent/ToolServer.h): sessions
+        // scripts start get its MCP config. May be nullptr.
+        void SetToolServer(gitgud::agent::ToolServer* _pTools)
+        {
+            m_pTools = _pTools;
+        }
+
         // Directory `require` searches (`require("views.changes")` loads
         // <dir>/views/changes.lua). Applied now and after every Reset().
         void SetScriptRoot(const std::string& _Directory);
@@ -87,8 +136,29 @@ namespace gitgud::lua
         // the GitGud UI's, so packages reuse and override shared modules).
         void SetScriptRoots(const std::vector<std::string>& _Directories);
 
+        // The running package's overlay scripts (app/UiPackages.h; "" for
+        // none): `require` finds a module there first. One that fails to load
+        // or run is reported (OverlayErrors) and the shipped one runs instead.
+        void SetScriptOverlay(const std::string& _Directory);
+
         // Run a script file. Returns false and logs on error.
         bool RunFile(const std::string& _Path);
+        // Run `_Overlay` when it exists, else `_Shipped`; an overlay file that
+        // fails is reported and `_Shipped` runs instead.
+        bool RunFileOrShipped(const std::string& _Overlay, const std::string& _Shipped);
+
+        // Overlay files that failed to load since ClearOverlayErrors, as
+        // {file, error} (scripts here; the UI backend adds its own). Each one
+        // is also published as "ui.overlayError" ({file, error}).
+        void AddOverlayError(const std::string& _File, const std::string& _Error);
+        void ClearOverlayErrors()
+        {
+            m_OverlayErrors.clear();
+        }
+        const std::vector<std::pair<std::string, std::string>>& OverlayErrors() const
+        {
+            return m_OverlayErrors;
+        }
 
         // Evaluate a chunk of Lua source. Handy for REPL/testing.
         bool Eval(const std::string& _Source);
@@ -108,12 +178,34 @@ namespace gitgud::lua
         // Monotonic clock shared by timers and gitgud.now().
         static std::uint64_t NowMs();
 
+        // Move that clock ahead (the test harness, GITGUD_SCRIPT: a step
+        // that is ready goes on as if its wait had passed; timers fall due).
+        static void SkipClock(int _iMs);
+
         // Log every handler or timer callback that takes at least this many
         // milliseconds, with the function's source location (GITGUD_PERF).
         // 0 (the default) turns the report off.
         void SetSlowCallThreshold(int _iMs)
         {
             m_iSlowCallMs = _iMs;
+        }
+
+        // Profile every Lua call while a capture runs (app/Profiler.h).
+        // Call between frames, when no script runs.
+        void SetCallProfiling(bool _bOn);
+
+        // The Lua heap's size in kB.
+        double MemoryKb() const;
+
+        // Event handlers registered (gitgud.on), all events together.
+        std::size_t HandlerCount() const
+        {
+            std::size_t ncount = 0;
+            for (const auto& [name, refs] : m_Handlers)
+            {
+                ncount += refs.size();
+            }
+            return ncount;
         }
 
         lua_State* State()
@@ -151,8 +243,16 @@ namespace gitgud::lua
             return m_pHost;
         }
 
+        gitgud::agent::ToolServer* ToolServer()
+        {
+            return m_pTools;
+        }
+
         // Called by binding trampolines; not for general use.
         void RegisterHandler(const std::string& _EventName, int _iRef);
+        // Drop every handler of an event (gitgud.off). Their functions are
+        // released once no dispatch is running.
+        void UnregisterHandlers(const std::string& _EventName);
         int AddTimer(int _iDelayMs, bool _bRepeat, int _iRef);
         void CancelTimer(int _iId);
 
@@ -179,14 +279,21 @@ namespace gitgud::lua
         gitgud::app::TaskRunner* m_pTasks = nullptr;
         gitgud::platform::ICredentialStore* m_pCredentials = nullptr;
         gitgud::app::IAppHost* m_pHost = nullptr;
+        gitgud::agent::ToolServer* m_pTools = nullptr;
         std::vector<std::string> m_ScriptRoots;
+        std::string m_ScriptOverlay;
+        std::vector<std::pair<std::string, std::string>> m_OverlayErrors;
 
         // event name -> registry refs (luaL_ref) of the subscribed functions.
         std::unordered_map<std::string, std::vector<int>> m_Handlers;
 
         std::vector<Timer> m_Timers;
+        std::unordered_map<std::string, std::string> m_Kept; // survives Reset
         int m_iNextTimerId = 1;
         int m_iSlowCallMs = 0;
+        std::unique_ptr<LuaProfiler> m_pProfiler;
+        int m_iDispatching = 0;           // nested Dispatch calls running
+        std::vector<int> m_ReleaseLater;  // refs of handlers dropped meanwhile
     };
 
 } // namespace gitgud::lua

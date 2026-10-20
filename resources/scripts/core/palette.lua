@@ -43,6 +43,13 @@ local C = {
 
     transparent = "00000000",
 
+    -- Glyph tint for enabled icons, and the brightest text (hover). White
+    -- here; a UI package with a light theme makes them dark.
+    icon = "FFFFFFFE",
+    bright = "FFFFFFFE",
+    -- Text and marks on accent-filled buttons (primary actions, the active tab).
+    onAccent = "FF0E0A1B",
+
     -- Commit graph lanes, in the order lanes are handed out (cycled).
     lanes = {
         "FF7EF2D6", -- cyan

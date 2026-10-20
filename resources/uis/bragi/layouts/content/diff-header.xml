@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  diff-header.xml (Bragi UI) - the strip above the diff in design D,
+  replacing the GitGud UI's file of that name:
+
+    src/main.cpp  +4 −2                     (Edited by Bragi)  [Split ▾]
+
+  DiffTitle is set by views/content.lua; DiffViewButton opens the diff's
+  display menu (views/diff.lua) and is labelled with the mode in use, and
+  BragiEditedBadge shows when the open session edited the file
+  (scripts/bragi/repolook.lua, which also sets the height:
+  content.setLook).
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="DiffHeader">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{0,52}}"/>
+        <Property name="PanelColour" value="00000000"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Gitgud/Label" name="DiffTitle">
+            <Property name="Area" value="{{0,24},{0,0},{1,-260},{1,0}}"/>
+            <Property name="Font" value="Bragi-Mono-13"/>
+            <Property name="Text" value=""/>
+        </Window>
+        <Window type="Bragi/Button6" name="BragiEditedBadge">
+            <Property name="Area" value="{{1,-246},{0.5,-13},{1,-130},{0.5,13}}"/>
+            <Property name="Text" value="Edited by Bragi"/>
+            <Property name="Font" value="Bragi-12"/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="BorderColour" value="$border"/>
+            <Property name="NormalTextColour" value="$sub"/>
+            <Property name="HoverTextColour" value="$text"/>
+            <Property name="TooltipText" value="The session in the Agent view changed this file: open it"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+        <Window type="Bragi/Button8" name="DiffViewButton">
+            <Property name="Area" value="{{1,-120},{0.5,-16},{1,-24},{0.5,16}}"/>
+            <Property name="Text" value="Split"/>
+            <Property name="Font" value="Bragi-13"/>
+            <Property name="NormalFillColour" value="00000000"/>
+            <Property name="BorderColour" value="$border"/>
+            <Property name="NormalTextColour" value="$sub"/>
+            <Property name="HoverTextColour" value="$text"/>
+            <Property name="TooltipText" value="Split or unified, whitespace, context"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="DiffHeaderHairline">
+            <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="$border"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

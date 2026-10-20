@@ -1,5 +1,7 @@
 #include "git/Repository.h"
 
+#include "app/Profiler.h"
+
 #include "git/LibGit2Internal.h"
 
 #include <cstdlib>
@@ -107,6 +109,7 @@ namespace gitgud::git
 
     Repository Repository::Open(const std::string& _Path)
     {
+        GITGUD_PROFILE_FUNCTION();
         Repository r;
         // A Perforce workspace: its root has a .p4config naming the
         // workspace and no .git of its own.
@@ -179,6 +182,7 @@ namespace gitgud::git
     // ---- Status --------------------------------------------------------------
     std::vector<StatusEntry> Repository::Status() const
     {
+        GITGUD_PROFILE_FUNCTION();
         if (m_pP4)
         {
             return m_pP4->Status();

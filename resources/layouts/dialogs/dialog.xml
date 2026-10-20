@@ -160,9 +160,9 @@
             <Property name="NormalFillColour" value="FF7C93FF"/>
             <Property name="HoverFillColour" value="FF93A4FF"/>
             <Property name="PushedFillColour" value="FF6F84E6"/>
-            <Property name="NormalTextColour" value="FF0E0A1A"/>
-            <Property name="HoverTextColour" value="FF0E0A1A"/>
-            <Property name="PushedTextColour" value="FF0E0A1A"/>
+            <Property name="NormalTextColour" value="FF0E0A1B"/>
+            <Property name="HoverTextColour" value="FF0E0A1B"/>
+            <Property name="PushedTextColour" value="FF0E0A1B"/>
             <Property name="BorderColour" value="FF93A4FF"/>
             <Property name="Font" value="Gitgud-UI-Bold"/>
         </Window>

@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  changes.xml (Bragi UI) - the Changes tab in design D, replacing the GitGud
+  UI's file of that name. It keeps every widget the GitGud UI's
+  views/changes.lua drives, restyled:
+
+    [ Filter changed files                    ]
+    [x] 2 of 4 files staged
+    [x] src/main.cpp                  Modified    44px rows, drawn by
+    [ ] notes.txt                        Added    scripts/bragi/repolook.lua
+    (stash / undo rows)
+    +- Commit message ----------------- 50 -+
+    | [ Summary (required)               ] |
+    | [ Description                      ] |
+    | ( Ask Bragi to write the description ) |
+    | [ ] Amend last commit      + Co-author |
+    | [     Commit 2 files to main         ] |
+    +--------------------------------------+
+
+  views/changes.lua places ChangesList (inside BragiChangesListFrame, so it
+  keeps a 10px margin), StashRow, and UndoRow with the sizes in
+  scripts/bragi/repolook.lua (changes.setLook): keep them in step.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="ChangesPanel">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+
+        <!-- ======================== filter ======================== -->
+        <Window type="Bragi/Box8" name="BragiChangesFilterBox">
+            <Property name="Area" value="{{0,20},{0,16},{1,-20},{0,56}}"/>
+            <Property name="FillColour" value="$well"/>
+            <Property name="BorderColour" value="$border"/>
+            <Window type="Gitgud/Editbox" name="ChangesFilterEdit">
+                <Property name="Area" value="{{0,8},{0,2},{1,-36},{1,-2}}"/>
+                <Property name="BgColour" value="00000000"/>
+                <Property name="BorderColour" value="00000000"/>
+                <Property name="Font" value="Bragi-13"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/Label" name="ChangesFilterPlaceholder">
+                <Property name="Area" value="{{0,12},{0,0},{1,-40},{1,0}}"/>
+                <Property name="Text" value="Filter changed files"/>
+                <Property name="Font" value="Bragi-13"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Icon" name="ChangesFilterIcon">
+                <Property name="Area" value="{{1,-30},{0.5,-9},{1,-12},{0.5,9}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconSearch"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+
+        <!-- The box lines up with the rows' boxes (20px in). -->
+        <Window type="Gitgud/Checkbox" name="IncludeAllCheck">
+            <Property name="Area" value="{{0,12},{0,62},{1,-20},{0,92}}"/>
+            <Property name="Text" value="0 changed files"/>
+            <Property name="Font" value="Bragi-13"/>
+            <Property name="NormalTextColour" value="$sub"/>
+            <Property name="PushedTextColour" value="$sub"/>
+            <Property name="HoverTextColour" value="$text"/>
+            <Property name="TooltipText" value="Include or exclude every file"/>
+        </Window>
+        <Window type="Gitgud/StaticText" name="IncludeAllHairline">
+            <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+            <Property name="Visible" value="false"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <!-- ======================= file rows ======================= -->
+        <Window type="DefaultWindow" name="BragiChangesListFrame">
+            <Property name="Area" value="{{0,10},{0,0},{1,-10},{1,0}}"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Window type="Gitgud/ListWidget" name="ChangesList">
+                <Property name="Area" value="{{0,0},{0,98},{1,0},{1,-310}}"/>
+                <Property name="BgColour" value="00000000"/>
+                <Property name="BorderColour" value="00000000"/>
+                <Property name="SelectionColour" value="$sel"/>
+                <Property name="SelectionBrushImage" value="Bragi-Rows/Row44x300"/>
+                <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+            </Window>
+        </Window>
+        <Window type="Gitgud/Label" name="ChangesEmptyLabel">
+            <Property name="Area" value="{{0,20},{0,104},{1,-20},{0,132}}"/>
+            <Property name="Text" value=""/>
+            <Property name="Font" value="Bragi-13"/>
+            <Property name="HorzFormatting" value="CentreAligned"/>
+            <Property name="NormalTextColour" value="$sub"/>
+            <Property name="Visible" value="false"/>
+        </Window>
+
+        <!-- ====== info rows (Lua stacks the visible ones) ====== -->
+        <Window type="DefaultWindow" name="StashRow">
+            <Property name="Area" value="{{0,0},{1,-346},{1,0},{1,-310}}"/>
+            <Property name="Visible" value="false"/>
+            <Window type="Gitgud/Label" name="StashRowText">
+                <Property name="Area" value="{{0,22},{0,0},{1,-104},{1,0}}"/>
+                <Property name="Font" value="Bragi-13"/>
+                <Property name="Text" value="Stashed changes"/>
+            </Window>
+            <Window type="Bragi/Button6" name="StashRowButton">
+                <Property name="Area" value="{{1,-92},{0,4},{1,-20},{1,-4}}"/>
+                <Property name="Text" value="View"/>
+                <Property name="Font" value="Bragi-12-Bold"/>
+                <Property name="NormalFillColour" value="00000000"/>
+            </Window>
+        </Window>
+        <Window type="DefaultWindow" name="UndoRow">
+            <Property name="Area" value="{{0,0},{1,-346},{1,0},{1,-310}}"/>
+            <Property name="Visible" value="false"/>
+            <Window type="Gitgud/Label" name="UndoRowText">
+                <Property name="Area" value="{{0,22},{0,0},{1,-104},{1,0}}"/>
+                <Property name="Font" value="Bragi-13"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Bragi/Button6" name="UndoRowButton">
+                <Property name="Area" value="{{1,-92},{0,4},{1,-20},{1,-4}}"/>
+                <Property name="Text" value="Undo"/>
+                <Property name="Font" value="Bragi-12-Bold"/>
+                <Property name="NormalFillColour" value="00000000"/>
+                <Property name="TooltipText" value="Undo the last commit, keeping its changes"/>
+            </Window>
+        </Window>
+
+        <!-- ======================= commit card ======================= -->
+        <Window type="DefaultWindow" name="CommitBox">
+            <!-- Tab moves between the message boxes only. -->
+            <UserString name="TabGroup" value="true"/>
+            <Property name="Area" value="{{0,0},{1,-310},{1,0},{1,0}}"/>
+
+            <Window type="Gitgud/StaticText" name="CommitBoxHairline">
+                <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+                <Property name="Visible" value="false"/>
+                <Property name="Text" value=""/>
+            </Window>
+
+            <Window type="Bragi/Box12" name="BragiCommitCard">
+                <Property name="Area" value="{{0,12},{0,12},{1,-12},{1,-12}}"/>
+                <Property name="FillColour" value="$panel"/>
+                <Property name="BorderColour" value="$border"/>
+
+                <Window type="Gitgud/Label" name="BragiCommitHeading">
+                    <Property name="Area" value="{{0,14},{0,12},{1,-60},{0,30}}"/>
+                    <Property name="Text" value="Commit message"/>
+                    <Property name="Font" value="Bragi-12-Bold"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+                <!-- Characters left before a 50-character summary wraps. -->
+                <Window type="Gitgud/Label" name="SummaryCount">
+                    <Property name="Area" value="{{1,-60},{0,12},{1,-14},{0,30}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="Font" value="Bragi-12"/>
+                    <Property name="HorzFormatting" value="RightAligned"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+
+                <Window type="Bragi/Box8" name="BragiSummaryBox">
+                    <Property name="Area" value="{{0,14},{0,38},{1,-14},{0,78}}"/>
+                    <Property name="FillColour" value="$well"/>
+                    <Property name="BorderColour" value="$border"/>
+                    <Window type="Gitgud/Editbox" name="SummaryEdit">
+                        <Property name="Area" value="{{0,8},{0,2},{1,-8},{1,-2}}"/>
+                        <Property name="BgColour" value="00000000"/>
+                        <Property name="BorderColour" value="00000000"/>
+                        <Property name="Font" value="Bragi-14"/>
+                        <Property name="Text" value=""/>
+                    </Window>
+                    <Window type="Gitgud/Label" name="SummaryPlaceholder">
+                        <Property name="Area" value="{{0,12},{0,0},{1,-12},{1,0}}"/>
+                        <Property name="Text" value="Summary (required)"/>
+                        <Property name="Font" value="Bragi-14"/>
+                        <Property name="NormalTextColour" value="$sub"/>
+                        <Property name="CursorPassThroughEnabled" value="true"/>
+                    </Window>
+                </Window>
+
+                <Window type="Bragi/Box8" name="BragiDescriptionBox">
+                    <Property name="Area" value="{{0,14},{0,86},{1,-14},{0,142}}"/>
+                    <Property name="FillColour" value="$well"/>
+                    <Property name="BorderColour" value="$border"/>
+                    <Window type="Gitgud/MultiLineEditbox" name="DescriptionEdit">
+                        <!-- Tab moves on to the next field. -->
+                        <UserString name="TabStop" value="true"/>
+                        <Property name="Area" value="{{0,6},{0,4},{1,-4},{1,-4}}"/>
+                        <Property name="BgColour" value="00000000"/>
+                        <Property name="BorderColour" value="00000000"/>
+                        <Property name="Font" value="Bragi-13"/>
+                        <Property name="Text" value=""/>
+                    </Window>
+                    <Window type="Gitgud/Label" name="DescriptionPlaceholder">
+                        <Property name="Area" value="{{0,12},{0,6},{1,-12},{0,26}}"/>
+                        <Property name="Text" value="Description"/>
+                        <Property name="Font" value="Bragi-13"/>
+                        <Property name="NormalTextColour" value="$sub"/>
+                        <Property name="CursorPassThroughEnabled" value="true"/>
+                    </Window>
+                </Window>
+
+                <!-- Drafts a request in the Agent view (scripts/bragi/repolook.lua). -->
+                <Window type="Bragi/DashButton8" name="BragiAskCommitButton">
+                    <Property name="Area" value="{{0,14},{0,150},{1,-14},{0,186}}"/>
+                    <Property name="Text" value="Ask Bragi to write the description"/>
+                    <Property name="Font" value="Bragi-13-Bold"/>
+                    <Property name="NormalFillColour" value="00000000"/>
+                    <Property name="DisabledFillColour" value="00000000"/>
+                    <Property name="BorderColour" value="$border"/>
+                    <Property name="NormalTextColour" value="$link"/>
+                    <Property name="HoverTextColour" value="$link"/>
+                    <Property name="PushedTextColour" value="$link"/>
+                    <Property name="TooltipText" value="Draft a request to the agent for this commit's description"/>
+                </Window>
+
+                <Window type="Gitgud/Checkbox" name="AmendCheck">
+                    <Property name="Area" value="{{0,6},{0,192},{0.6,0},{0,222}}"/>
+                    <Property name="Text" value="Amend last commit"/>
+                    <Property name="Font" value="Bragi-13"/>
+                    <Property name="TooltipText" value="Fold these changes into the previous commit"/>
+                </Window>
+                <Window type="Bragi/Button6" name="CoAuthorButton">
+                    <Property name="Area" value="{{1,-110},{0,194},{1,-2},{0,220}}"/>
+                    <Property name="Text" value="+ Co-author"/>
+                    <Property name="Font" value="Bragi-12-Bold"/>
+                    <Property name="HorzFormatting" value="RightAligned"/>
+                    <Property name="NormalFillColour" value="00000000"/>
+                    <Property name="HoverFillColour" value="00000000"/>
+                    <Property name="PushedFillColour" value="00000000"/>
+                    <Property name="BorderColour" value="00000000"/>
+                    <Property name="NormalTextColour" value="$link"/>
+                    <Property name="HoverTextColour" value="$text"/>
+                    <Property name="PushedTextColour" value="$link"/>
+                    <Property name="TooltipText" value="Add a Co-authored-by trailer"/>
+                </Window>
+
+                <!-- The GitGud UI's halo behind the button; none here. -->
+                <Window type="Gitgud/Glow" name="CommitGlow">
+                    <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+                    <Property name="GlowColour" value="00000000"/>
+                    <Property name="CoreColour" value="00000000"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+                <Window type="Bragi/Button8" name="CommitButton">
+                    <Property name="Area" value="{{0,14},{0,228},{1,-14},{0,272}}"/>
+                    <Property name="Text" value="Commit to main"/>
+                    <Property name="Font" value="Bragi-14-Bold"/>
+                    <Property name="NormalFillColour" value="$accent"/>
+                    <Property name="HoverFillColour" value="$accent-hover"/>
+                    <Property name="PushedFillColour" value="$accent-pressed"/>
+                    <Property name="DisabledFillColour" value="$sel"/>
+                    <Property name="BorderColour" value="00000000"/>
+                    <Property name="NormalTextColour" value="$on-accent"/>
+                    <Property name="HoverTextColour" value="$on-accent"/>
+                    <Property name="PushedTextColour" value="$on-accent"/>
+                    <Property name="DisabledTextColour" value="$sub"/>
+                    <Property name="TooltipText" value="Commit the included changes  (Ctrl+Enter)"/>
+                </Window>
+            </Window>
+        </Window>
+    </Window>
+</GUILayout>

@@ -1,0 +1,415 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  agent.xml - the Agent view (design D): sessions on the left; on the right
+  the top bar, the conversation, and the prompt box. scripts/bragi/agent.lua
+  keeps the conversation column centred at up to 780px (24px gutters) and
+  builds the messages, steps, and permission cards at run time.
+-->
+<GUILayout version="4">
+    <Window type="DefaultWindow" name="AgentRoot">
+        <Property name="Area" value="{{0,0},{0,0},{1,0},{1,0}}"/>
+
+        <!-- ================= sidebar ================= -->
+        <Window type="Gitgud/StaticText" name="AgentSidebar">
+            <Property name="Area" value="{{0,0},{0,0},{0,264},{1,0}}"/>
+            <Property name="PanelColour" value="$rail"/>
+            <Property name="Text" value=""/>
+
+            <Window type="Bragi/Button10" name="AgentNewButton">
+                <Property name="Area" value="{{0,12},{0,16},{1,-12},{0,60}}"/>
+                <Property name="Text" value=""/>
+                <Property name="NormalFillColour" value="$panel"/>
+                <Property name="BorderColour" value="$border"/>
+                <Property name="TooltipText" value="Start a new session  (Ctrl+N)"/>
+                <Window type="Gitgud/Label" name="AgentNewPlus">
+                    <Property name="Area" value="{{0,14},{0,0},{0,30},{1,0}}"/>
+                    <Property name="Text" value="+"/>
+                    <Property name="Font" value="Bragi-15-Bold"/>
+                    <Property name="NormalTextColour" value="$accent-text"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+                <Window type="Gitgud/Label" name="AgentNewLabel">
+                    <Property name="Area" value="{{0,34},{0,0},{1,-8},{1,0}}"/>
+                    <Property name="Text" value="New session"/>
+                    <Property name="Font" value="Bragi-14-Bold"/>
+                    <Property name="NormalTextColour" value="$text"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+            </Window>
+
+            <Window type="Gitgud/Label" name="AgentSessionsHeader">
+                <Property name="Area" value="{{0,20},{0,76},{1,-12},{0,94}}"/>
+                <Property name="Text" value="CONVERSATIONS"/>
+                <Property name="Font" value="Bragi-Caps"/>
+                <Property name="NormalTextColour" value="$sub"/>
+            </Window>
+
+            <Window type="Gitgud/ListWidget" name="AgentSessionList">
+                <Property name="Area" value="{{0,5},{0,100},{1,-5},{1,-56}}"/>
+                <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+                <Property name="BgColour" value="$rail"/>
+                <Property name="BorderColour" value="$rail"/>
+                <Property name="SelectionColour" value="$sel"/>
+                <Property name="Font" value="Bragi-14"/>
+            </Window>
+            <Window type="Gitgud/Label" name="AgentSessionsEmpty">
+                <Property name="Area" value="{{0,20},{0,104},{1,-12},{0,124}}"/>
+                <Property name="Text" value="No sessions yet."/>
+                <Property name="Font" value="Bragi-13"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+
+            <Window type="Gitgud/StaticText" name="AgentSidebarRule">
+                <Property name="Area" value="{{0,12},{1,-52},{1,-12},{1,-51}}"/>
+                <Property name="PanelColour" value="$border"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Bragi/Button8" name="AgentFolderButton">
+                <Property name="Area" value="{{0,12},{1,-46},{1,-12},{1,-10}}"/>
+                <Property name="Text" value=""/>
+                <Property name="NormalFillColour" value="00000000"/>
+                <Property name="BorderColour" value="00000000"/>
+                <Property name="TooltipText" value="The repository the agent works in"/>
+                <Window type="Gitgud/Label" name="AgentFolderLabel">
+                    <Property name="Area" value="{{0,8},{0,0},{1,-8},{1,0}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="Font" value="Bragi-13"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+            </Window>
+
+            <Window type="Gitgud/StaticText" name="AgentSidebarEdge">
+                <Property name="Area" value="{{1,-1},{0,0},{1,0},{1,0}}"/>
+                <Property name="PanelColour" value="$border"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Property name="Text" value=""/>
+            </Window>
+        </Window>
+
+        <!-- ================= conversation ================= -->
+        <Window type="Gitgud/StaticText" name="AgentMain">
+            <Property name="Area" value="{{0,264},{0,0},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="$bg"/>
+            <Property name="Text" value=""/>
+
+            <Window type="Gitgud/StaticText" name="AgentHeader">
+                <Property name="Area" value="{{0,0},{0,0},{1,0},{0,56}}"/>
+                <Property name="PanelColour" value="$bg"/>
+                <Property name="Text" value=""/>
+                <UserString name="AppDrag" value="true"/>
+
+                <Window type="Bragi/Button8" name="AgentSidebarButton">
+                    <Property name="Area" value="{{0,16},{0,12},{0,48},{0,44}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="NormalFillColour" value="00000000"/>
+                    <Property name="BorderColour" value="00000000"/>
+                    <Property name="TooltipText" value="Show or hide the sessions  (Ctrl+B)"/>
+                    <Window type="Gitgud/Icon" name="AgentSidebarIcon">
+                        <Property name="Area" value="{{0.5,-9},{0.5,-9},{0.5,9},{0.5,9}}"/>
+                        <Property name="IconImage" value="Bragi-Icons/Sidebar"/>
+                        <Property name="IconColour" value="$sub"/>
+                        <Property name="GlowColour" value="00000000"/>
+                        <Property name="CursorPassThroughEnabled" value="true"/>
+                    </Window>
+                </Window>
+                <Window type="Gitgud/Label" name="AgentTitle">
+                    <Property name="Area" value="{{0,56},{0,0},{1,-580},{1,0}}"/>
+                    <Property name="Text" value="New session"/>
+                    <Property name="Font" value="Bragi-15-Bold"/>
+                    <Property name="NormalTextColour" value="$text"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+                <Window type="Gitgud/Label" name="AgentState">
+                    <Property name="Area" value="{{1,-580},{0,0},{1,-564},{1,0}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="Visible" value="false"/>
+                </Window>
+
+                <Window type="Bragi/Button8" name="AgentSearch">
+                    <Property name="Area" value="{{1,-552},{0,10},{1,-312},{0,46}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="NormalFillColour" value="$well"/>
+                    <Property name="HoverFillColour" value="$well"/>
+                    <Property name="PushedFillColour" value="$well"/>
+                    <Property name="BorderColour" value="$border"/>
+                    <Property name="TooltipText" value="Search, or run any command  (Ctrl+K)"/>
+                    <Window type="Gitgud/Label" name="AgentSearchLabel">
+                        <Property name="Area" value="{{0,12},{0,0},{1,-60},{1,0}}"/>
+                        <Property name="Text" value="Search or run a command"/>
+                        <Property name="Font" value="Bragi-13"/>
+                        <Property name="NormalTextColour" value="$sub"/>
+                        <Property name="CursorPassThroughEnabled" value="true"/>
+                    </Window>
+                    <Window type="Gitgud/Label" name="AgentSearchKey">
+                        <Property name="Area" value="{{1,-60},{0,0},{1,-12},{1,0}}"/>
+                        <Property name="Text" value="Ctrl K"/>
+                        <Property name="Font" value="Bragi-Mono-11"/>
+                        <Property name="HorzFormatting" value="RightAligned"/>
+                        <Property name="NormalTextColour" value="$sub"/>
+                        <Property name="CursorPassThroughEnabled" value="true"/>
+                    </Window>
+                </Window>
+
+                <!-- Show or hide the session panel on the right
+                     (layouts/bragi/sidepanel.xml, scripts/bragi/sidepanel.lua). -->
+                <Window type="Bragi/Button8" name="AgentPanelButton">
+                    <Property name="Area" value="{{1,-304},{0,10},{1,-268},{0,46}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="NormalFillColour" value="00000000"/>
+                    <Property name="BorderColour" value="00000000"/>
+                    <Property name="TooltipText" value="Show or hide the session panel"/>
+                    <Window type="Gitgud/Icon" name="AgentPanelIcon">
+                        <Property name="Area" value="{{0.5,-9},{0.5,-9},{0.5,9},{0.5,9}}"/>
+                        <Property name="IconImage" value="Bragi-Panel/PanelToggle"/>
+                        <Property name="IconColour" value="$sub"/>
+                        <Property name="GlowColour" value="00000000"/>
+                        <Property name="CursorPassThroughEnabled" value="true"/>
+                    </Window>
+                </Window>
+
+                <!-- Review the working tree's changes (scripts/bragi/review.lua). -->
+                <Window type="Bragi/Button8" name="AgentReviewButton">
+                    <Property name="Area" value="{{1,-260},{0,10},{1,-148},{0,46}}"/>
+                    <Property name="Text" value="Review"/>
+                    <Property name="Font" value="Bragi-13-Bold"/>
+                    <Property name="NormalFillColour" value="00000000"/>
+                    <Property name="BorderColour" value="$border"/>
+                    <Property name="TooltipText" value="Review the changes and comment on lines  (Ctrl+Shift+R)"/>
+                </Window>
+
+                <Window type="Gitgud/StaticText" name="AgentHeaderRule">
+                    <Property name="Area" value="{{0,0},{1,-1},{1,0},{1,0}}"/>
+                    <Property name="PanelColour" value="$border"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                    <Property name="Text" value=""/>
+                </Window>
+            </Window>
+
+            <!-- The conversation: rows are created here at run time. -->
+            <Window type="Gitgud/ScrollablePane" name="AgentTranscript">
+                <Property name="Area" value="{{0,0},{0,56},{1,0},{1,-182}}"/>
+            </Window>
+
+            <!-- Shown while the conversation is empty. -->
+            <Window type="DefaultWindow" name="AgentEmpty">
+                <Property name="Area" value="{{0.5,-280},{0.5,-170},{0.5,280},{0.5,-10}}"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+                <Window type="Gitgud/Icon" name="AgentEmptyPetals">
+                    <Property name="Area" value="{{0.5,-32},{0,0},{0.5,32},{0,64}}"/>
+                    <Property name="IconImage" value="Bragi-Icons/MarkPetalsLarge"/>
+                    <Property name="IconColour" value="$petal"/>
+                    <Property name="GlowColour" value="00000000"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+                <Window type="Gitgud/Icon" name="AgentEmptyCentre">
+                    <Property name="Area" value="{{0.5,-32},{0,0},{0.5,32},{0,64}}"/>
+                    <Property name="IconImage" value="Bragi-Icons/MarkCentreLarge"/>
+                    <Property name="IconColour" value="$logo-centre"/>
+                    <Property name="GlowColour" value="00000000"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+                <Window type="Gitgud/Label" name="AgentEmptyTitle">
+                    <Property name="Area" value="{{0,0},{0,84},{1,0},{0,116}}"/>
+                    <Property name="Text" value="What are we working on?"/>
+                    <Property name="Font" value="Bragi-20-Bold"/>
+                    <Property name="HorzFormatting" value="CentreAligned"/>
+                    <Property name="NormalTextColour" value="$text"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+                <Window type="Gitgud/Label" name="AgentEmptyHint">
+                    <Property name="Area" value="{{0,0},{0,122},{1,0},{0,146}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="Font" value="Bragi-14"/>
+                    <Property name="HorzFormatting" value="CentreAligned"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+            </Window>
+
+            <!-- The prompt box; agent.lua sets its width (column) and keeps it
+                 24px off the bottom. -->
+            <Window type="Bragi/Box16" name="AgentComposer">
+                <Property name="Area" value="{{0.5,-366},{1,-158},{0.5,366},{1,-24}}"/>
+                <Property name="FillColour" value="$panel"/>
+                <Property name="BorderColour" value="$border"/>
+
+                <!-- Enter sends (accepted), Shift+Enter breaks the line. -->
+                <Window type="Gitgud/MultiLineEditbox" name="AgentPromptEdit">
+                    <UserString name="SubmitOnEnter" value="true"/>
+                    <Property name="Area" value="{{0,14},{0,12},{1,-14},{1,-72}}"/>
+                    <Property name="BgColour" value="00000000"/>
+                    <Property name="BorderColour" value="00000000"/>
+                    <Property name="Font" value="Bragi-15"/>
+                    <Property name="Text" value=""/>
+                </Window>
+                <Window type="Gitgud/Label" name="AgentPromptPlaceholder">
+                    <Property name="Area" value="{{0,22},{0,16},{1,-22},{0,40}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="Font" value="Bragi-15"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+
+                <!-- The bottom row: mic, mute, level, status, the usage
+                     circle (bragi/usage.lua makes it), mode, model, Send. -->
+                <Window type="Bragi/Button22" name="AgentMicButton">
+                    <Property name="Area" value="{{0,14},{1,-58},{0,58},{1,-14}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="NormalFillColour" value="$accent"/>
+                    <Property name="HoverFillColour" value="$accent-hover"/>
+                    <Property name="PushedFillColour" value="$accent-pressed"/>
+                    <Property name="BorderColour" value="00000000"/>
+                    <Property name="TooltipText" value="Start talking  (Ctrl+Shift+F9)"/>
+                    <Window type="Gitgud/Icon" name="AgentMicIcon">
+                        <Property name="Area" value="{{0.5,-10},{0.5,-10},{0.5,10},{0.5,10}}"/>
+                        <Property name="IconImage" value="Bragi-Icons/Mic"/>
+                        <Property name="IconColour" value="$on-accent"/>
+                        <Property name="GlowColour" value="00000000"/>
+                        <Property name="CursorPassThroughEnabled" value="true"/>
+                    </Window>
+                </Window>
+                <!-- Mute Bragi's voice (bragi/voice.lua, bragi.mute). -->
+                <Window type="Bragi/Button8" name="AgentMuteButton">
+                    <Property name="Area" value="{{0,64},{1,-52},{0,96},{1,-20}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="NormalFillColour" value="00000000"/>
+                    <Property name="BorderColour" value="00000000"/>
+                    <Property name="TooltipText" value="Mute Bragi"/>
+                    <Window type="Gitgud/Icon" name="AgentMuteIcon">
+                        <Property name="Area" value="{{0.5,-9},{0.5,-9},{0.5,9},{0.5,9}}"/>
+                        <Property name="IconImage" value="Bragi-Icons/Speaker"/>
+                        <Property name="IconColour" value="$sub"/>
+                        <Property name="GlowColour" value="00000000"/>
+                        <Property name="CursorPassThroughEnabled" value="true"/>
+                    </Window>
+                </Window>
+                <Window type="DefaultWindow" name="AgentLevel">
+                    <Property name="Area" value="{{0,104},{1,-48},{0,144},{1,-24}}"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+                <Window type="Gitgud/Label" name="AgentVoiceState">
+                    <Property name="Area" value="{{0,152},{1,-58},{1,-352},{1,-14}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="Font" value="Bragi-13"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+                <Window type="Bragi/Button8" name="AgentModeButton">
+                    <Property name="Area" value="{{1,-306},{1,-54},{1,-166},{1,-18}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="Font" value="Bragi-13"/>
+                    <Property name="HorzFormatting" value="LeftAligned"/>
+                    <Property name="NormalFillColour" value="00000000"/>
+                    <Property name="DisabledFillColour" value="00000000"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="HoverTextColour" value="$text"/>
+                    <Property name="TooltipText" value="What the agent may do without asking"/>
+                    <Window type="Gitgud/Icon" name="AgentModeChevron">
+                        <Property name="Area" value="{{1,-21},{0.5,-5},{1,-11},{0.5,5}}"/>
+                        <Property name="IconImage" value="Gitgud-Images/Chevron"/>
+                        <Property name="IconColour" value="$sub"/>
+                        <Property name="GlowColour" value="00000000"/>
+                        <Property name="CursorPassThroughEnabled" value="true"/>
+                    </Window>
+                </Window>
+                <Window type="Bragi/Button8" name="AgentModelButton">
+                    <Property name="Area" value="{{1,-160},{1,-54},{1,-64},{1,-18}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="Font" value="Bragi-13"/>
+                    <Property name="HorzFormatting" value="LeftAligned"/>
+                    <Property name="NormalFillColour" value="00000000"/>
+                    <Property name="DisabledFillColour" value="00000000"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="HoverTextColour" value="$text"/>
+                    <Property name="TooltipText" value="The model"/>
+                    <Window type="Gitgud/Icon" name="AgentModelChevron">
+                        <Property name="Area" value="{{1,-21},{0.5,-5},{1,-11},{0.5,5}}"/>
+                        <Property name="IconImage" value="Gitgud-Images/Chevron"/>
+                        <Property name="IconColour" value="$sub"/>
+                        <Property name="GlowColour" value="00000000"/>
+                        <Property name="CursorPassThroughEnabled" value="true"/>
+                    </Window>
+                </Window>
+                <Window type="Bragi/Button10" name="AgentSendButton">
+                    <Property name="Area" value="{{1,-58},{1,-58},{1,-14},{1,-14}}"/>
+                    <Property name="Text" value=""/>
+                    <Property name="NormalFillColour" value="$sel"/>
+                    <Property name="BorderColour" value="$border"/>
+                    <Property name="TooltipText" value="Send  (Enter)"/>
+                    <Window type="Gitgud/Icon" name="AgentSendIcon">
+                        <Property name="Area" value="{{0.5,-10},{0.5,-10},{0.5,10},{0.5,10}}"/>
+                        <Property name="IconImage" value="Bragi-Icons/Send"/>
+                        <Property name="IconColour" value="$text"/>
+                        <Property name="GlowColour" value="00000000"/>
+                        <Property name="CursorPassThroughEnabled" value="true"/>
+                    </Window>
+                </Window>
+            </Window>
+
+            <!-- Review: the changed files, a file's diff, and
+                 comments on its lines, sent to the session as one message.
+                 Covers the conversation while it's open. -->
+            <Window type="Gitgud/StaticText" name="AgentReview">
+                <Property name="Area" value="{{0,0},{0,56},{1,0},{1,0}}"/>
+                <Property name="PanelColour" value="$bg"/>
+                <Property name="Text" value=""/>
+                <Property name="Visible" value="false"/>
+
+                <Window type="Gitgud/Label" name="AgentReviewTitle">
+                    <Property name="Area" value="{{0,24},{0,12},{1,-420},{0,48}}"/>
+                    <Property name="Text" value="Review changes"/>
+                    <Property name="Font" value="Bragi-14-Bold"/>
+                    <Property name="NormalTextColour" value="$text"/>
+                    <Property name="CursorPassThroughEnabled" value="true"/>
+                </Window>
+                <Window type="Bragi/Button8" name="AgentReviewClear">
+                    <Property name="Area" value="{{1,-404},{0,12},{1,-304},{0,48}}"/>
+                    <Property name="Text" value="Clear"/>
+                    <Property name="Font" value="Bragi-13-Bold"/>
+                    <Property name="NormalFillColour" value="00000000"/>
+                    <Property name="BorderColour" value="$border"/>
+                    <Property name="TooltipText" value="Drop every comment"/>
+                </Window>
+                <Window type="Bragi/Button8" name="AgentReviewSend">
+                    <Property name="Area" value="{{1,-296},{0,12},{1,-136},{0,48}}"/>
+                    <Property name="Text" value="Send comments"/>
+                    <Property name="Font" value="Bragi-13-Bold"/>
+                    <Property name="TooltipText" value="Send every comment to Claude as one message"/>
+                </Window>
+                <Window type="Bragi/Button8" name="AgentReviewClose">
+                    <Property name="Area" value="{{1,-128},{0,12},{1,-24},{0,48}}"/>
+                    <Property name="Text" value="Back"/>
+                    <Property name="Font" value="Bragi-13-Bold"/>
+                    <Property name="NormalFillColour" value="00000000"/>
+                    <Property name="BorderColour" value="$border"/>
+                    <Property name="TooltipText" value="Back to the conversation; comments are kept  (Esc)"/>
+                </Window>
+
+                <Window type="Gitgud/ListWidget" name="AgentReviewFiles">
+                    <Property name="Area" value="{{0,16},{0,60},{0,276},{1,-16}}"/>
+                    <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+                    <Property name="BgColour" value="$rail"/>
+                    <Property name="BorderColour" value="$border"/>
+                    <Property name="Font" value="Bragi-13"/>
+                </Window>
+                <Window type="Gitgud/ListWidget" name="AgentReviewDiff">
+                    <Property name="Area" value="{{0,288},{0,60},{1,-16},{1,-16}}"/>
+                    <Property name="BgColour" value="$well"/>
+                    <Property name="BorderColour" value="$border"/>
+                    <Property name="Font" value="Bragi-Mono-13"/>
+                    <Property name="TooltipText" value="Click a line to comment on it"/>
+                </Window>
+                <Window type="Gitgud/Label" name="AgentReviewEmpty">
+                    <Property name="Area" value="{{0,24},{0,60},{1,-24},{0,100}}"/>
+                    <Property name="Text" value="No changes to review."/>
+                    <Property name="Font" value="Bragi-14"/>
+                    <Property name="NormalTextColour" value="$sub"/>
+                    <Property name="Visible" value="false"/>
+                </Window>
+            </Window>
+        </Window>
+    </Window>
+</GUILayout>

@@ -8,6 +8,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "agent/RepoTools.h"
 #include "git/Repository.h"
 #include "p4/P4Command.h"
 #include "p4/P4Workspace.h"
@@ -86,7 +87,7 @@ namespace
         return !p4d.empty() && fs::exists(fs::u8path(p4d), ec) && P4Command::Available();
     }
 
-    // A fresh p4d with user "tim" (password set, logged in).
+    // A fresh p4d with user "sam" (password set, logged in).
     struct TestServer
     {
         git::LibGit2 m_Lib;
@@ -107,7 +108,7 @@ namespace
             P4Command::ClearTickets();
             m_Conn.m_Port =
                 "rsh:" + Env("GITGUD_TEST_P4D") + " -r " + (m_Dir / "root").string() + " -L log -i";
-            m_Conn.m_User = "tim";
+            m_Conn.m_User = "sam";
             m_Conn.m_Dir = (m_Dir / "tmp").string();
             P4Command::RunText(
                 m_Conn, {"passwd"}, std::string(g_szPassword) + "\n" + g_szPassword + "\n");
@@ -265,7 +266,7 @@ TEST_CASE("p4 new repository: add, submit, history", "[p4][server]")
     CHECK(log[0].m_Oid == first);
     CHECK(log[0].m_Summary == "First change");
     CHECK(log[0].m_Message == "First change\n\nWith a body");
-    CHECK(log[0].m_AuthorName == "tim");
+    CHECK(log[0].m_AuthorName == "sam");
 
     // Edit -> unstaged; stage -> staged; unstage; discard.
     WriteFile(repo, "a.txt", "one\nTWO\nthree\n");
@@ -535,7 +536,7 @@ TEST_CASE("p4 classic depot: folders as branches", "[p4][server]")
     TestServer server;
     WorkspaceSetup setup;
     setup.m_Port = server.m_Conn.m_Port;
-    setup.m_User = "tim";
+    setup.m_User = "sam";
     setup.m_Client = "classic";
     setup.m_Root = server.Folder("classic");
     setup.m_DepotPath = "//depot/proj/main";
@@ -576,7 +577,7 @@ TEST_CASE("p4 connects to an existing workspace that has no .p4config", "[p4][se
 
     WorkspaceSetup setup;
     setup.m_Port = server.m_Conn.m_Port;
-    setup.m_User = "tim";
+    setup.m_User = "sam";
     setup.m_Root = server.Folder("made-elsewhere");
     auto ws = P4Workspace::Create(setup);
     CHECK(ws->Conn().m_Client == "made-elsewhere");
@@ -610,7 +611,7 @@ TEST_CASE("p4 asks for a password when the ticket is missing", "[p4][server]")
             std::string& _OutPass)
         {
             CHECK(_Url.rfind("p4:", 0) == 0);
-            CHECK(_User == "tim");
+            CHECK(_User == "sam");
             bsawRejected = bsawRejected || _bRejected;
             _OutPass = "wrong";
             return !_bRejected;
@@ -711,5 +712,49 @@ TEST_CASE("p4 changelists: check out, reopen, shelve, submit a selection", "[p4]
         [](const p4::FileState& _S) { return _S.m_iHaveRev < _S.m_iHeadRev; }));
     ws.SyncPaths({}, "");
     CHECK(fs::exists(fs::u8path(repo.WorkDir()) / "c.txt"));
-    CHECK(p4::Field(ws.Info(), "userName") == "tim");
+    CHECK(p4::Field(ws.Info(), "userName") == "sam");
+}
+
+TEST_CASE("p4 tools for Claude Code", "[p4][server][mcp]")
+{
+    if (!HaveServer())
+    {
+        SKIP("set GITGUD_TEST_P4D (and GITGUD_P4) to run Perforce server tests");
+    }
+    TestServer server;
+    git::Repository repo = server.Workspace("ws1", "//proj/main", true);
+    const std::string first = CommitFile(repo, "a.txt", "one\n", "First change");
+    p4::P4Workspace& ws = *repo.P4();
+    WriteFile(repo, "a.txt", "one\ntwo\n");
+    ws.Edit({"a.txt"}, "default");
+    WriteFile(repo, "c.txt", "c\n");
+    ws.Add({"c.txt"}, "default");
+    const std::string cl = ws.CreateChange("Feature work", {"c.txt"});
+    const app::Json none = app::Json::Object();
+    const std::string path = repo.WorkDir();
+
+    const agent::ToolResult changes = agent::RunTool(path, "p4_changes", none);
+    INFO(changes.m_Text);
+    CHECK_FALSE(changes.m_bIsError);
+    CHECK(changes.m_Text.find("Change default") != std::string::npos);
+    CHECK(changes.m_Text.find("edit a.txt") != std::string::npos);
+    CHECK(changes.m_Text.find("Change " + cl) != std::string::npos);
+    CHECK(changes.m_Text.find("Feature work") != std::string::npos);
+    CHECK(changes.m_Text.find("add c.txt") != std::string::npos);
+
+    const agent::ToolResult status = agent::RunTool(path, "status", none);
+    INFO(status.m_Text);
+    CHECK(status.m_Text.find("(p4)") != std::string::npos);
+    CHECK(status.m_Text.find("a.txt") != std::string::npos);
+
+    CHECK(agent::RunTool(path, "log", none).m_Text.find("First change") != std::string::npos);
+    const agent::ToolResult show =
+        agent::RunTool(path, "show", app::Json::Object().Set("commit", first));
+    INFO(show.m_Text);
+    CHECK_FALSE(show.m_bIsError);
+    CHECK(show.m_Text.find("a.txt") != std::string::npos);
+    CHECK(agent::RunTool(path, "show", app::Json::Object().Set("commit", "9999")).m_bIsError);
+    CHECK(agent::RunTool(path, "diff", app::Json::Object().Set("path", "a.txt"))
+              .m_Text.find("+two") != std::string::npos);
+    CHECK_FALSE(agent::RunTool(path, "branches", none).m_bIsError);
 }

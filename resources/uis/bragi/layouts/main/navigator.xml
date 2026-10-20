@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  navigator.xml (Bragi UI) - the branch panel (the top bar's Branches
+  button), in design D, replacing the GitGud UI's file of that name: a
+  sidebar in the rail colour with a rounded filter and the tree of local and
+  remote branches, tags, stashes, submodules and worktrees (NavList, filled
+  by views/navigator.lua with the sizes scripts/bragi/repolook.lua sets:
+  navigator.setLook).
+-->
+<GUILayout version="4">
+    <Window type="Gitgud/StaticText" name="Navigator">
+        <Property name="Area" value="{{0,0},{0,0},{0,236},{1,0}}"/>
+        <Property name="PanelColour" value="$rail"/>
+        <Property name="Text" value=""/>
+
+        <Window type="Bragi/Box8" name="BragiNavFilterBox">
+            <Property name="Area" value="{{0,12},{0,16},{1,-12},{0,52}}"/>
+            <Property name="FillColour" value="$well"/>
+            <Property name="BorderColour" value="$border"/>
+            <Window type="Gitgud/Editbox" name="NavFilterEdit">
+                <Property name="Area" value="{{0,6},{0,2},{1,-32},{1,-2}}"/>
+                <Property name="BgColour" value="00000000"/>
+                <Property name="BorderColour" value="00000000"/>
+                <Property name="Font" value="Bragi-13"/>
+                <Property name="Text" value=""/>
+            </Window>
+            <Window type="Gitgud/Label" name="NavFilterPlaceholder">
+                <Property name="Area" value="{{0,10},{0,0},{1,-34},{1,0}}"/>
+                <Property name="Text" value="Filter branches and tags"/>
+                <Property name="Font" value="Bragi-13"/>
+                <Property name="NormalTextColour" value="$sub"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+            <Window type="Gitgud/Icon" name="NavFilterIcon">
+                <Property name="Area" value="{{1,-28},{0.5,-8},{1,-12},{0.5,8}}"/>
+                <Property name="IconImage" value="Gitgud-Images/IconSearch"/>
+                <Property name="IconColour" value="$sub"/>
+                <Property name="GlowColour" value="00000000"/>
+                <Property name="CursorPassThroughEnabled" value="true"/>
+            </Window>
+        </Window>
+        <Window type="Gitgud/StaticText" name="NavHairline">
+            <Property name="Area" value="{{0,0},{0,0},{0,0},{0,0}}"/>
+            <Property name="Visible" value="false"/>
+            <Property name="Text" value=""/>
+        </Window>
+
+        <Window type="Gitgud/ListWidget" name="NavList">
+            <Property name="Area" value="{{0,4},{0,60},{1,-5},{1,0}}"/>
+            <Property name="HorzScrollbarDisplayMode" value="Hidden"/>
+            <!-- Inter: the rows use ✓ and ↑ ↓, which Manrope lacks. -->
+            <Property name="Font" value="Gitgud-UI"/>
+            <Property name="BgColour" value="00000000"/>
+            <Property name="BorderColour" value="00000000"/>
+            <Property name="SelectionColour" value="$sel"/>
+        </Window>
+
+        <Window type="Gitgud/StaticText" name="NavigatorBorder">
+            <Property name="Area" value="{{1,-1},{0,0},{1,0},{1,0}}"/>
+            <Property name="PanelColour" value="$border"/>
+            <Property name="CursorPassThroughEnabled" value="true"/>
+            <Property name="Text" value=""/>
+        </Window>
+    </Window>
+</GUILayout>

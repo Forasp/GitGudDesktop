@@ -169,6 +169,39 @@ cmake --build --preset release
 Output lands in `build/<preset>/bin`. Every build mirrors `resources/` and
 `docs/` next to the exe (even when no code changed).
 
+### Voice (the Bragi interface)
+
+The Bragi interface's speech engine runs on sherpa-onnx 1.13.8 and ONNX
+Runtime 1.28.2, loaded at run time from a `voice` folder beside the exe
+(only when voice starts). The build compiles against sherpa-onnx's C API
+header (`third_party/sherpa-onnx`) and links nothing of it. `voice` holds
+sherpa-onnx's C API DLL from its CPU release
+(`sherpa-onnx-v1.13.8-win-x64-shared-MD-Release-no-tts-lib`) and ONNX
+Runtime's core (`onnxruntime.dll`, `onnxruntime_providers_shared.dll`)
+from its CUDA release
+(`sherpa-onnx-v1.13.8-cuda-13.x-cudnn-9.x-onnxruntime1.28.2-win-x64-cuda`):
+the GPU build, which needs nothing from NVIDIA and runs on the processor
+until the optional GPU pack adds the CUDA provider (in the same run). Point
+`GITGUD_SHERPA_DIR` and `GITGUD_ORT_DIR` at the two `lib` folders
+(`package.cmd` downloads and checks both into `build\sherpa` the first
+time, unpacking only those DLLs; with both there, `GITGUD_ORT_DIR` is
+found on its own):
+
+```powershell
+cmake --preset release -DGITGUD_SHERPA_DIR="$PWD\build\sherpa\sherpa-onnx-v1.13.8-win-x64-shared-MD-Release-no-tts-lib\lib"
+```
+
+Without it the app builds and runs, and the Bragi interface says voice
+isn't part of the build. The models aren't part of any build: the Bragi
+interface downloads them (about 602 MB) into
+`%LOCALAPPDATA%\Gitgud\bragi\voice` when the user says so, from its
+welcome flow or Settings. So do Bragi's voice model (Chatterbox Turbo, for
+replies in Baldr) and the optional GPU pack for NVIDIA GPUs (ONNX
+Runtime's CUDA provider and NVIDIA's CUDA and cuDNN libraries from
+NVIDIA's packages): they are never in the package or the installer. The build compiles against ONNX
+Runtime's C API header (`third_party/onnxruntime/include`) for it and links
+nothing of it.
+
 ## Run
 
 ```powershell
@@ -205,10 +238,13 @@ when copied to another machine; the source tree's copy is only a fallback.
 .\package.cmd -Installer   # and fail if Inno Setup can't build the installer
 ```
 
-The package is a self-contained folder of about 21 MB: `gitgud.exe`, every
+The package is a self-contained folder of about 41 MB: `gitgud.exe`, every
 DLL (including the Visual C++ runtime, so no redistributable install is
-needed), `resources/`, `docs/`, `cegui-datafiles/`, `BUILD-INFO.txt` (the
-version and source commit), `LICENSE`, and `THIRD_PARTY_NOTICES.txt`.
+needed), `resources/`, `docs/`, `cegui-datafiles/`, `voice/` (the speech
+engine's three DLLs, 19 MB, from the pinned sherpa-onnx releases: downloaded
+into `build\sherpa` the first time and checked against their SHA-256),
+`BUILD-INFO.txt` (the version and source commit), `LICENSE`, and
+`THIRD_PARTY_NOTICES.txt`.
 
 `THIRD_PARTY_NOTICES.txt` holds the license of every third-party component
 that ships. After adding or upgrading a dependency, regenerate it and commit
@@ -301,6 +337,19 @@ last two, so every release needs them), the Linux .deb and .rpm, and
 - **Engine (C++)**: Catch2, 97 cases: `build\release\bin\gitgud_tests.exe`
   (or `ctest --test-dir build/release`). The signing and LFS cases need
   `ssh-keygen` and `git-lfs` (Git for Windows ships both) and skip without.
+  The speech engine's cases (`"[speech]"`) need the voice DLLs in
+  `bin\voice` for two of them (a corrupt model reported, a wrong checksum
+  refused) and skip without. The real models' smoke test is hidden:
+  `gitgud_tests "[.voice-models]"` with `GITGUD_TEST_VOICE_MODELS` set to a
+  folder of `vad\`, `kws\`, `parakeet\`, and `speaker\` as unpacked from
+  the downloads. Chatterbox Turbo's cases (`"[turbo]"`) run without models;
+  its real run is hidden too: `gitgud_tests "[.voice-gpu]"` with
+  `GITGUD_TEST_TURBO_DIR` (the Turbo download, graphs patched),
+  `GITGUD_TEST_TURBO_REF` (a recording) and `GITGUD_TEST_VOICE_MODELS`: on
+  the processor, then a broken GPU pack (it stays on the processor and
+  says why), then with `GITGUD_TEST_VOICE_GPU` (a folder with the GPU
+  pack's libraries) on the GPU, in the same run. It runs in a process of
+  its own: once the GPU has started it stays for the process.
 - **UI (Lua, scripted)**: `tests/ui/*.lua` drive the real UI without
   touching your mouse or keyboard and save screenshots:
 
@@ -313,8 +362,17 @@ last two, so every release needs them), the Linux .deb and .rpm, and
   Start-Process build\release\bin\gitgud.exe -ArgumentList C:\temp\gg-test
   ```
 
+  The Bragi scripts step through `tests/ui/harness.lua`: a step goes on
+  as soon as its checks pass (the app's clock skips the rest of its wait)
+  instead of always waiting its full delay. `GITGUD_HARNESS=full` waits
+  every delay as before; `GITGUD_HARNESS=trace` logs how long each step
+  waited. They run Claude Code as `GITGUD_TEST_CLAUDE` (the build's
+  `gitgud_test_claude.exe`, a stand-in), never the real one.
+
   `GITGUD_PERF=<ms>` also logs every main-loop pass, live-resize step, and
   Lua handler or timer slower than that, with the phase or source line.
+  For deeper measurement (captures, flame graphs, the stall watchdog's
+  `logs/perf.log`), see [PROFILING.md](PROFILING.md).
   Grep the log for `[check]`, `[perf]`, and `failed`. Always point these at a
   throwaway repository — they stage, commit, branch, and push. They also save
   settings, open tabs, and recent repositories to `%APPDATA%\Gitgud`; set
@@ -324,7 +382,23 @@ last two, so every release needs them), the Linux .deb and .rpm, and
   variables and `HOME` set to a scratch folder. The Keychain isn't per
   `HOME`: scripts that can reach a sign-in must stub `gitgud.setCredential`
   (see `tests/ui/signin.lua`), and the engine's Keychain test uses its own
-  service name ("GitGud tests") and deletes what it adds.
+  service name ("GitGud tests") and deletes what it adds. `signin.lua`'s
+  GitHub part runs offline with `GITGUD_TEST_GH` pointing at the build's
+  `gitgud_test_gh.exe` (a stand-in); the real `gh auth login --web` against
+  github.com runs only with `GITGUD_TEST_NETWORK=1` and `GITGUD_TEST_GH`
+  unset. Voice scripts never use the real speech engine or devices:
+  `bragi-voice-engine.lua` swaps in a stand-in engine with a quiet
+  microphone (`gitgud.voiceTestEngine`, or `GITGUD_TEST_VOICE=fake` for a
+  manual run). `bragi-voice-install.lua` installs the real models from a
+  folder of the downloads (`GITGUD_TEST_VOICE_FOLDER`) into a scratch
+  `LOCALAPPDATA` and checks them; it isn't in the usual suite. Nor is
+  `bragi-voice-exit.lua`: with the real models in a scratch `LOCALAPPDATA`
+  and `GITGUD_TEST_QUIET_AUDIO=1` (the real engine with a quiet microphone
+  and speaker), it turns voice on, speaks one reply in Baldr
+  (`GITGUD_TEST_EXIT_DEVICE=cpu` or `gpu`), and closes the window; run it
+  repeatedly and check that the engine's markers are clear and its log
+  says `exit: models released`. `gitgud_tests "[.voice-exit]"` does the
+  same with the engine alone, in child processes.
 - **Perforce**: the `[p4][server]` engine cases and the `p4.lua` /
   `depot-p4.lua` UI scripts need `p4.exe` and `p4d.exe` from Perforce's
   downloads. Point `GITGUD_P4` and `GITGUD_TEST_P4D` at them, or the server

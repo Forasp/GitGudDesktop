@@ -44,6 +44,9 @@ local C = {
     borderStrong = "FFA0A485",
 
     transparent = "00000000",
+    icon = "FFFFFFFF",       -- enabled glyph tint
+    bright = "FFFFFFFF",     -- hover text
+    onAccent = "FF28333C",   -- text on accent-filled buttons
 
     -- Graph lanes (the commit graph, when shown).
     lanes = {

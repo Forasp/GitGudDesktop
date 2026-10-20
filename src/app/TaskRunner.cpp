@@ -1,5 +1,7 @@
 #include "app/TaskRunner.h"
 
+#include "app/Profiler.h"
+
 #include <exception>
 #include <utility>
 
@@ -32,9 +34,11 @@ namespace gitgud::app
         std::thread worker(
             [this, _Name, job = std::move(_Job), finished]()
             {
+                prof::SetThreadName("task " + _Name);
                 m_Bus.Publish({_Name + ".started", _Name});
                 try
                 {
+                    const prof::Scope zone(prof::Intern("task " + _Name));
                     const std::string result = job();
                     m_Bus.Publish({_Name + ".done", result});
                 }

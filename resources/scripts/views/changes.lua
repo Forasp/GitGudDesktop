@@ -12,7 +12,7 @@
 --
 -- Public API (menus, shortcuts):
 --   changes.commit()  changes.discardAll()  changes.undoLastCommit()
---   changes.focusFilter()  changes.selectedPath()
+--   changes.focusFilter()  changes.selectedPath()  changes.setLook(fields)
 
 local C = require("core.palette")
 local app = require("core.app")
@@ -26,6 +26,7 @@ local repo = require("core.repo")
 local settings = require("core.settings")
 local shell = require("core.shell")
 local sidebar = require("views.sidebar")
+local sprites = require("core.sprites")
 local stash = require("views.stash")
 local status = require("core.status")
 local text = require("core.text")
@@ -33,13 +34,27 @@ local undo = require("core.undo")
 
 local changes = { name = "changes" }
 
-local ROW_HEIGHT = 32
-local CHECK_COLUMN = 36       -- px from the list's left edge that toggle inclusion
 local NAME_BUDGET = 32        -- characters of "name  dir" that fit a row
 local SUMMARY_LIMIT = 50
-local COMMIT_BOX_HEIGHT = 212
-local INFO_ROW_HEIGHT = 36
-local LIST_TOP = 76
+
+-- How the tab looks: the GitGud UI's sizes and rows. A UI package with its
+-- own sidebar/changes.xml can replace any field with changes.setLook.
+--   rowHeight        list row height
+--   checkColumn      px from the list's left edge whose clicks toggle inclusion
+--   listTop          the list's top edge in ChangesPanel
+--   commitBoxHeight  CommitBox's height (it sits at the panel's bottom)
+--   infoRowHeight    each stash / undo row stacked above it
+--   rowText          optional function(file, inclusion) -> a row's markup
+--   includeAllText   optional function(total, staged) -> IncludeAllCheck's text
+--   commitLabel      optional function(branch, staged) -> the Commit button's
+--                    usual label (not amending or merging)
+local look = {
+    rowHeight = 32,
+    checkColumn = 36,
+    listTop = 76,
+    commitBoxHeight = 212,
+    infoRowHeight = 36,
+}
 
 local selectedPath = nil
 local visibleFiles = {}       -- the filtered rows, in display order
@@ -117,16 +132,20 @@ local function checkSprite(file)
         image = "HunkPart"
     end
 
-    return "[image-size='w:26 h:26'][image='Gitgud-Images/" .. image .. "']"
+    return sprites.image(image, 26, 26)
 end
 
 --- One list row: box, status letter, name + folder.
 -- @param file  status row
 -- @return markup
 local function rowText(file)
+    if look.rowText then
+        return look.rowText(file, inclusion(file))
+    end
+
     local code = file.code == "?" and "A" or file.code
 
-    return text.rowHeight(ROW_HEIGHT) .. " " .. checkSprite(file) .. "  "
+    return text.rowHeight(look.rowHeight) .. " " .. checkSprite(file) .. "  "
         .. "[font='Gitgud-Mono']" .. text.colour(codeColour(file.code), code) .. "[font='Gitgud-UI']   "
         .. rowLabel(file.path)
 end
@@ -396,14 +415,19 @@ end
 local function renderIncludeAll(state)
     local total = #state.files
     local all = total > 0
+    local staged = 0
 
     for _, file in ipairs(state.files) do
         if inclusion(file) ~= "all" then
             all = false
         end
+        if file.staged then
+            staged = staged + 1
+        end
     end
 
-    gitgud.setText("IncludeAllCheck", text.plural(total, "changed file"))
+    gitgud.setText("IncludeAllCheck",
+        look.includeAllText and look.includeAllText(total, staged) or text.plural(total, "changed file"))
     gitgud.setChecked("IncludeAllCheck", all)
     gitgud.setEnabled("IncludeAllCheck", total > 0)
 end
@@ -428,13 +452,13 @@ local function layoutInfoRows(state)
         rows[#rows + 1] = "UndoRow"
     end
 
-    local bottom = COMMIT_BOX_HEIGHT
+    local bottom = look.commitBoxHeight
     for _, name in ipairs(rows) do
-        gitgud.setProperty(name, "Area", geometry.area(0, 0, 1, -bottom - INFO_ROW_HEIGHT, 1, 0, 1, -bottom))
-        bottom = bottom + INFO_ROW_HEIGHT
+        gitgud.setProperty(name, "Area", geometry.area(0, 0, 1, -bottom - look.infoRowHeight, 1, 0, 1, -bottom))
+        bottom = bottom + look.infoRowHeight
     end
 
-    gitgud.setProperty("ChangesList", "Area", geometry.area(0, 0, 0, LIST_TOP, 1, 0, 1, -bottom))
+    gitgud.setProperty("ChangesList", "Area", geometry.area(0, 0, 0, look.listTop, 1, 0, 1, -bottom))
 end
 
 --- Summary character counter (turns yellow, then red, near the limit).
@@ -459,16 +483,18 @@ end
 --- Enable/label the commit button for the current state.
 -- @param state  repository snapshot
 local function updateCommitButton(state)
-    local anyStaged = false
+    local staged = 0
     for _, file in ipairs(state.files) do
         if file.staged then
-            anyStaged = true
+            staged = staged + 1
         end
     end
+    local anyStaged = staged > 0
 
     local amend = gitgud.getProperty("AmendCheck", "Selected") == "true"
     local conflicts = #state.conflicts > 0
-    local label = "Commit to " .. (state.branch ~= "" and state.branch or "HEAD")
+    local branch = state.branch ~= "" and state.branch or "HEAD"
+    local label = look.commitLabel and look.commitLabel(branch, staged) or ("Commit to " .. branch)
 
     if amend then
         label = "Amend last commit"
@@ -684,6 +710,14 @@ function changes.selectedPath()
     return selectedPath
 end
 
+--- Restyle the tab (see `look` at the top); the next refresh uses it.
+-- @param fields  any of look's fields
+function changes.setLook(fields)
+    for key, value in pairs(fields) do
+        look[key] = value
+    end
+end
+
 --- Ask for a co-author and append a Co-authored-by trailer.
 local function addCoAuthor()
     dialog.show({
@@ -762,7 +796,7 @@ function changes.init()
         end
 
         local listX = gitgud.getRect("ChangesList")
-        if x - listX < CHECK_COLUMN then
+        if x - listX < look.checkColumn then
             setIncluded(file, inclusion(file) ~= "all")
             paintSelection(false)
         else
