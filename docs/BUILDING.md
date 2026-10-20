@@ -319,8 +319,8 @@ To release, set the version in `CMakeLists.txt` (`project(... VERSION x.y.z)`)
 and `vcpkg.json`, commit, and push a tag:
 
 ```powershell
-git tag v1.5.2
-git push origin v1.5.2
+git tag v1.6.0
+git push origin v1.6.0
 ```
 
 Once every platform has built, the workflow publishes a release for the
