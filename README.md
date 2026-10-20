@@ -42,16 +42,8 @@ GitGud ships three interfaces and asks which one you'd like on first launch:
   tree, undo, interactive rebase, and a merge tool.
 - **Depot**: pending changelists with shelving, submitted changelists, and
   revision graph, time-lapse, and diff windows.
-- **Bragi**: a workspace for Claude Code beside your repositories.
-  Conversations are grouped by project, and Bragi's own conversation
-  starts work in the others, follows it, and tells you how it's going.
-  Each conversation shows the agent's plan and steps, cards to approve
-  or answer, and its changes to review; rewind or fork it from any of
-  your messages. Tasks, boards, and wikis are kept on your computer. It
-  needs Claude Code installed; its own first-run setup covers the rest.
-  Talk to it by voice on Windows: speech is recognized on your computer,
-  with models its setup downloads when you choose to. With an NVIDIA GPU,
-  it can answer in a voice made from a recording.
+- **Bragi**: an agentic AI interface built on Claude Code, focused on
+  voice conversation and productivity tools.
 
 ![The GitGud, Depot, and Bragi interfaces](.github/images/ui-interfaces.png)
 
