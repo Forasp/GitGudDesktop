@@ -118,6 +118,9 @@ namespace gitgud::lua::bindings
     // what JSON can't hold.
     app::Json LuaToJson(lua_State* _pL, int _iIndex);
 
+    // Values from large sorted key/value files (LuaLookupBindings.cpp).
+    void AddLookupBindings(std::vector<luaL_Reg>& _Out);
+
     // Voice (LuaVoiceBindings.cpp).
     void AddVoiceBindings(std::vector<luaL_Reg>& _Out);
     // The local app data folder, downloads, archives (LuaLocalDataBindings.cpp).

@@ -25,6 +25,7 @@ add_executable(gitgud_tests
     test_mcp_tools.cpp
     test_speech.cpp
     test_speech_turbo.cpp
+    test_speech_small.cpp
 )
 
 # The updater is Windows only (BCrypt signatures, gitgud-patcher.exe).

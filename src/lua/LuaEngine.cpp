@@ -300,6 +300,7 @@ table.insert(searchers, 2, searcher)
         bindings::AddUpdateBindings(functions);
         bindings::AddP4Bindings(functions);
         bindings::AddJsonBindings(functions);
+        bindings::AddLookupBindings(functions);
         bindings::AddVoiceBindings(functions);
         bindings::AddLocalDataBindings(functions);
         bindings::AddAgentBindings(functions);

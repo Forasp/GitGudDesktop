@@ -248,8 +248,10 @@ namespace gitgud::voice
         // Queue text to speak; connects (and opens the speaker) first if
         // needed. `_Voice` "", `_iSampleRate` 0, and `_fSpeed` 0 leave the
         // engine's default (`_fSpeed`: 1 is normal pace, 1.2 a fifth faster).
+        // `_Voicing`'s numbers (a small voice's wobble, rough, roughLow,
+        // roughHigh) go with the say as they are.
         void Say(const std::string& _Id, const std::string& _Text, const std::string& _Voice = {},
-            int _iSampleRate = 0, double _fSpeed = 0.0);
+            int _iSampleRate = 0, double _fSpeed = 0.0, const app::Json& _Voicing = app::Json());
         // Connect and open the speaker now, so the first reply doesn't wait
         // for either. No-op while connected.
         void Prepare();

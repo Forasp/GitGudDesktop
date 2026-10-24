@@ -3,9 +3,10 @@
 // -----------------------------------------------------------------------------
 // LocalEngine: the speech engine inside the app, behind the voice links
 // (voice/Link.h). The listen channel runs the Listener (speech/Listener.h)
-// on the models; the speak channel speaks with Chatterbox Turbo
-// (speech/Turbo.h) in a voice made from a recording, when its models are
-// set up (Configure's `tts`), else with the system's voices
+// on the models; the speak channel speaks with a small built-in voice
+// (speech/SmallVoice.h, Configure's `small`: phonemes in, from Lua), with
+// Chatterbox Turbo (speech/Turbo.h) in a voice made from a recording, when
+// its models are set up (Configure's `tts`), else with the system's voices
 // (speech/TextToSpeech.h).
 //
 // One ONNX Runtime serves both: the CPU build in the `voice` folder beside
@@ -108,10 +109,19 @@ namespace gitgud::speech
         //   tts         Turbo: {dir, encoder, embed, lm, decoder, tokenizer,
         //               voicesDir, provider, threads, cpuThreads, files};
         //               absent: system voices only
+        //   small       small voices: {voicesDir, threads}: "small:<name>" is
+        //               <voicesDir>/<name> (model.onnx, phonemes.tsv), and its
+        //               `say` text is phonemes; absent: none
         bool Configure(const app::Json& _Settings, std::string& _Error);
 
         // Turbo is set up (Configure's `tts`), not necessarily loaded.
         bool TurboConfigured() const;
+        // Small voices are set up (Configure's `small`).
+        bool SmallConfigured() const;
+        // Say `_Phonemes` with small voice `_Name` (speaking thread; it loads
+        // the first time). 24 kHz audio, or false with `_Error`.
+        bool SmallSay(const std::string& _Phonemes, const std::string& _Name, double _fSpeed,
+            double _fWobble, std::vector<float>& _Audio, std::string& _Error);
         // The voice a `say` without one uses when Turbo is set up:
         // "turbo:baldr" when Baldr is made, else the first made voice; ""
         // when none is.
@@ -200,6 +210,10 @@ namespace gitgud::speech
         // Speaking thread: load Turbo (and the runtime) if it isn't.
         bool EnsureTurbo(std::string& _Error);
         void UnloadTurbo();
+        // Speaking thread: the runtime, the speak marker and the log, before
+        // a small voice loads. False with `_Error`.
+        bool PrepareSmall(std::string& _Error);
+        void UnloadSmall();
         void SpeakLoop();
         // The GPU pack's folder when Turbo should use it and it's there, else "".
         std::string GpuDir() const;
@@ -223,6 +237,7 @@ namespace gitgud::speech
         std::string m_GpuError;
         app::Json m_Tts; // Configure's `tts` (null: none)
         FileList m_TtsFiles;
+        app::Json m_Small; // Configure's `small` (null: none)
         std::string m_FaultCode;
         std::string m_FaultDetail;
         std::vector<std::weak_ptr<ListenState>> m_Listens;
@@ -271,6 +286,8 @@ namespace gitgud::speech
         // Speaking thread only.
         struct TurboState;
         std::unique_ptr<TurboState> m_pTurbo;
+        struct SmallState;
+        std::unique_ptr<SmallState> m_pSmall;
         std::string m_SpeakException;
     };
 

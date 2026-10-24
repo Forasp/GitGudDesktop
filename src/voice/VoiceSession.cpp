@@ -606,7 +606,7 @@ namespace gitgud::voice
     }
 
     void SpeakSession::Say(const std::string& _Id, const std::string& _Text,
-        const std::string& _Voice, int _iSampleRate, double _fSpeed)
+        const std::string& _Voice, int _iSampleRate, double _fSpeed, const Json& _Voicing)
     {
         Begin(); // no-op while connected
         {
@@ -629,6 +629,13 @@ namespace gitgud::voice
         if (_fSpeed > 0.0)
         {
             say.Set("speed", _fSpeed);
+        }
+        for (const char* szkey : {"wobble", "rough", "roughLow", "roughHigh"})
+        {
+            if (_Voicing[szkey].IsNumber())
+            {
+                say.Set(szkey, _Voicing[szkey].AsNumber());
+            }
         }
         QueueText(say);
     }

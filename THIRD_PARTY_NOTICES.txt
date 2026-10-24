@@ -9754,3 +9754,15 @@ Baldr, the Bragi interface's voice for replies: the recording it is made
 from (resources/uis/bragi/voices/baldr/ref.wav, which ships with the
 interface) is the project's own.
 
+Bragi's built-in voice (resources/uis/bragi/voices/bragi-1, which ships with
+the interface) is the project's own model, trained from Kokoro-82M by
+hexgrad (Apache License 2.0, https://huggingface.co/hexgrad/Kokoro-82M) with
+the training code of Paradee by Sahil Mahendrakar (Apache License 2.0,
+https://github.com/sahilmahendrakar/paradee), on sentences from WikiText-103
+(Creative Commons Attribution-ShareAlike 3.0; the sentences themselves don't
+ship). Its pronunciation dictionaries (resources/uis/bragi/phonemes) are
+misaki's American English dictionaries by hexgrad (Apache License 2.0,
+https://github.com/hexgrad/misaki), unchanged, and the Bragi interface's
+bragi/phonemes.lua follows misaki's English rules. The Apache License 2.0
+text is above.
+

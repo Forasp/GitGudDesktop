@@ -1,0 +1,254 @@
+Good evening. I've been watching the build while you were away, and nothing caught fire.	ɡˈʊd ˈivnɪŋ. ˌIv bɪn wˈɑʧɪŋ ðə bˈɪld wˌIl ju wɜɹ əwˈA, ænd nˈʌθɪŋ kˈɔt fˈIəɹ.
+Quick question before I merge: do you want the old settings file kept as a backup, or should I delete it?	kwˈɪk kwˈɛsʧᵊn bəfˈɔɹ ˌI mˈɜɹʤ: dˈu ju wˈɑnt ði ˈOld sˈɛTɪŋz fˈIl kˈɛpt æz ɐ bˈækˌʌp, ɔɹ ʃˌʊd ˌI dəlˈit ɪt?
+I found the problem. The cache was keyed on the file's name instead of its contents, so your edits never showed up.	ˌI fˈWnd ðə pɹˈɑbləm. ðə kˈæʃ wʌz kˈid ˌɔn ðə fˈIlz nˈAm ɪnstˈɛd ʌv ɪts kˈɑntɛnts, sˌO jʊɹ ˈɛdəts nˈɛvəɹ ʃˈOd ˌʌp.
+That's three tasks done today, two pull requests merged, and one test that still fails on Tuesdays for no good reason.	ðˈæts θɹˈi tˈæsks dˈʌn tədˈA, tˈu pˈʊl ɹəkwˈɛsts mˈɜɹʤd, ænd wˈʌn tˈɛst ðæt stˈɪl fˈAlz ˌɔn tˈuzdˌAz fɔɹ nˈO ɡˈʊd ɹˈizᵊn.
+Hmm, I'm not sure about that. Let me check the log first, and then I'll tell you what I think.	hmm, ˌIm nˌɑt ʃˈʊɹ əbˈWt ðˈæt. lˈɛt mˌi ʧˈɛk ðə lˈɔɡ fˈɜɹst, ænd ðˈɛn ˌIl tˈɛl ju wˌʌt ˌI θˈɪŋk.
+The storm rolled in over the hills just after sunset, and by midnight the river had climbed halfway up the old stone bridge.	ðə stˈɔɹm ɹˈOld ˈɪn ˈOvəɹ ðə hˈɪlz ʤˈʌst ˈæftəɹ sˈʌnsˌɛt, ænd bI mˈɪdnˌIt ðə ɹˈɪvəɹ hæd klˈImd hˌæfwˈA ˌʌp ði ˈOld stˈOn bɹˈɪʤ.
+Honestly? I think the second version reads better. It's shorter, and it says the same thing.	ˈɑnəstli? ˌI θˈɪŋk ðə sˈɛkənd vˈɜɹʒən ɹˈidz bˈɛTəɹ. ˌɪts ʃˈɔɹTəɹ, ænd ɪt sˈɛz ðə sˈAm θˈɪŋ.
+Okay, I've started the tests on the rebase branch. This usually takes about a minute.	ˌOkˈA, ˌIv stˈɑɹTᵻd ðə tˈɛsts ˌɔn ðə ɹəbˈAs bɹˈænʧ. ðˌɪs jˈuʒəwəli tˈAks əbˈWt ɐ mˈɪnət.
+The tests are done. Everything passed except one, and it's the flaky timing test again.	ðə tˈɛsts ɑɹ dˈʌn. ˈɛvəɹiθˌɪŋ pˈæst ɪksˈɛpt wˈʌn, ænd ɪts ðə flˈAki tˈImɪŋ tˈɛst əɡˈɛn.
+Two failures, both in the depot backend's stream code. Want me to look at them, or keep going with the merge?	tˈu fˈAljəɹz, bˈOθ ɪn ðə dˈipˌO bˈækənds stɹˈim kˈOd. wˈɑnt mˌi tə lˈʊk æt ðˌɛm, ɔɹ kˈip ɡˈOɪŋ wɪð ðə mˈɜɹʤ?
+Done. The build is green, the pull request is up, and I left you a note on the board.	dˈʌn. ðə bˈɪld ɪz ɡɹˈin, ðə pˈʊl ɹəkwˈɛst ɪz ˌʌp, ænd ˌI lˈɛft ju ɐ nˈOt ˌɔn ðə bˈɔɹd.
+I'm rebasing your branch onto main now. There might be a conflict in the settings file.	ˌIm ɹəbˈAsɪŋ jʊɹ bɹˈænʧ ˈɑntˌu mˈAn nˈW. ðˌɛɹ mˌIt bi ɐ kˈɑnflˌɪkt ɪn ðə sˈɛTɪŋz fˈIl.
+There's a merge conflict in the voice module. Both sides changed the same function.	ðˌɛɹz ɐ mˈɜɹʤ kˈɑnflˌɪkt ɪn ðə vˈYs mˈɑʤul. bˈOθ sˈIdz ʧˈAnʤd ðə sˈAm fˈʌŋkʃən.
+I kept your version of the function and brought in the new logging from main.	ˌI kˈɛpt jʊɹ vˈɜɹʒən ʌv ðə fˈʌŋkʃən ænd bɹˈɔt ˈɪn ðə nˈu lˈɔɡɪŋ fɹʌm mˈAn.
+The conflict is resolved, and the branch builds again. Should I push it?	ðə kˈɑnflˌɪkt ɪz ɹəzˈɔlvd, ænd ðə bɹˈænʧ bˈɪldz əɡˈɛn. ʃˌʊd ˌI pˈʊʃ ɪt?
+I pushed the branch. The pull request is waiting for checks.	ˌI pˈʊʃt ðə bɹˈænʧ. ðə pˈʊl ɹəkwˈɛst ɪz wˈATɪŋ fɔɹ ʧˈɛks.
+The checks failed on Linux. It looks like a missing include, not a real bug.	ðə ʧˈɛks fˈAld ˌɔn lˈɪnəks. ˌɪt lˈʊks lˈIk ɐ mˈɪsɪŋ ɪnklˈud, nˌɑt ɐ ɹˈiᵊl bˈʌɡ.
+I fixed the include and pushed again. The Linux build is running now.	ˌI fˈɪkst ði ɪnklˈud ænd pˈʊʃt əɡˈɛn. ðə lˈɪnəks bˈɪld ɪz ɹˈʌnɪŋ nˈW.
+All three platforms are green. The pull request is ready for your review.	ˈɔl θɹˈi plˈætfˌɔɹmz ɑɹ ɡɹˈin. ðə pˈʊl ɹəkwˈɛst ɪz ɹˈɛdi fɔɹ jʊɹ ɹəvjˈu.
+You have four tasks on the board. Two are in progress, one is blocked, and one is new.	jˌu hæv fˈɔɹ tˈæsks ˌɔn ðə bˈɔɹd. tˈu ɑɹ ɪn pɹˈɑɡɹəs, wˈʌn ɪz blˈɑkt, ænd wˈʌn ɪz nˈu.
+The blocked task is waiting on the installer change. Do you want me to take that one first?	ðə blˈɑkt tˈæsk ɪz wˈATɪŋ ˌɔn ði ɪnstˈɔləɹ ʧˈAnʤ. dˈu ju wˈɑnt mˌi tə tˈAk ðˈæt wˈʌn fˈɜɹst?
+I moved the card to done and added a short summary of what changed.	ˌI mˈuvd ðə kˈɑɹd tə dˈʌn ænd ˈædᵻd ɐ ʃˈɔɹt sˈʌməɹi ʌv wˌʌt ʧˈAnʤd.
+I wrote the wiki page for the new setup steps. It links back to the task.	ˌI ɹˈOt ðə wˈɪki pˈAʤ fɔɹ ðə nˈu sˈɛTˌʌp stˈɛps. ˌɪt lˈɪŋks bˈæk tə ðə tˈæsk.
+Sam commented on the task. They want the dialog to remember its size.	sˈæm kˈɑmˌɛntᵻd ˌɔn ðə tˈæsk. ðˌA wˈɑnt ðə dˈIəlˌɔɡ tə ɹəmˈɛmbəɹ ɪts sˈIz.
+That's a small change. I can do it in this session, or start a new one for it.	ðˈæts ɐ smˈɔl ʧˈAnʤ. ˌI kæn dˈu ɪt ɪn ðɪs sˈɛʃən, ɔɹ stˈɑɹt ɐ nˈu wˈʌn fɔɹ ɪt.
+I started a new session for the dialog work, so this one stays on the merge.	ˌI stˈɑɹTᵻd ɐ nˈu sˈɛʃən fɔɹ ðə dˈIəlˌɔɡ wˈɜɹk, sˌO ðɪs wˈʌn stˈAz ˌɔn ðə mˈɜɹʤ.
+The other session finished. It made one commit on its own branch.	ði ˈʌðəɹ sˈɛʃən fˈɪnəʃt. ˌɪt mˌAd wˈʌn kəmˈɪt ˌɔn ɪts ˈOn bɹˈænʧ.
+Here's what it changed: the dialog keeps its width and height between runs.	hˈɪɹz wˌʌt ɪt ʧˈAnʤd: ðə dˈIəlˌɔɡ kˈips ɪts wˈɪdθ ænd hˈIt bətwˈin ɹˈʌnz.
+I haven't merged that branch. Do you want it in this one, or kept separate?	ˌI hˈævᵊnt mˈɜɹʤd ðˈæt bɹˈænʧ. dˈu ju wˈɑnt ɪt ɪn ðɪs wˈʌn, ɔɹ kˈɛpt sˈɛpəɹət?
+Give me a second, I'm reading the log.	ɡˈɪv mˌi ɐ sˈɛkənd, ˌIm ɹˈidɪŋ ðə lˈɔɡ.
+The crash happens when the window is resized while a file is still loading.	ðə kɹˈæʃ hˈæpənz wˌɛn ðə wˈɪndO ɪz ɹisˈIzd wˌIl ɐ fˈIl ɪz stˈɪl lˈOdɪŋ.
+I think I found it. The loader keeps a pointer to a row that was already freed.	ˌI θˈɪŋk ˌI fˈWnd ɪt. ðə lˈOdəɹ kˈips ɐ pˈYntəɹ tə ɐ ɹˈO ðæt wʌz ˌɔlɹˈɛdi fɹˈid.
+I added a guard and a test that resizes during a load. The test passes now.	ˌI ˈædᵻd ɐ ɡˈɑɹd ænd ɐ tˈɛst ðæt ɹisˈIzᵻz dˈʊɹɪŋ ɐ lˈOd. ðə tˈɛst pˈæsᵻz nˈW.
+Before I change that, can you tell me which behaviour you expect?	bəfˈɔɹ ˌI ʧˈAnʤ ðˈæt, kæn ju tˈɛl mˌi wˌɪʧ bəhˈAvjəɹ ju ɪkspˈɛkt?
+Should the search match whole words only, or any part of a word?	ʃˌʊd ðə sˈɜɹʧ mˈæʧ hˈOl wˈɜɹdz ˈOnli, ɔɹ ˈɛni pˈɑɹt ʌv ɐ wˈɜɹd?
+Got it. Whole words only, and case doesn't matter.	ɡˌɑt ɪt. hˈOl wˈɜɹdz ˈOnli, ænd kˈAs dˈʌzᵊnt mˈæTəɹ.
+I'm not sure that's safe. Deleting the branch would also drop two commits that aren't merged anywhere.	ˌIm nˌɑt ʃˈʊɹ ðˈæts sˈAf. dᵻlˈiTɪŋ ðə bɹˈænʧ wʊd ˈɔlsO dɹˈɑp tˈu kəmˈɪts ðæt ˌɑɹnt mˈɜɹʤd ˈɛniwˌɛɹ.
+I'd rather keep the branch and archive it. You can always delete it later.	ˌId ɹˈæðəɹ kˈip ðə bɹˈænʧ ænd ˈɑɹkˌIv ɪt. jˌu kæn ˈɔlwˌAz dəlˈit ɪt lˈATəɹ.
+That command would rewrite history on main. I won't run it without a clear yes from you.	ðˈæt kəmˈænd wʊd ɹiɹˈIt hˈɪstəɹi ˌɔn mˈAn. ˌI wOnt ɹˈʌn ɪt wɪðˈWt ɐ klˈɪɹ jˈɛs fɹʌm ju.
+Okay, I'll leave main alone and do it on a new branch instead.	ˌOkˈA, ˌIl lˈiv mˈAn əlˈOn ænd dˈu ɪt ˌɔn ɐ nˈu bɹˈænʧ ɪnstˈɛd.
+The commit message says what changed and why, in one line.	ðə kəmˈɪt mˈɛsɪʤ sˈɛz wˌʌt ʧˈAnʤd ænd wˌI, ɪn wˈʌn lˈIn.
+I'm going to run the full test suite. It takes about four minutes.	ˌIm ɡˈOɪŋ tə ɹˈʌn ðə fˈʊl tˈɛst swˈit. ˌɪt tˈAks əbˈWt fˈɔɹ mˈɪnəts.
+Two hundred and forty nine cases, all green.	tˈu hˈʌndɹəd ænd fˈɔɹTi nˈIn kˈAsᵻz, ˈɔl ɡɹˈin.
+Fifty five interface tests, and fifty three passed. The two failures were already failing on main.	fˈɪfti fˈIv ˈɪntəɹfˌAs tˈɛsts, ænd fˈɪfti θɹˈi pˈæst. ðə tˈu fˈAljəɹz wɜɹ ˌɔlɹˈɛdi fˈAlɪŋ ˌɔn mˈAn.
+The profiler shows most of the time going into the layout pass.	ðə pɹˈOfˌIləɹ ʃˈOz mˈOst ʌv ðə tˈIm ɡˈOɪŋ ˈɪntu ðə lˈAˌWt pˈæs.
+After the fix, the slowest frame went from one hundred and ninety milliseconds to twenty five.	ˈæftəɹ ðə fˈɪks, ðə slˈOᵻst fɹˈAm wˈɛnt fɹʌm wˈʌn hˈʌndɹəd ænd nˈIndi mˈɪləsˌɛkəndz tə twˈɛnti fˈIv.
+Memory peaked at four hundred and fifty megabytes, down from one point three gigabytes.	mˈɛməɹi pˈikt æt fˈɔɹ hˈʌndɹəd ænd fˈɪfti mˈɛɡəbˌIts, dˌWn fɹʌm wˈʌn pˈYnt θɹˈi ɡˈɪɡəbˌIts.
+The new version is one point five point two. I updated the build files and the installer.	ðə nˈu vˈɜɹʒən ɪz wˈʌn pˈYnt fˈIv pˈYnt tˈu. ˌI ˈʌpdˌATᵻd ðə bˈɪld fˈIlz ænd ði ɪnstˈɔləɹ.
+I tagged the release. The pipeline will publish it in about ten minutes.	ˌI tˈæɡd ðə ɹəlˈis. ðə pˈIplˌIn wɪl pˈʌblɪʃ ɪt ɪn əbˈWt tˈɛn mˈɪnəts.
+The release is out. I replaced the generated notes with the ones we wrote.	ðə ɹəlˈis ɪz ˈWt. ˌI ɹəplˈAst ðə ʤˈɛnəɹˌATᵻd nˈOts wɪð ðə wˈʌnz wi ɹˈOt.
+It's twenty past three. You asked me to remind you about the review at half past.	ˌɪts twˈɛnti pˈæst θɹˈi. jˌu ˈæskt mˌi tə ɹəmˈInd ju əbˈWt ðə ɹəvjˈu æt hˈæf pˈæst.
+Your review starts in ten minutes.	jˌʊɹ ɹəvjˈu stˈɑɹts ɪn tˈɛn mˈɪnəts.
+I paused the voice while you were on the call.	ˌI pˈɔzd ðə vˈYs wˌIl ju wɜɹ ˌɔn ðə kˈɔl.
+Sorry, I didn't catch that. Could you say it again?	sˈɔɹi, ˌI dˈɪdᵊnt kˈɛʧ ðˈæt. kˌʊd ju sˈA ɪt əɡˈɛn?
+Did you mean the settings dialog, or the settings file?	dˈɪd ju mˈin ðə sˈɛTɪŋz dˈIəlˌɔɡ, ɔɹ ðə sˈɛTɪŋz fˈIl?
+Okay, the settings file. Opening it now.	ˌOkˈA, ðə sˈɛTɪŋz fˈIl. ˈOpᵊnɪŋ ɪt nˈW.
+I can hear you again. What would you like to do next?	ˌI kæn hˈɪɹ ju əɡˈɛn. wˌʌt wʊd ju lˈIk tə dˈu nˈɛkst?
+That's everything on the list for today.	ðˈæts ˈɛvəɹiθˌɪŋ ˌɔn ðə lˈɪst fɔɹ tədˈA.
+Nice work. Three tasks closed, one pull request merged, and no new failures.	nˈIs wˈɜɹk. θɹˈi tˈæsks klˈOzd, wˈʌn pˈʊl ɹəkwˈɛst mˈɜɹʤd, ænd nˈO nˈu fˈAljəɹz.
+Hmm, that's odd. The same test passes when I run it on its own.	hmm, ðˈæts ˈɑd. ðə sˈAm tˈɛst pˈæsᵻz wˌɛn ˌI ɹˈʌn ɪt ˌɔn ɪts ˈOn.
+It might depend on the order the tests run in. Let me shuffle them and try again.	ˌɪt mˌIt dəpˈɛnd ˌɔn ði ˈɔɹdəɹ ðə tˈɛsts ɹˈʌn ˈɪn. lˈɛt mˌi ʃˈʌfᵊl ðˌɛm ænd tɹˈI əɡˈɛn.
+Yes, that's it. One test leaves a temporary folder behind, and the next one trips over it.	jˈɛs, ðˈæts ɪt. wˈʌn tˈɛst lˈivz ɐ tˈɛmpəɹˌɛɹi fˈOldəɹ bəhˈInd, ænd ðə nˈɛkst wˈʌn tɹˈɪps ˈOvəɹ ɪt.
+I'll clean up the folder at the end of the first test.	ˌIl klˈin ˌʌp ðə fˈOldəɹ æt ði ˈɛnd ʌv ðə fˈɜɹst tˈɛst.
+Do you want the short version or the full explanation?	dˈu ju wˈɑnt ðə ʃˈɔɹt vˈɜɹʒən ɔɹ ðə fˈʊl ˌɛksplənˈAʃən?
+Short version: the cache was stale, and now it's rebuilt when the file changes.	ʃˈɔɹt vˈɜɹʒən: ðə kˈæʃ wʌz stˈAl, ænd nˈW ɪts ɹibˈɪlt wˌɛn ðə fˈIl ʧˈAnʤᵻz.
+Here's the longer version. The cache stored a hash of the file's name, not its contents, so edits never invalidated it.	hˈɪɹz ðə lˈɔŋɡəɹ vˈɜɹʒən. ðə kˈæʃ stˈɔɹd ɐ hˈæʃ ʌv ðə fˈIlz nˈAm, nˌɑt ɪts kˈɑntɛnts, sˌO ˈɛdəts nˈɛvəɹ ɪnvˈælɪdˌATᵻd ɪt.
+I'm opening the worktree for the performance branch.	ˌIm ˈOpᵊnɪŋ ðə ❓ fɔɹ ðə pəɹfˈɔɹməns bɹˈænʧ.
+The worktree is clean, and it's three commits ahead of main.	ði ❓ ɪz klˈin, ænd ɪts θɹˈi kəmˈɪts əhˈɛd ʌv mˈAn.
+I'll rebase it onto main first, so the history stays straight.	ˌIl ɹəbˈAs ɪt ˈɑntˌu mˈAn fˈɜɹst, sˌO ðə hˈɪstəɹi stˈAz stɹˈAt.
+The rebase went through without conflicts.	ðə ɹəbˈAs wˈɛnt θɹu wɪðˈWt kˈɑnflˌɪkts.
+I'm building it in release mode. That takes a couple of minutes on this machine.	ˌIm bˈɪldɪŋ ɪt ɪn ɹəlˈis mˈOd. ðˈæt tˈAks ɐ kˈʌpᵊl ʌv mˈɪnəts ˌɔn ðɪs məʃˈin.
+The build failed. A header moved, and two files still include the old path.	ðə bˈɪld fˈAld. ɐ hˈɛdəɹ mˈuvd, ænd tˈu fˈIlz stˈɪl ɪnklˈud ði ˈOld pˈæθ.
+Fixed. The build is running again.	fˈɪkst. ðə bˈɪld ɪz ɹˈʌnɪŋ əɡˈɛn.
+The build finished in two minutes and eleven seconds.	ðə bˈɪld fˈɪnəʃt ɪn tˈu mˈɪnəts ænd əlˈɛvᵊn sˈɛkəndz.
+I'm starting the app with a scratch profile, so your own settings aren't touched.	ˌIm stˈɑɹTɪŋ ði ˈæp wɪð ɐ skɹˈæʧ pɹˈOfˌIl, sˌO jʊɹ ˈOn sˈɛTɪŋz ˌɑɹnt tˈʌʧt.
+The app is up. I'm running the scrolling test now.	ði ˈæp ɪz ˌʌp. ˌIm ɹˈʌnɪŋ ðə skɹˈOlɪŋ tˈɛst nˈW.
+Scrolling is smooth until about fifteen hundred items, then it starts to drop frames.	skɹˈOlɪŋ ɪz smˈuð ˌʌntˈɪl əbˈWt fˌɪftˈin hˈʌndɹəd ˈITəmz, ðˈɛn ɪt stˈɑɹts tə dɹˈɑp fɹˈAmz.
+I'll look at why the long list redraws every row.	ˌIl lˈʊk æt wˌI ðə lˈɔŋ lˈɪst ɹidɹˈɔz ˈɛvəɹi ɹˈO.
+Found it. Every layout pass sets the size of every row, even the ones off screen.	fˈWnd ɪt. ˈɛvəɹi lˈAˌWt pˈæs sˈɛts ðə sˈIz ʌv ˈɛvəɹi ɹˈO, ˈivən ðə wˈʌnz ˈɔf skɹˈin.
+Now only the visible rows are measured. The long list scrolls at full speed.	nˈW ˈOnli ðə vˈɪzəbᵊl ɹˈOz ɑɹ mˈɛʒəɹd. ðə lˈɔŋ lˈɪst skɹˈOlz æt fˈʊl spˈid.
+Would you like me to write that up as a task, so it doesn't get lost?	wˌʊd ju lˈIk mˌi tə ɹˈIt ðˈæt ˌʌp æz ɐ tˈæsk, sˌO ɪt dˈʌzᵊnt ɡɛt lˈɔst?
+I added the task to the board, under performance.	ˌI ˈædᵻd ðə tˈæsk tə ðə bˈɔɹd, ˈʌndəɹ pəɹfˈɔɹməns.
+I'm checking the comments on the pull request.	ˌIm ʧˈɛkɪŋ ðə kˈɑmˌɛnts ˌɔn ðə pˈʊl ɹəkwˈɛst.
+There are three comments. Two are small naming fixes, and one asks for a test.	ðˌɛɹ ɑɹ θɹˈi kˈɑmˌɛnts. tˈu ɑɹ smˈɔl nˈAmɪŋ fˈɪksᵻz, ænd wˈʌn ˈæsks fɔɹ ɐ tˈɛst.
+I made the naming fixes and added the test. I replied to each comment.	ˌI mˌAd ðə nˈAmɪŋ fˈɪksᵻz ænd ˈædᵻd ðə tˈɛst. ˌI ɹᵻplˈId tʊ ˈiʧ kˈɑmˌɛnt.
+The reviewer approved it. You can merge whenever you're ready.	ðə ɹəvjˈuəɹ əpɹˈuvd ɪt. jˌu kæn mˈɜɹʤ wənˈɛvəɹ jʊɹ ɹˈɛdi.
+Merged. I deleted the remote branch and kept the local one, as usual.	mˈɜɹʤd. ˌI dəlˈiTᵻd ðə ɹəmˈOt bɹˈænʧ ænd kˈɛpt ðə lˈOkəl wˈʌn, æz jˈuʒəwəl.
+I'm going quiet for a bit while the long build runs. I'll tell you when it's done.	ˌIm ɡˈOɪŋ kwˈIət fɔɹ ɐ bˈɪt wˌIl ðə lˈɔŋ bˈɪld ɹˈʌnz. ˌIl tˈɛl ju wˌɛn ɪts dˈʌn.
+The build is done.	ðə bˈɪld ɪz dˈʌn.
+Something went wrong, and I couldn't recover on my own. Here's what I saw.	sˈʌmθˌɪŋ wˈɛnt ɹˈɔŋ, ænd ˌI kˌʊdᵊnt ɹəkˈʌvəɹ ˌɔn mI ˈOn. hˈɪɹz wˌʌt ˌI sˈɔ.
+The speech models didn't load. The download looks incomplete.	ðə spˈiʧ mˈɑdᵊlz dˈɪdᵊnt lˈOd. ðə dˈWnlˌOd lˈʊks ˌɪnkəmplˈit.
+I can download the missing file again. It's about one hundred and twenty megabytes.	ˌI kæn dˈWnlˌOd ðə mˈɪsɪŋ fˈIl əɡˈɛn. ˌɪts əbˈWt wˈʌn hˈʌndɹəd ænd twˈɛnti mˈɛɡəbˌIts.
+The download finished, and the models loaded. Voice is back.	ðə dˈWnlˌOd fˈɪnəʃt, ænd ðə mˈɑdᵊlz lˈOdᵻd. vˈYs ɪz bˈæk.
+The microphone is muted, so I can't hear you. Unmute it when you're ready.	ðə mˈIkɹəfˌOn ɪz mjˈuTᵻd, sˌO ˌI kˈænt hˈɪɹ ju. ˌʌnmjˈut ɪt wˌɛn jʊɹ ɹˈɛdi.
+I hear some background noise. I'll wait for a clear pause before I answer.	ˌI hˈɪɹ sˌʌm bˈækɡɹˌWnd nˈYz. ˌIl wˈAt fɔɹ ɐ klˈɪɹ pˈɔz bəfˈɔɹ ˌI ˈænsəɹ.
+Okay, stopping. Tell me when you want me to continue.	ˌOkˈA, stˈɑpɪŋ. tˈɛl mˌi wˌɛn ju wˈɑnt mˌi tə kəntˈɪnju.
+Picking up where we left off: we were in the middle of the merge.	pˈɪkɪŋ ˌʌp wˌɛɹ wi lˈɛft ˈɔf: wi wɜɹ ɪn ðə mˈɪdᵊl ʌv ðə mˈɜɹʤ.
+That file is generated. Editing it by hand would be lost on the next build.	ðˈæt fˈIl ɪz ʤˈɛnəɹˌATᵻd. ˈɛdəTɪŋ ɪt bI hˈænd wʊd bi lˈɔst ˌɔn ðə nˈɛkst bˈɪld.
+The right place for that change is the template it's generated from.	ðə ɹˈIt plˈAs fɔɹ ðˈæt ʧˈAnʤ ɪz ðə tˈɛmplət ɪts ʤˈɛnəɹˌATᵻd fɹʌm.
+I changed the template and regenerated the file. The diff is two lines.	ˌI ʧˈAnʤd ðə tˈɛmplət ænd ɹiʤˈɛnəɹˌATᵻd ðə fˈIl. ðə dˈɪf ɪz tˈu lˈInz.
+I don't have permission to push to that repository. You'll need to do that one.	ˌI dˈOnt hæv pəɹmˈɪʃən tə pˈʊʃ tə ðˈæt ɹəpˈɑzətˌɔɹi. jˌul nˈid tə dˈu ðˈæt wˈʌn.
+The token expired. Please sign in again in the browser, and I'll retry.	ðə tˈOkᵊn ɪkspˈIəɹd. plˈiz sˈIn ˈɪn əɡˈɛn ɪn ðə bɹˈWzəɹ, ænd ˌIl ɹitɹˈI.
+Thanks, that worked. The push went through.	θˈæŋks, ðæt wˈɜɹkt. ðə pˈʊʃ wˈɛnt θɹˈu.
+I found three places that copy the same parsing code. I can pull them into one function.	ˌI fˈWnd θɹˈi plˈAsᵻz ðæt kˈɑpi ðə sˈAm pˈɑɹsɪŋ kˈOd. ˌI kæn pˈʊl ðˌɛm ˈɪntu wˈʌn fˈʌŋkʃən.
+That's a refactor, not a fix, so I'd put it on its own branch.	ðˈæts ɐ ɹifˈæktəɹ, nˌɑt ɐ fˈɪks, sˌO ˌId pˌʊt ɪt ˌɔn ɪts ˈOn bɹˈænʧ.
+Before I touch the installer, I want to check what the last release changed.	bəfˈɔɹ ˌI tˈʌʧ ði ɪnstˈɔləɹ, ˌI wˈɑnt tə ʧˈɛk wˌʌt ðə lˈæst ɹəlˈis ʧˈAnʤd.
+The last release added a shortcut and a file association. Nothing else.	ðə lˈæst ɹəlˈis ˈædᵻd ɐ ʃˈɔɹtkˌʌt ænd ɐ fˈIl əsˌOsiˈAʃən. nˈʌθɪŋ ˈɛls.
+I'm comparing the old and new installers now.	ˌIm kəmpˈɛɹɪŋ ði ˈOld ænd nˈu ɪnstˈɔləɹz nˈW.
+They match, apart from the version number and the new icon.	ðˌA mˈæʧ, əpˈɑɹt fɹʌm ðə vˈɜɹʒən nˈʌmbəɹ ænd ðə nˈu ˈIkˌɑn.
+The icon looks blurry at small sizes. I'll export a sixteen pixel version.	ði ˈIkˌɑn lˈʊks blˈɜɹi æt smˈɔl sˈIzᵻz. ˌIl ˈɛkspˌɔɹt ɐ sˌɪkstˈin pˈɪksᵊl vˈɜɹʒən.
+The board shows twelve open tasks. Most are small.	ðə bˈɔɹd ʃˈOz twˈɛlv ˈOpᵊn tˈæsks. mˈOst ɑɹ smˈɔl.
+The oldest one has been open for three weeks. It's about the color picker.	ði ˈOldᵻst wˈʌn hæz bɪn ˈOpᵊn fɔɹ θɹˈi wˈiks. ˌɪts əbˈWt ðə kˈʌləɹ pˈɪkəɹ.
+I can take the color picker next. It's mostly interface work.	ˌI kæn tˈAk ðə kˈʌləɹ pˈɪkəɹ nˈɛkst. ˌɪts mˈOstli ˈɪntəɹfˌAs wˈɜɹk.
+I'll keep the colors in the theme file, so they're easy to change later.	ˌIl kˈip ðə kˈʌləɹz ɪn ðə θˈim fˈIl, sˌO ðɛɹ ˈizi tə ʧˈAnʤ lˈATəɹ.
+The dark theme was missing two colors. I added them.	ðə dˈɑɹk θˈim wʌz mˈɪsɪŋ tˈu kˈʌləɹz. ˌI ˈædᵻd ðˌɛm.
+I'm switching to the light theme to check the contrast.	ˌIm swˈɪʧɪŋ tə ðə lˈIt θˈim tə ʧˈɛk ðə kˈɑntɹˌæst.
+The contrast is fine in both themes now.	ðə kˈɑntɹˌæst ɪz fˈIn ɪn bˈOθ θˈimz nˈW.
+The text on the status bar was cut off at small window sizes. It wraps now.	ðə tˈɛkst ˌɔn ðə stˈATəs bˈɑɹ wʌz kˈʌt ˈɔf æt smˈɔl wˈɪndO sˈIzᵻz. ˌɪt ɹˈæps nˈW.
+I'm going to read the error out loud, because it's short: file not found, config dot json.	ˌIm ɡˈOɪŋ tə ɹˈid ði ˈɛɹəɹ ˈWt lˈWd, bəkˈʌz ɪts ʃˈɔɹt: fˈIl nˌɑt fˈWnd, ❓ dˈɑt ❓.
+The config file is in the old folder. The app looks in the new one since the last update.	ðə ❓ fˈIl ɪz ɪn ði ˈOld fˈOldəɹ. ði ˈæp lˈʊks ɪn ðə nˈu wˈʌn sˈɪns ðə lˈæst ˈʌpdˌAt.
+I'll move it, and leave a copy in the old place until you've checked everything.	ˌIl mˈuv ɪt, ænd lˈiv ɐ kˈɑpi ɪn ði ˈOld plˈAs ˌʌntˈɪl juv ʧˈɛkt ˈɛvəɹiθˌɪŋ.
+The repository has two remotes. I'm pushing to the one called origin.	ðə ɹəpˈɑzətˌɔɹi hæz tˈu ɹəmˈOts. ˌIm pˈʊʃɪŋ tə ðə wˈʌn kˈɔld ˈɔɹəʤᵊn.
+The fetch brought in five new commits from main.	ðə fˈɛʧ bɹˈɔt ˈɪn fˈIv nˈu kəmˈɪts fɹʌm mˈAn.
+One of them touches the same file you're editing. I'll show you the overlap.	wˈʌn ʌv ðˌɛm tˈʌʧᵻz ðə sˈAm fˈIl jʊɹ ˈɛdəTɪŋ. ˌIl ʃˈO ju ði ˈOvəɹlˌæp.
+They only overlap in the comments, so the merge should be easy.	ðˌA ˈOnli ˌOvəɹlˈæp ɪn ðə kˈɑmˌɛnts, sˌO ðə mˈɜɹʤ ʃˌʊd bi ˈizi.
+Three, two, one. Starting now.	θɹˈi, tˈu, wˈʌn. stˈɑɹTɪŋ nˈW.
+That took longer than I expected, sorry about the wait.	ðˈæt tˈʊk lˈɔŋɡəɹ ðən ˌI ɪkspˈɛktᵻd, sˈɔɹi əbˈWt ðə wˈAt.
+It's fixed, but I'd like you to try it yourself before we call it done.	ˌɪts fˈɪkst, bˌʌt ˌId lˈIk ju tə tɹˈI ɪt jəɹsˈɛlf bəfˈɔɹ wi kˈɔl ɪt dˈʌn.
+You're right, I misread the requirement. I'll change it back.	jˌʊɹ ɹˈIt, ˌI mˌɪsɹˈid ðə ɹəkwˈIəɹmᵊnt. ˌIl ʧˈAnʤ ɪt bˈæk.
+I undid that change. The file is back to how it was this morning.	ˌI ˌʌndˈɪd ðˈæt ʧˈAnʤ. ðə fˈIl ɪz bˈæk tə hˌW ɪt wʌz ðɪs mˈɔɹnɪŋ.
+Let me think about that for a moment.	lˈɛt mˌi θˈɪŋk əbˈWt ðˈæt fɔɹ ɐ mˈOmᵊnt.
+There are two ways to do this. The quick one is a setting, and the proper one is a new option in the menu.	ðˌɛɹ ɑɹ tˈu wˈAz tə dˈu ðˈɪs. ðə kwˈɪk wˈʌn ɪz ɐ sˈɛTɪŋ, ænd ðə pɹˈɑpəɹ wˈʌn ɪz ɐ nˈu ˈɑpʃən ɪn ðə mˈɛnju.
+I'd go with the setting for now, and make the menu option a task for later.	ˌId ɡˌO wɪð ðə sˈɛTɪŋ fɔɹ nˈW, ænd mˌAk ðə mˈɛnju ˈɑpʃən ɐ tˈæsk fɔɹ lˈATəɹ.
+I'm writing the tests first, so we know when it works.	ˌIm ɹˈITɪŋ ðə tˈɛsts fˈɜɹst, sˌO wi nˈO wˌɛn ɪt wˈɜɹks.
+The new tests fail, as expected. Now I'll make them pass.	ðə nˈu tˈɛsts fˈAl, æz ɪkspˈɛktᵻd. nˈW ˌIl mˌAk ðˌɛm pˈæs.
+All the new tests pass, and nothing old broke.	ˈɔl ðə nˈu tˈɛsts pˈæs, ænd nˈʌθɪŋ ˈOld bɹˈOk.
+I measured it before and after. It's about three times faster.	ˌI mˈɛʒəɹd ɪt bəfˈɔɹ ænd ˈæftəɹ. ˌɪts əbˈWt θɹˈi tˈImz fˈæstəɹ.
+The first sound now comes in under a tenth of a second.	ðə fˈɜɹst sˈWnd nˈW kˈʌmz ˈɪn ˈʌndəɹ ɐ tˈɛnθ ʌv ɐ sˈɛkənd.
+I'm downloading the voice model. It's about eight megabytes.	ˌIm dˈWnlOdɪŋ ðə vˈYs mˈɑdᵊl. ˌɪts əbˈWt ˈAt mˈɛɡəbˌIts.
+The voice model is ready. You won't need to download anything else to hear me.	ðə vˈYs mˈɑdᵊl ɪz ɹˈɛdi. jˌu wOnt nˈid tə dˈWnlˌOd ˈɛniθˌɪŋ ˈɛls tə hˈɪɹ mˌi.
+If you'd like a different voice, you can pick one in settings.	ˌɪf jud lˈIk ɐ dˈɪfəɹənt vˈYs, ju kæn pˈɪk wˈʌn ɪn sˈɛTɪŋz.
+I'll keep my answers short while you're driving the session.	ˌIl kˈip mI ˈænsəɹz ʃˈɔɹt wˌIl jʊɹ dɹˈIvɪŋ ðə sˈɛʃən.
+Here's a summary of today. We fixed the crash, sped up the long list, and shipped version one point five point two.	hˈɪɹz ɐ sˈʌməɹi ʌv tədˈA. wˌi fˈɪkst ðə kɹˈæʃ, spˈɛd ˌʌp ðə lˈɔŋ lˈɪst, ænd ʃˈɪpt vˈɜɹʒən wˈʌn pˈYnt fˈIv pˈYnt tˈu.
+Tomorrow's first task is the installer. It's waiting on the signing certificate.	təmˈɑɹOz fˈɜɹst tˈæsk ɪz ði ɪnstˈɔləɹ. ˌɪts wˈATɪŋ ˌɔn ðə sˈInɪŋ səɹtˈɪfəkət.
+Good night. I'll keep the sessions where they are.	ɡˈʊd nˈIt. ˌIl kˈip ðə sˈɛʃənz wˌɛɹ ðA ɑɹ.
+Good morning. Two sessions finished overnight, and one is waiting on you.	ɡˈʊd mˈɔɹnɪŋ. tˈu sˈɛʃənz fˈɪnəʃt ˌOvəɹnˈIt, ænd wˈʌn ɪz wˈATɪŋ ˌɔn ju.
+The waiting session asks whether it can delete its scratch folder.	ðə wˈATɪŋ sˈɛʃən ˈæsks wˈɛðəɹ ɪt kæn dəlˈit ɪts skɹˈæʧ fˈOldəɹ.
+I told it yes, since the folder is inside its own worktree.	ˌI tˈOld ɪt jˈɛs, sˈɪns ðə fˈOldəɹ ɪz ɪnsˈId ɪts ˈOn ❓.
+The build machine is offline, so I'm building locally instead.	ðə bˈɪld məʃˈin ɪz ˌɔflˈIn, sˌO ˌIm bˈɪldɪŋ lˈOkəli ɪnstˈɛd.
+Local build passed. I'll run the full suite on the build machine when it's back.	lˈOkəl bˈɪld pˈæst. ˌIl ɹˈʌn ðə fˈʊl swˈit ˌɔn ðə bˈɪld məʃˈin wˌɛn ɪts bˈæk.
+The log is very long. The important part is near the end.	ðə lˈɔɡ ɪz vˈɛɹi lˈɔŋ. ði ɪmpˈɔɹtᵊnt pˈɑɹt ɪz nˌɪɹ ði ˈɛnd.
+It says the port is already in use. Another copy of the server is still running.	ˌɪt sˈɛz ðə pˈɔɹt ɪz ˌɔlɹˈɛdi ɪn jˈus. ənˈʌðəɹ kˈɑpi ʌv ðə sˈɜɹvəɹ ɪz stˈɪl ɹˈʌnɪŋ.
+I stopped the old copy. The new one started on the usual port.	ˌI stˈɑpt ði ˈOld kˈɑpi. ðə nˈu wˈʌn stˈɑɹTᵻd ˌɔn ðə jˈuʒəwəl pˈɔɹt.
+I can't find a test for that function. Want me to add one?	ˌI kˈænt fˈInd ɐ tˈɛst fɔɹ ðˈæt fˈʌŋkʃən. wˈɑnt mˌi tʊ ˈæd wˈʌn?
+Here's the plan. First the fix, then the test, then a short note in the changelog.	hˈɪɹz ðə plˈæn. fˈɜɹst ðə fˈɪks, ðˈɛn ðə tˈɛst, ðˈɛn ɐ ʃˈɔɹt nˈOt ɪn ðə ❓.
+The changelog entry reads: fixed a crash when resizing during a file load.	ði ❓ ˈɛntɹi ɹˈidz: fˈɪkst ɐ kɹˈæʃ wˌɛn ɹᵻsˈIzɪŋ dˈʊɹɪŋ ɐ fˈIl lˈOd.
+I left the old behaviour behind a setting, in case anyone depends on it.	ˌI lˈɛft ði ˈOld bəhˈAvjəɹ bəhˈInd ɐ sˈɛTɪŋ, ɪn kˈAs ˈɛniwˌʌn dəpˈɛndz ˌɔn ɪt.
+Nobody uses that setting, according to the code search. I'll remove it in the next release.	nˈObˌɑdi jˈuzᵻz ðˈæt sˈɛTɪŋ, əkˈɔɹdɪŋ tə ðə kˈOd sˈɜɹʧ. ˌIl ɹəmˈuv ɪt ɪn ðə nˈɛkst ɹəlˈis.
+The help page still shows the old screenshot. I'll take a new one.	ðə hˈɛlp pˈAʤ stˈɪl ʃˈOz ði ˈOld skɹˈinʃˌɑt. ˌIl tˈAk ɐ nˈu wˈʌn.
+New screenshot taken, with a scratch repository so nothing private shows up.	nˈu skɹˈinʃˌɑt tˈAkən, wɪð ɐ skɹˈæʧ ɹəpˈɑzətˌɔɹi sˌO nˈʌθɪŋ pɹˈIvət ʃˈOz ˌʌp.
+I'm opening the pull request for the documentation.	ˌIm ˈOpᵊnɪŋ ðə pˈʊl ɹəkwˈɛst fɔɹ ðə dˌɑkjəməntˈAʃən.
+The documentation build passed. The links all resolve.	ðə dˌɑkjəməntˈAʃən bˈɪld pˈæst. ðə lˈɪŋks ˈɔl ɹəzˈɔlv.
+Quick question: should the new shortcut be control shift K, or control K?	kwˈɪk kwˈɛsʧᵊn: ʃˌʊd ðə nˈu ʃˈɔɹtkˌʌt bi kəntɹˈOl ʃˈɪft kˈA, ɔɹ kəntɹˈOl kˈA?
+Control shift K it is. Control K is already taken by the search.	kəntɹˈOl ʃˈɪft kˈA ɪt ɪz. kəntɹˈOl kˈA ɪz ˌɔlɹˈɛdi tˈAkən bI ðə sˈɜɹʧ.
+I noticed the font is slightly different on Linux. It falls back to a system font.	ˌI nˈOTəst ðə fˈɑnt ɪz slˈItli dˈɪfəɹənt ˌɔn lˈɪnəks. ˌɪt fˈɔlz bˈæk tə ɐ sˈɪstəm fˈɑnt.
+I bundled the font, so it looks the same everywhere.	ˌI bˈʌndᵊld ðə fˈɑnt, sˌO ɪt lˈʊks ðə sˈAm ˈɛvɹiwˌɛɹ.
+The archive is twenty megabytes, which is fine for a download.	ði ˈɑɹkˌIv ɪz twˈɛnti mˈɛɡəbˌIts, wˌɪʧ ɪz fˈIn fɔɹ ɐ dˈWnlˌOd.
+I'm checking that the Windows and Linux packages have the same files.	ˌIm ʧˈɛkɪŋ ðæt ðə wˈɪndOz ænd lˈɪnəks pˈækɪʤᵻz hæv ðə sˈAm fˈIlz.
+They match, apart from the executable names.	ðˌA mˈæʧ, əpˈɑɹt fɹʌm ði ˈɛksəkjˌuTəbᵊl nˈAmz.
+On the Mac build, the window opened behind the others. I'll bring it to the front on launch.	ˌɔn ðə mˈæk bˈɪld, ðə wˈɪndO ˈOpᵊnd bəhˈInd ði ˈʌðəɹz. ˌIl bɹˈɪŋ ɪt tə ðə fɹˈʌnt ˌɔn lˈɔnʧ.
+Fixed. It comes to the front now.	fˈɪkst. ˌɪt kˈʌmz tə ðə fɹˈʌnt nˈW.
+That's a lot of changes for one pull request. I'd split it into three.	ðˈæts ɐ lˈɑt ʌv ʧˈAnʤᵻz fɔɹ wˈʌn pˈʊl ɹəkwˈɛst. ˌId splˈɪt ɪt ˈɪntu θɹˈi.
+The first one is the refactor, the second is the fix, and the third is the new option.	ðə fˈɜɹst wˈʌn ɪz ðə ɹifˈæktəɹ, ðə sˈɛkənd ɪz ðə fˈɪks, ænd ðə θˈɜɹd ɪz ðə nˈu ˈɑpʃən.
+Each one builds and passes on its own.	ˈiʧ wˈʌn bˈɪldz ænd pˈæsᵻz ˌɔn ɪts ˈOn.
+I've sent all three for review, in order.	ˌIv sˈɛnt ˈɔl θɹˈi fɔɹ ɹəvjˈu, ɪn ˈɔɹdəɹ.
+The first two are merged. The third is waiting on one comment.	ðə fˈɜɹst tˈu ɑɹ mˈɜɹʤd. ðə θˈɜɹd ɪz wˈATɪŋ ˌɔn wˈʌn kˈɑmˌɛnt.
+The comment asked for a better name. I renamed it to show hidden files.	ðə kˈɑmˌɛnt ˈæskt fɔɹ ɐ bˈɛTəɹ nˈAm. ˌI ɹinˈAmd ɪt tə ʃˈO hˈɪdᵊn fˈIlz.
+Merged. That's the last of the three.	mˈɜɹʤd. ðˈæts ðə lˈæst ʌv ðə θɹˈi.
+I'm watching the checks. I'll tell you as soon as they finish.	ˌIm wˈɑʧɪŋ ðə ʧˈɛks. ˌIl tˈɛl ju æz sˈun æz ðA fˈɪnəʃ.
+The checks finished. Everything is green.	ðə ʧˈɛks fˈɪnəʃt. ˈɛvəɹiθˌɪŋ ɪz ɡɹˈin.
+I'll stop here, unless there's something else you want tonight.	ˌIl stˈɑp hˈɪɹ, ənlˈɛs ðɛɹz sˈʌmθˌɪŋ ˈɛls ju wˈɑnt tənˈIt.
+1998	nˌIntˈin nˈIndi ˈAt
+2015	twˈɛnti fˌɪftˈin
+2005	tˈu θˈWzᵊnd fˈIv
+1900	nˌIntˈin hˈʌndɹəd
+2000	tˈu θˈWzᵊnd
+21st	twˈɛnti fˈɜɹst
+1.5.2	wˈʌn fˈIv tˈu
+$5	fˈIv dˈɑləɹz
+$3.50	θɹˈi dˈɑləɹz ænd fˈɪfti sˈɛnts
+42	fˈɔɹTi tˈu
+-7	
+100%	wˈʌn hˈʌndɹəd pəɹsˈɛnt
+3.14	θɹˈi pYnt wˈʌn fˈɔɹ
+1,000 people	wˈʌn θˈWzᵊnd pˈipᵊl
+It cost $1,250.	ˌɪt kˈɔst wˈʌn θˈWzᵊnd tˈu hˈʌndɹəd fˈɪfti dˈɑləɹz.
+In 1066, the Normans came.	ɪn tˈɛn sˈɪksti sˈɪks, ðə nˈɔɹmᵊnz kˈAm.
+I've	ˌIv
+don't	dˈOnt
+it's	ɪts
+you'll	jul
+they're	ðɛɹ
+files'	fˈIlz
+the file's name	ðə fˈIlz nˈAm
+e.g. this one	ˌiʤˈi ðɪs wˈʌn
+the U.S. army	ðə jˌuˈɛs ˈɑɹmi
+Mr. Smith	mˈɪstəɹ smˈɪθ
+Dr. Jones	dˈɑktəɹ ʤˈOnz
+camelCase	kˈæmᵊlkˌAs
+HTTPServer	❓
+well-known	wˌɛlnˈOn
+re-run the tests	ɹˌiɹˈʌn ðə tˈɛsts
+an A/B test	ɐn ˈA bˈi tˈɛst
+the 2nd time	ðə sˈɛkənd tˈIm
+Use it, then use it again.	jˈuz ɪt, ðˈɛn jˈuz ɪt əɡˈɛn.
+The API and the UI	ði ˌApˌiˈI ænd ðə jˌuˈI
+Read the README.	ɹˈid ði ˌɑɹˌiˌAdˌiˌɛmˈi.
+He read it yesterday.	hˌi ɹˈɛd ɪt jˈɛstəɹdˌA.
+Plan A failed.	plˈæn ˈA fˈAld.
+A cat sat.	ɐ kˈæt sˈæt.
+that's that	ðˈæts ðæt
+So that's it.	sˌO ðˈæts ɪt.
+in 3 days	ɪn θɹˈi dˈAz
+about 22 minutes	əbˈWt twˈɛnti tˈu mˈɪnəts
+The old lighthouse keeper climbed the spiral stairs every evening to light the great lamp.	ði ˈOld lˈIthˌWs kˈipəɹ klˈImd ðə spˈIɹəl stˈɛɹz ˈɛvəɹi ˈivnɪŋ tə lˈIt ðə ɡɹˈAt lˈæmp.
+Although the forecast promised sunshine, a cold wind blew in from the north by noon.	ɔlðˈO ðə fˈɔɹkˌæst pɹˈɑməst sˈʌnʃˌIn, ɐ kˈOld wˈɪnd blˈu ˈɪn fɹʌm ðə nˈɔɹθ bI nˈun.
+She carefully wrapped the fragile vase in newspaper before placing it in the box.	ʃˌi kˈɛɹfᵊli ɹˈæpt ðə fɹˈæʤəl vˈAs ɪn nˈuzpˌApəɹ bəfˈɔɹ plˈAsɪŋ ɪt ɪn ðə bˈɑks.
+The committee will review every application and announce its decision next month.	ðə kəmˈɪTi wɪl ɹəvjˈu ˈɛvəɹi ˌæpləkˈAʃən ænd ənˈWns ɪts dəsˈɪʒᵊn nˈɛkst mˈʌnθ.
+After the concert, the musicians gathered backstage to celebrate their final performance.	ˈæftəɹ ðə kˈɑnsəɹt, ðə mjuzˈɪʃənz ɡˈæðəɹd bˌækstˈAʤ tə sˈɛləbɹˌAt ðɛɹ fˈInᵊl pəɹfˈɔɹməns.
+Scientists believe the ancient river once flowed through what is now a dry desert valley.	sˈIəntɪsts bəlˈiv ði ˈAnʧənt ɹˈɪvəɹ wˈʌns flˈOd θɹu wˌʌt ɪz nˈW ɐ dɹˈI dˈɛzəɹt vˈæli.
+If you leave the bread in the oven too long, the crust turns dark and bitter.	ˌɪf ju lˈiv ðə bɹˈɛd ɪn ði ˈʌvᵊn tˈu lˈɔŋ, ðə kɹˈʌst tˈɜɹnz dˈɑɹk ænd bˈɪTəɹ.
+The museum's newest exhibit features paintings that were hidden for nearly a century.	ðə mjuzˈiəmz nˈuᵻst ɪɡzˈɪbət fˈiʧəɹz pˈAntɪŋz ðæt wɜɹ hˈɪdᵊn fɔɹ nˈɪɹli ɐ sˈɛnʧəɹi.
+He apologized for the delay and promised that the package would arrive on Thursday.	hˌi əpˈɑləʤˌIzd fɔɹ ðə dəlˈA ænd pɹˈɑməst ðæt ðə pˈækɪʤ wʊd əɹˈIv ˌɔn θˈɜɹzdˌA.
+Our neighbors planted tomatoes, peppers and herbs along the sunny side of the fence.	ˌWəɹ nˈAbəɹz plˈæntᵻd təmˈATOz, pˈɛpəɹz ænd ˈɜɹbz əlˈɔŋ ðə sˈʌni sˈId ʌv ðə fˈɛns.
+The library extended its hours during exam week so students could study late.	ðə lˈIbɹˌɛɹi ɪkstˈɛndᵻd ɪts ˈWəɹz dˈʊɹɪŋ ɪɡzˈæm wˈik sˌO stˈudᵊnts kʊd stˈʌdi lˈAt.
+Several witnesses described a bright light moving slowly across the night sky.	sˈɛvəɹəl wˈɪtnəsᵻz dəskɹˈIbd ɐ bɹˈIt lˈIt mˈuvɪŋ slˈOli əkɹˈɔs ðə nˈIt skˈI.
+Before the bridge was built, travelers had to cross the river by ferry.	bəfˈɔɹ ðə bɹˈɪʤ wʌz bˈɪlt, tɹˈævᵊləɹz hæd tə kɹˈɔs ðə ɹˈɪvəɹ bI fˈɛɹi.
+The recipe calls for two cups of flour, a pinch of salt and three eggs.	ðə ɹˈɛsəpˌi kˈɔlz fɔɹ tˈu kˈʌps ʌv flˈWəɹ, ɐ pˈɪnʧ ʌv sˈɔlt ænd θɹˈi ˈɛɡz.
+Despite the rain, thousands of runners lined up for the start of the marathon.	dəspˈIt ðə ɹˈAn, θˈWzᵊndz ʌv ɹˈʌnəɹz lˈInd ˌʌp fɔɹ ðə stˈɑɹt ʌv ðə mˈɛɹəθˌɑn.
+The engineer explained why the original design failed under heavy loads.	ði ˌɛnʤənˈɪɹ ɪksplˈAnd wˌI ði əɹˈɪʤənᵊl dəzˈIn fˈAld ˈʌndəɹ hˈɛvi lˈOdz.
+Children laughed as the puppy chased its own tail around the garden.	ʧˈɪldɹᵊn lˈæft æz ðə pˈʌpi ʧˈAst ɪts ˈOn tˈAl əɹˈWnd ðə ɡˈɑɹdən.
+The treaty was signed in the spring, ending years of uncertainty along the border.	ðə tɹˈiTi wʌz sˈInd ɪn ðə spɹˈɪŋ, ˈɛndɪŋ jˈɪɹz ʌv ˌʌnsˈɜɹtᵊnti əlˈɔŋ ðə bˈɔɹdəɹ.
+Whenever the power goes out, we light candles and play cards at the kitchen table.	wənˈɛvəɹ ðə pˈWəɹ ɡˈOz ˈWt, wi lˈIt kˈændᵊlz ænd plˈA kˈɑɹdz æt ðə kˈɪʧᵊn tˈAbᵊl.
+The professor's lecture on volcanoes drew a larger crowd than anyone expected.	ðə pɹəfˈɛsəɹz lˈɛkʧəɹ ˌɔn vɑlkˈAnOz dɹˈu ɐ lˈɑɹʤəɹ kɹˈWd ðən ˈɛniwˌʌn ɪkspˈɛktᵻd.
+A small bakery on the corner sells the best cinnamon rolls in town.	ɐ smˈɔl bˈAkəɹi ˌɔn ðə kˈɔɹnəɹ sˈɛlz ðə bˈɛst sˈɪnəmən ɹˈOlz ɪn tˈWn.
+The pilot announced that we would land twenty minutes ahead of schedule.	ðə pˈIlət ənˈWnst ðæt wi wʊd lˈænd twˈɛnti mˈɪnəts əhˈɛd ʌv skˈɛʤˌul.
+They spent the weekend repainting the fence and fixing the broken gate.	ðˌA spˈɛnt ðə wˈikˌɛnd ɹᵻpˈAntɪŋ ðə fˈɛns ænd fˈɪksɪŋ ðə bɹˈOkən ɡˈAt.
+The novel follows a young sailor who discovers a map to a forgotten island.	ðə nˈɑvᵊl fˈɑlOz ɐ jˈʌŋ sˈAləɹ hˌu dəskˈʌvəɹz ɐ mˈæp tə ɐ fəɹɡˈɑtn ˈIlənd.
+Without enough water, the crops withered and the harvest was smaller than usual.	wɪðˈWt ɪnˈʌf wˈɔTəɹ, ðə kɹˈɑps wˈɪðəɹd ænd ðə hˈɑɹvəst wʌz smˈɔləɹ ðən jˈuʒəwəl.
+The orchestra rehearsed the symphony twice before the opening night.	ði ˈɔɹkəstɹə ɹəhˈɜɹst ðə sˈɪmfəni twˈIs bəfˈɔɹ ði ˈOpᵊnɪŋ nˈIt.
+Her grandmother kept every letter she had ever received in a wooden chest.	hˌɜɹ ɡɹˈændmˌʌðəɹ kˈɛpt ˈɛvəɹi lˈɛTəɹ ʃi hæd ˈɛvəɹ ɹəsˈivd ɪn ɐ wˈʊdᵊn ʧˈɛst.
+The city plans to replace the aging buses with quieter electric ones.	ðə sˈɪTi plˈænz tə ɹəplˈAs ði ˈAʤɪŋ bˈʌsᵻz wɪð kwˈIəTəɹ əlˈɛktɹɪk wˈʌnz.
+Most of the guests left early, but a few stayed to help clean up.	mˈOst ʌv ðə ɡˈɛsts lˈɛft ˈɜɹli, bˌʌt ɐ fjˈu stˈAd tə hˈɛlp klˈin ˌʌp.
+The hikers reached the summit just as the clouds parted to reveal the valley below.	ðə hˈIkəɹz ɹˈiʧt ðə sˈʌmət ʤˈʌst æz ðə klˈWdz pˈɑɹTᵻd tə ɹəvˈil ðə vˈæli bəlˈO.

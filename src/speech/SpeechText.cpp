@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <random>
 
 namespace gitgud::speech
 {
@@ -355,6 +356,69 @@ namespace gitgud::speech
                 nfade > 1 ? 1.0f - static_cast<float>(ni) / static_cast<float>(nfade - 1) : 0.0f;
         }
         return fcut;
+    }
+
+    void Roughen(std::vector<float>& _Samples, int _iRate, double _fAmount, double _fLowHz,
+        double _fHighHz, unsigned _uSeed)
+    {
+        if (_Samples.empty() || _fAmount <= 0.0 || _iRate <= 0 || _fLowHz <= 0.0 ||
+            _fHighHz <= _fLowHz || _fHighHz >= _iRate / 2.0)
+        {
+            return;
+        }
+        std::mt19937 rng(_uSeed);
+        std::normal_distribution<double> gauss(0.0, 1.0);
+        std::vector<double> mod(_Samples.size());
+        for (double& f : mod)
+        {
+            f = gauss(rng);
+        }
+        // A band-pass biquad (0 dB peak) at the band's middle, twice, run
+        // forward and then backward.
+        const double fcentre = std::sqrt(_fLowHz * _fHighHz);
+        const double fq = fcentre / (_fHighHz - _fLowHz);
+        const double fw = 2.0 * 3.14159265358979323846 * fcentre / _iRate;
+        const double falpha = std::sin(fw) / (2.0 * fq);
+        const double fa0 = 1.0 + falpha;
+        const double fb0 = falpha / fa0;
+        const double fb2 = -falpha / fa0;
+        const double fa1 = -2.0 * std::cos(fw) / fa0;
+        const double fa2 = (1.0 - falpha) / fa0;
+        auto pass = [&](bool _bBackward)
+        {
+            double fx1 = 0.0, fx2 = 0.0, fy1 = 0.0, fy2 = 0.0;
+            const std::size_t ncount = mod.size();
+            for (std::size_t nk = 0; nk < ncount; ++nk)
+            {
+                double& f = mod[_bBackward ? ncount - 1 - nk : nk];
+                const double fy = fb0 * f + fb2 * fx2 - fa1 * fy1 - fa2 * fy2;
+                fx2 = fx1;
+                fx1 = f;
+                fy2 = fy1;
+                fy1 = fy;
+                f = fy;
+            }
+        };
+        for (int ipass = 0; ipass < 2; ++ipass)
+        {
+            pass(false);
+            pass(true);
+        }
+        double fsum = 0.0;
+        for (double f : mod)
+        {
+            fsum += f * f;
+        }
+        const double fstd = std::sqrt(fsum / static_cast<double>(mod.size()));
+        if (fstd <= 0.0)
+        {
+            return;
+        }
+        for (std::size_t ni = 0; ni < _Samples.size(); ++ni)
+        {
+            const double fgain = std::max(0.0, 1.0 + _fAmount * mod[ni] / fstd);
+            _Samples[ni] = static_cast<float>(_Samples[ni] * fgain);
+        }
     }
 
 } // namespace gitgud::speech

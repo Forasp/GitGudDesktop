@@ -4,8 +4,8 @@
 // SpeechText: text and audio shaping for spoken replies, as the voice server
 // did it: sentences (a long first one cut at a clause, so audio starts
 // sooner), punctuation the cloning model reads well, a pitch-keeping time
-// stretch (WSOLA), and the trim of a stray sound the model sometimes adds
-// after a sentence.
+// stretch (WSOLA), the trim of a stray sound the model sometimes adds after
+// a sentence, and the small voice's light roughness.
 // -----------------------------------------------------------------------------
 
 #include <string>
@@ -40,5 +40,12 @@ namespace gitgud::speech
     // a short last clause, else 0.3 s), in audio longer than the text needs.
     // Returns the seconds cut.
     double TrimStrayTail(std::vector<float>& _Samples, int _iRate, const std::string& _Sentence);
+
+    // Roughness: `_Samples` with their loudness fluttering at random by
+    // `_fAmount` (0.15 is light), from noise band-passed to `_fLowHz` to
+    // `_fHighHz` (run forward and back, so it adds no delay), as a rough
+    // voice wavers. The same `_uSeed` gives the same flutter.
+    void Roughen(std::vector<float>& _Samples, int _iRate, double _fAmount, double _fLowHz,
+        double _fHighHz, unsigned _uSeed);
 
 } // namespace gitgud::speech

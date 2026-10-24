@@ -5,6 +5,7 @@
 #include "speech/Gpt2Tokenizer.h"
 #include "speech/Listener.h"
 #include "speech/SherpaApi.h"
+#include "speech/SmallVoice.h"
 #include "speech/SpeechText.h"
 #include "speech/Text.h"
 #include "speech/Turbo.h"
@@ -309,9 +310,10 @@ namespace gitgud::speech
     {
 
         // The speak channel: says spoken one at a time on a thread of its own,
-        // sentence by sentence: a "turbo:<name>" voice with Turbo on the
-        // engine's speaking thread, any other with the system's voices (also
-        // when Turbo isn't set up: `start` then says why in `fallback`).
+        // sentence by sentence: a "small:<name>" voice (its text is phonemes)
+        // and a "turbo:<name>" voice on the engine's speaking thread, any
+        // other with the system's voices (also when the voice named isn't set
+        // up: `start` then says why in `fallback`).
         class SpeakLink : public voice::ILink
         {
           public:
@@ -363,6 +365,13 @@ namespace gitgud::speech
                     say.m_Text = (*parsed)["text"].AsString();
                     say.m_Voice = (*parsed)["voice"].AsString();
                     say.m_fSpeed = (*parsed)["speed"].AsNumber(1.0);
+                    // A small voice's playback: the rate it plays at, the
+                    // pitch wobble, and the roughness with its band (Lua's).
+                    say.m_iRate = static_cast<int>((*parsed)["sampleRate"].AsInt(0));
+                    say.m_fWobble = (*parsed)["wobble"].AsNumber(0.0);
+                    say.m_fRough = (*parsed)["rough"].AsNumber(0.0);
+                    say.m_fRoughLow = (*parsed)["roughLow"].AsNumber(30.0);
+                    say.m_fRoughHigh = (*parsed)["roughHigh"].AsNumber(80.0);
                     if (id.empty() || id.size() > 64 || say.m_Text.size() > kMaxSayBytes ||
                         m_Says.size() >= kMaxSays)
                     {
@@ -455,6 +464,11 @@ namespace gitgud::speech
                 std::string m_Text;
                 std::string m_Voice;
                 double m_fSpeed = 1.0;
+                int m_iRate = 0; // small voices: 0 is the model's own rate
+                double m_fWobble = 0.0;
+                double m_fRough = 0.0;
+                double m_fRoughLow = 30.0;
+                double m_fRoughHigh = 80.0;
             };
 
             void Send(const Json& _Message)
@@ -523,6 +537,26 @@ namespace gitgud::speech
                     {
                         say.m_Voice = m_pEngine->DefaultMadeVoice();
                     }
+                    if (say.m_Voice.rfind("small:", 0) == 0)
+                    {
+                        if (m_pEngine && m_pEngine->SmallConfigured() &&
+                            !m_pEngine->State().m_bFaulted)
+                        {
+                            SpeakSmall(say);
+                            std::lock_guard<std::mutex> lock(m_Mutex);
+                            m_CurrentId.clear();
+                            continue;
+                        }
+                        // Its text is phonemes: a system voice can't read it.
+                        Send(ErrorMessage(
+                            "tts", m_pEngine && m_pEngine->State().m_bFaulted
+                                       ? "the speech engine stopped after an internal error"
+                                       : "the built-in voice isn't set up")
+                                .Set("id", say.m_Id));
+                        std::lock_guard<std::mutex> lock(m_Mutex);
+                        m_CurrentId.clear();
+                        continue;
+                    }
                     if (say.m_Voice.rfind("turbo:", 0) == 0)
                     {
                         if (m_pEngine && m_pEngine->TurboConfigured() &&
@@ -575,6 +609,7 @@ namespace gitgud::speech
                         std::condition_variable m_Done;
                         bool m_bDone = false;
                     };
+
                     auto pready = std::make_shared<Ready>();
                     m_pEngine->WarmTurbo(
                         [pready]()
@@ -677,6 +712,102 @@ namespace gitgud::speech
                         .Set("id", _Say.m_Id));
             }
 
+            // A small voice: its text is phonemes, said a sentence at a time
+            // on the engine's speaking thread, played at the say's rate (a
+            // lower one than the model's deepens the voice), with roughness.
+            void SpeakSmall(const Say& _Say)
+            {
+                const int irate = _Say.m_iRate > 0 ? _Say.m_iRate : kSmallVoiceRate;
+                Send(Json::Object()
+                        .Set("type", "start")
+                        .Set("id", _Say.m_Id)
+                        .Set("sampleRate", irate)
+                        .Set("provider", "small"));
+                const std::string name = _Say.m_Voice.substr(std::strlen("small:"));
+                // The roughness band is in played Hz; the audio is still at the model's rate.
+                const double fscale = static_cast<double>(kSmallVoiceRate) / irate;
+                unsigned useed = 7;
+                for (const std::string& sentence : SplitForSpeech(_Say.m_Text))
+                {
+                    if (Stopping())
+                    {
+                        break;
+                    }
+
+                    struct Result
+                    {
+                        std::mutex m_Mutex;
+                        std::condition_variable m_Done;
+                        bool m_bDone = false;
+                        bool m_bOk = false;
+                        std::vector<float> m_Audio;
+                        std::string m_Error;
+                    };
+
+                    auto presult = std::make_shared<Result>();
+                    LocalEngine* pengine = m_pEngine;
+                    const double fspeed = _Say.m_fSpeed;
+                    const double fwobble = _Say.m_fWobble;
+                    pengine->PostSpeak(
+                        [pengine, presult, sentence, name, fspeed, fwobble]()
+                        {
+                            std::vector<float> audio;
+                            std::string error;
+                            const bool bok =
+                                pengine->SmallSay(sentence, name, fspeed, fwobble, audio, error);
+                            std::lock_guard<std::mutex> lock(presult->m_Mutex);
+                            presult->m_bOk = bok;
+                            presult->m_Audio = std::move(audio);
+                            presult->m_Error = error;
+                            presult->m_bDone = true;
+                            presult->m_Done.notify_all();
+                        });
+                    bool bdone = false;
+                    {
+                        std::unique_lock<std::mutex> lock(presult->m_Mutex);
+                        while (!presult->m_bDone)
+                        {
+                            presult->m_Done.wait_for(lock, 100ms);
+                            if (presult->m_bDone || Stopping() || pengine->State().m_bFaulted)
+                            {
+                                break;
+                            }
+                        }
+                        bdone = presult->m_bDone;
+                    }
+                    if (Stopping())
+                    {
+                        break;
+                    }
+                    if (!bdone || !presult->m_bOk)
+                    {
+                        Send(ErrorMessage(
+                            "tts", bdone ? presult->m_Error : "the speech engine stopped")
+                                .Set("id", _Say.m_Id));
+                        return;
+                    }
+                    std::vector<float>& audio = presult->m_Audio;
+                    Roughen(audio, kSmallVoiceRate, _Say.m_fRough, _Say.m_fRoughLow * fscale,
+                        _Say.m_fRoughHigh * fscale, useed++);
+                    std::string pcm(audio.size() * 2, '\0');
+                    for (std::size_t ni = 0; ni < audio.size(); ++ni)
+                    {
+                        const float f = std::max(-1.0f, std::min(1.0f, audio[ni]));
+                        const int16_t s = static_cast<int16_t>(std::lround(f * 32767.0f));
+                        pcm[2 * ni] = static_cast<char>(s & 0xFF);
+                        pcm[2 * ni + 1] = static_cast<char>((s >> 8) & 0xFF);
+                    }
+                    const std::size_t npiece = static_cast<std::size_t>(irate) / 10 * 2;
+                    for (std::size_t nat = 0; nat < pcm.size() && !Stopping(); nat += npiece)
+                    {
+                        SendPcm(pcm.substr(nat, npiece));
+                    }
+                }
+                Send(Json::Object()
+                        .Set("type", Stopping() ? "stopped" : "end")
+                        .Set("id", _Say.m_Id));
+            }
+
             void Speak(ITextToSpeech& _Speech, const Say& _Say, const std::string& _Fallback)
             {
                 Json start = Json::Object()
@@ -756,7 +887,12 @@ namespace gitgud::speech
         {
             std::lock_guard<std::mutex> lock(m_Mutex);
             m_Tasks.push_back([this]() { Unload(); });
-            m_SpeakTasks.push_back([this]() { UnloadTurbo(); });
+            m_SpeakTasks.push_back(
+                [this]()
+                {
+                    UnloadTurbo();
+                    UnloadSmall();
+                });
             m_bQuit = true;
         }
         m_Wake.notify_all();
@@ -842,6 +978,7 @@ namespace gitgud::speech
                 [this, pspoken]()
                 {
                     UnloadTurbo();
+                    UnloadSmall();
                     pspoken->store(true);
                 });
         }
@@ -953,12 +1090,19 @@ namespace gitgud::speech
                     {static_cast<std::uint64_t>(file["size"].AsNumber()), sha}});
             }
         }
+        const Json& small = _Settings["small"];
+        if (!small.IsNull() && (!small.IsObject() || small["voicesDir"].AsString().empty()))
+        {
+            _Error = "small needs voicesDir";
+            return false;
+        }
         std::lock_guard<std::mutex> lock(m_Mutex);
         m_Config = std::move(config);
         m_Files = std::move(files);
         m_GpuDir = _Settings["gpuDir"].AsString();
         m_Tts = tts.IsObject() ? tts : Json();
         m_TtsFiles = std::move(ttsFiles);
+        m_Small = small.IsObject() ? small : Json();
         m_bConfigured = true;
         return true;
     }
@@ -1006,6 +1150,12 @@ namespace gitgud::speech
     {
         std::lock_guard<std::mutex> lock(m_Mutex);
         return m_Tts.IsObject();
+    }
+
+    bool LocalEngine::SmallConfigured() const
+    {
+        std::lock_guard<std::mutex> lock(m_Mutex);
+        return m_Small.IsObject();
     }
 
     std::unique_ptr<voice::ILink> LocalEngine::MakeLink(const std::string& _Channel)
@@ -1217,6 +1367,10 @@ namespace gitgud::speech
             if (m_bFaulted.load() && m_pTurbo)
             {
                 UnloadTurbo(); // leaks its handles once faulted
+            }
+            if (m_bFaulted.load() && m_pSmall)
+            {
+                UnloadSmall(); // the same
             }
         }
     }
@@ -2029,6 +2183,140 @@ namespace gitgud::speech
         char abuf[160];
         std::snprintf(abuf, sizeof(abuf), "speak: %d tokens, %.2f s of audio in %.0f ms%s",
             turbo.m_pSynth->LastTokens(), static_cast<double>(_Audio.size()) / kTurboRate, fms,
+            bok ? "" : " (failed)");
+        Log(abuf);
+        if (!bok && !m_SpeakException.empty())
+        {
+            _Error += " (" + m_SpeakException + ")";
+        }
+        return bok;
+    }
+
+    // ---- Small voices (speaking thread) -------------------------------------------
+
+    struct LocalEngine::SmallState
+    {
+        std::map<std::string, std::unique_ptr<SmallVoice>> m_Voices;
+        std::map<std::string, std::string> m_LoadErrors; // a failed load, until the settings change
+        std::string m_LoadedFrom;                        // the settings they loaded with
+    };
+
+    bool LocalEngine::PrepareSmall(std::string& _Error)
+    {
+        TakeLastCrash(); // before the marker is reused
+        if (!m_bSpeakMarkerOpen)
+        {
+            m_bSpeakMarkerOpen =
+                m_SpeakMarker.Open((fs::u8path(m_StateDir) / "voice-state-speak").u8string());
+        }
+        {
+            std::lock_guard<std::mutex> lock(m_LogMutex);
+            OpenLog();
+        }
+        return LoadSherpa(m_LibraryDir, _Error);
+    }
+
+    void LocalEngine::UnloadSmall()
+    {
+        if (!m_pSmall)
+        {
+            return;
+        }
+        if (m_bFaulted.load())
+        {
+            for (auto& entry : m_pSmall->m_Voices)
+            {
+                entry.second->SetPoisoned();
+            }
+        }
+        m_pSmall.reset();
+    }
+
+    bool LocalEngine::SmallSay(const std::string& _Phonemes, const std::string& _Name,
+        double _fSpeed, double _fWobble, std::vector<float>& _Audio, std::string& _Error)
+    {
+        if (m_bFaulted.load())
+        {
+            _Error = "the speech engine stopped after an internal error";
+            return false;
+        }
+        Json small;
+        {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            small = m_Small;
+        }
+        if (!small.IsObject())
+        {
+            _Error = "the built-in voice isn't set up";
+            return false;
+        }
+        if (!ValidVoiceName(_Name))
+        {
+            _Error = "no voice called " + _Name;
+            return false;
+        }
+        const std::string settings = small.Dump();
+        if (m_pSmall && m_pSmall->m_LoadedFrom != settings)
+        {
+            UnloadSmall(); // the settings changed: load again
+        }
+        if (!m_pSmall)
+        {
+            m_pSmall = std::make_unique<SmallState>();
+            m_pSmall->m_LoadedFrom = settings;
+        }
+        SmallState& state = *m_pSmall;
+        auto failed = state.m_LoadErrors.find(_Name);
+        if (failed != state.m_LoadErrors.end())
+        {
+            _Error = failed->second;
+            return false;
+        }
+        auto it = state.m_Voices.find(_Name);
+        if (it == state.m_Voices.end())
+        {
+            std::string error;
+            if (!PrepareSmall(error))
+            {
+                _Error = error;
+                Log("speak: " + error);
+                return false;
+            }
+            const int ithreads = static_cast<int>(
+                std::min<int64_t>(16, std::max<int64_t>(1, small["threads"].AsInt(2))));
+            const auto t0 = std::chrono::steady_clock::now();
+            auto pvoice = std::make_unique<SmallVoice>(
+                (fs::u8path(small["voicesDir"].AsString()) / fs::u8path(_Name)).u8string(),
+                ithreads,
+                [this](const char* _szName, std::chrono::milliseconds _Limit,
+                    const std::function<void()>& _Fn) { return Call(_szName, _Limit, _Fn); });
+            if (!pvoice->Load(error))
+            {
+                if (m_bFaulted.load())
+                {
+                    pvoice->SetPoisoned();
+                }
+                error += m_SpeakException.empty() ? std::string() : " (" + m_SpeakException + ")";
+                state.m_LoadErrors[_Name] = error;
+                _Error = error;
+                Log("speak: the small voice " + _Name + " didn't load: " + error);
+                return false;
+            }
+            Log("speak: small voice " + _Name + " loaded in " +
+                std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - t0)
+                        .count()) +
+                " ms");
+            it = state.m_Voices.emplace(_Name, std::move(pvoice)).first;
+        }
+        const auto t0 = std::chrono::steady_clock::now();
+        const bool bok = it->second->Say(_Phonemes, _fSpeed, _fWobble, _Audio, _Error);
+        const double fms =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                .count();
+        char abuf[160];
+        std::snprintf(abuf, sizeof(abuf), "speak: %zu phonemes, %.2f s of audio in %.0f ms%s",
+            it->second->LastIds(), static_cast<double>(_Audio.size()) / kSmallVoiceRate, fms,
             bok ? "" : " (failed)");
         Log(abuf);
         if (!bok && !m_SpeakException.empty())

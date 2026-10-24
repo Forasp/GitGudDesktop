@@ -409,14 +409,14 @@ end)
 step(600, "Baldr, on the processor", function()
     check("Baldr was made once, from the interface's recording", #made == 1 and made[1].name == "baldr"
         and made[1].wav:find("voices[/\\]baldr[/\\]ref%.wav$") ~= nil)
-    check("Baldr is the voice for replies", voicemodels.voices()[1] ~= nil
+    check("Baldr is the first made voice", voicemodels.voices()[1] ~= nil
         and voicemodels.voices()[1].id == "turbo:baldr")
     check("without being chosen", settings.get("bragi.voice", "") == "")
     check("Turbo set up on the processor", #setups > 0 and setups[#setups].tts ~= nil
         and setups[#setups].tts.provider == "cpu" and setups[#setups].tts.threads == 8
         and setups[#setups].gpuDir == nil)
     check("its card says so", textOf(2, 1, "Title") == "Baldr" and textOf(2, 1, "Sub")
-        == "Installed. Bragi answers in Baldr, its own voice, on the processor: slower than the Windows voices.")
+        == "Installed. Bragi can answer in Baldr on the processor: slower than the built-in voice.")
     check("no voice to make in setup", textOf(3, 1, "Title") ~= "Voice for replies")
     shot("voice-baldr-cpu")
 end)

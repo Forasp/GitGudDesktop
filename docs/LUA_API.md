@@ -347,6 +347,7 @@ revision, HEAD by default. Failures return `nil, msg`.
 | Function | |
 |---|---|
 | `jsonDecode(text)` / `jsonEncode(value)` | JSON to Lua and back (`nil, msg` on failure). JSON null reads as `nil`; an empty table writes as `{}` |
+| `lookup(path, key)` | The value for `key` in a large sorted `.tsv` file of `key<TAB>value` lines (sorted by the keys' bytes), or `nil`; `nil, msg` when the file can't be used. Each file is read once per run. For word lists too big to hold as tables (the Bragi interface's pronunciation dictionaries) |
 
 ## Voice
 
@@ -357,8 +358,11 @@ Windows only for now.
 
 The engine runs inside the app: sherpa-onnx (Silero speech detection, a
 Zipformer wake word spotter, Parakeet speech recognition, TitaNet speaker
-recognition) for `listen`, and for `speak` Chatterbox Turbo in a voice
-made from a recording (`voiceMakeVoice`), or the system's voices. Its
+recognition) for `listen`, and for `speak` a small built-in voice
+(`small:<name>`: a few-MB model in an interface's `voices/<name>` folder,
+`model.onnx` and `phonemes.tsv`, on the processor; its `say` text is
+phonemes, and `sampleRate` is the rate it plays at), Chatterbox Turbo in a
+voice made from a recording (`voiceMakeVoice`), or the system's voices. Its
 libraries live in the `voice` folder beside the exe (sherpa-onnx's CPU
 build with ONNX Runtime's GPU build, which runs on the processor) and load
 the first time voice starts (never for an interface that doesn't use
@@ -366,9 +370,11 @@ voice). Its models aren't part of the app: the Bragi interface downloads
 them on the user's OK into the local app data folder and tells the engine
 where they are (`voiceEngineSetup`): the listening models, Chatterbox
 Turbo (`tts`), and the optional GPU pack for NVIDIA GPUs, ONNX Runtime's
-CUDA provider and NVIDIA's CUDA and cuDNN libraries (`gpuDir`). The Bragi
-interface makes its own voice, Baldr, from `voices/baldr/ref.wav` once
-Turbo is in, and replies use it unless another is chosen. One ONNX
+CUDA provider and NVIDIA's CUDA and cuDNN libraries (`gpuDir`); the small
+voices' folder comes with the interface (`small`). The Bragi interface's
+replies use its built-in voice (`voices/bragi-1`, its text made phonemes by
+`bragi/phonemes.lua`) unless another is chosen; it makes Baldr from
+`voices/baldr/ref.wav` once Turbo is in. One ONNX
 Runtime serves both channels. Listening always runs on the processor and
 never waits for the GPU; with the GPU pack, Turbo moves to the GPU the
 next time it loads, in the same run, and stays on the processor (with
@@ -401,12 +407,12 @@ exit and is never reported as a crash.
 | `voiceWake()` / `voiceSend(reason?)` / `voiceCancel()` | start a message now (the mic button), end it now (Send; `reason` `button` or `done`, when the app judged it finished), drop it |
 | `voiceLookback(id, tokens?)` | ask for the newest transcript, up to `tokens` (default the engine's `contextTokens`); `voice.lookback` answers with the same `id` |
 | `voiceTrain(state)` / `voiceEnroll(state)` | wake word training (`start`, `stop`) and voice enrollment (`start`, `stop`, `clear`) |
-| `voiceSpeak(id, text, options?)` | speak `text` (opens the `speak` channel on first use); `options`: `voice`, `sampleRate`, `speed` (1 is normal pace). Send replies a sentence or paragraph at a time |
+| `voiceSpeak(id, text, options?)` | speak `text` (opens the `speak` channel on first use); `options`: `voice`, `sampleRate`, `speed` (1 is normal pace), `voicing` (a small voice's `wobble`, `rough`, `roughLow`, `roughHigh`). A `small:` voice's `text` is its phonemes. Send replies a sentence or paragraph at a time |
 | `voiceSpeakPrepare()` | open the speak channel and the speaker now (Bragi calls it when listening starts), so the first reply waits for neither; `true` or `nil, msg` |
 | `voiceSpeakStop(id?)` | stop that reply, or all of them; playback goes quiet at once |
 | `voiceInfo()` | `{available, listening, speaking, playing}` (`available`: a speech engine is there; `playing`: the reply id being heard, or `""`) |
 | `voiceEngine()` | the engine inside the app: `{installed, configured, loaded, faulted, faultCode?, fault?, gpu, runtimeDir, turbo, turboDevice, gpuError?, test?, lastCrash?}`. `installed`: its libraries are there (nothing loads to say so); `faulted`: it stopped after an internal error; `gpu`: the CUDA provider started (it stays for the run); `runtimeDir`: where the libraries loaded from (`""` until they load); `turbo`: Chatterbox Turbo is set up; `turboDevice`: where it loaded, `"gpu"` or `"cpu"` (`""` while it isn't loaded); `gpuError`: why it isn't on the GPU it was asked to use; `lastCrash` (`{call, log}`): the call it was in when the app ended without warning last time, and the end of its log (`<app data>/bragi/voice-engine.log`) |
-| `voiceEngineSetup(settings)` | the models and how to run them, used from the next time listening starts: `vadModel`, `asrDir`, `kwsDir`, `speakerModel`, `voiceprintsDir`, `workDir`, `files` (`{ {path, size, sha256}, … }`, checked before loading), plus `asrThreads`, `kwsThreads`, `speakerThreads`, `hotwords`, `partialSeconds`, `wakeWord`, `spotterSpellings`, `mishearings`, and the other listening settings. With Chatterbox Turbo: `tts` (`{dir, encoder, embed, lm, decoder, tokenizer, voicesDir, provider, threads, cpuThreads, files}`: its graphs, where made voices go, `"cuda"` or `"cpu"`, and the processor threads on the GPU and without it); with the GPU pack, `gpuDir` (its folder: Turbo moves there the next time it loads, no restart). `true` or `nil, msg` |
+| `voiceEngineSetup(settings)` | the models and how to run them, used from the next time listening starts: `vadModel`, `asrDir`, `kwsDir`, `speakerModel`, `voiceprintsDir`, `workDir`, `files` (`{ {path, size, sha256}, … }`, checked before loading), plus `asrThreads`, `kwsThreads`, `speakerThreads`, `hotwords`, `partialSeconds`, `wakeWord`, `spotterSpellings`, `mishearings`, and the other listening settings. With Chatterbox Turbo: `tts` (`{dir, encoder, embed, lm, decoder, tokenizer, voicesDir, provider, threads, cpuThreads, files}`: its graphs, where made voices go, `"cuda"` or `"cpu"`, and the processor threads on the GPU and without it); with the GPU pack, `gpuDir` (its folder: Turbo moves there the next time it loads, no restart); with small voices, `small` (`{voicesDir, threads}`: the folder whose `<name>` folders are the `small:<name>` voices, and their processor threads). `true` or `nil, msg` |
 | `voiceSelfTest(task, wav?)` | load every model and run each once (on generated sound, or on `wav`, 16 kHz mono 16-bit); `<task>.done` carries `{ok, loadMs, decodeMs, text, keywords, speaker, code?, message?}`. `true` or `nil, msg` |
 | `voiceVoices()` | the system's voices for spoken replies: `{ {id, name, language}, … }` or `nil, msg` |
 | `voiceEngineRelease()` | release the models now (before removing them); they load again when listening starts |

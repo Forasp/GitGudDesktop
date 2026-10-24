@@ -35,7 +35,11 @@
 //                                  -> true | nil, msg. Speaks through the
 //                                     speak channel (opened on first use).
 //                                     options: { voice, sampleRate, speed
-//                                     (1 is normal pace) }
+//                                     (1 is normal pace), voicing (a small
+//                                     voice's {wobble, rough, roughLow,
+//                                     roughHigh}) }. A "small:<name>"
+//                                     voice's text is its phonemes, and
+//                                     sampleRate is the rate it plays at
 //   gitgud.voiceSpeakPrepare()     -> true | nil, msg. Opens the speak channel
 //                                     and the speaker now (when listening
 //                                     starts), so the first reply is quick
@@ -507,7 +511,8 @@ namespace gitgud::lua::bindings
                 return FailWith(_pL, error);
             }
             g_pSpeak->Say(id, text, options["voice"].AsString(),
-                static_cast<int>(options["sampleRate"].AsInt(0)), options["speed"].AsNumber(0.0));
+                static_cast<int>(options["sampleRate"].AsInt(0)), options["speed"].AsNumber(0.0),
+                options["voicing"]);
             return Ok(_pL);
         }
 

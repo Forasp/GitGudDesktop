@@ -10,8 +10,8 @@
 -- models come from the welcome flow's voice step or Settings, on the
 -- user's OK (bragi/voicemodels.lua); until they're installed, or in a
 -- build without the engine, voice.available() is false and the mic button
--- says why (voice.unavailableText()). Spoken replies use the system's
--- voices for now.
+-- says why (voice.unavailableText()). Spoken replies use Bragi's built-in
+-- voice, Baldr, or a system voice (Settings).
 --
 --   off -> connecting -> listening (for the wake word)
 --       -> hearing (a message: its text shows live in the prompt box)
@@ -117,7 +117,9 @@
 -- screen. A summary that says the reply again (echoes) is asked for once
 -- more, strictly; if that echoes too, or the summarizer fails, the reply is
 -- cut to its first sentence or two. Every `say` carries bragi.speechSpeed
--- as `speed`.
+-- (or the voice's own pace) as `speed`. Replies use Bragi's built-in voice
+-- (voicemodels.SMALL, its text made phonemes by bragi.phonemes) unless
+-- another is chosen.
 -- Saying the wake word while anything plays stops it.
 --
 -- The engine says who recognises and who speaks (its providers).
@@ -213,19 +215,26 @@ voice.backend = {
         local models = require("bragi.voicemodels")
         local test = models.engine().test
         local turbo = models.turboReady() and #models.voices() > 0
+        local small = models.smallReady()
         local chosen = settings.get("bragi.voice", "")
         local tts = voice.PROVIDER_NAMES.windows
-        if turbo and (chosen == "" or chosen:find("^turbo:")) then
+        if small and (chosen == "" or chosen:find("^small:")) then
+            tts = voice.PROVIDER_NAMES.small
+        elseif turbo and (chosen == "" or chosen:find("^turbo:")) then
             tts = voice.PROVIDER_NAMES[models.turboOnGpu() and "turbo" or "turbo-cpu"]
         end
         onDone({ sttProvider = test and "The test engine" or voice.PROVIDER_NAMES.parakeet,
             ttsProvider = test and "The test engine" or tts })
     end,
-    -- The voices made from recordings (with Baldr's model) first, then the
-    -- system's; the default is the first made voice, else the system's first.
+    -- The built-in voice, the voices made from recordings (with Baldr's
+    -- model), then the system's; the default is the first of them.
     voices = function(onDone, onError)
         local models = require("bragi.voicemodels")
         local out = {}
+        if models.smallReady() then
+            out[1] = { id = models.smallVoiceId(), name = models.SMALL.label, provider = "Built in",
+                description = voice.PROVIDER_NAMES.small }
+        end
         if models.turboReady() then
             for _, v in ipairs(models.voices()) do
                 out[#out + 1] = { id = v.id, name = v.name, provider = "Made voice",
@@ -262,6 +271,16 @@ voice.backend = {
         if not models.engine().configured then
             models.configure()
         end
+        if (options.voice or ""):find("^small:") then
+            -- The built-in voice reads phonemes, at its own rate and with
+            -- its wobble and roughness (voicemodels.SMALL).
+            local phonemes = require("bragi.phonemes")
+            phonemes.setDictionaries(models.phonemesDir() or "")
+            body = phonemes.say(body)
+            local s = models.SMALL
+            options.sampleRate = s.rate
+            options.voicing = { wobble = s.wobble, rough = s.rough, roughLow = s.roughLow, roughHigh = s.roughHigh }
+        end
         return gitgud.voiceSpeak(id, body, options)
     end,
     speakPrepare = function()
@@ -295,6 +314,7 @@ voice.backend = {
 -- The engine's provider names (`ready.stt.provider`, `start.provider`) in words.
 voice.PROVIDER_NAMES = {
     parakeet = "Speech recognition, on this computer",
+    small = "Bragi's built-in voice, on the processor",
     turbo = "Baldr's voice model, on the GPU",
     ["turbo-cpu"] = "Baldr's voice model, on the processor (slower)",
     windows = "Windows voices, on this computer",
@@ -1590,10 +1610,10 @@ function voice.chosenVoice()
 end
 
 --- The `voice` a `say` carries, or nil for the system's default. With no
--- voice chosen, Baldr (the first made voice) whenever its model is in: that
--- comes from this computer's own list, so the first reply after voice
--- starts is Baldr's even before the engine's voices list arrives
--- (it went to the Windows voice).
+-- voice chosen, the built-in voice when the interface has it, else Baldr
+-- (the first made voice) whenever its model is in: that comes from this
+-- computer's own list, so the first reply after voice starts is Bragi's own
+-- even before the engine's voices list arrives (it went to the Windows voice).
 local function sayVoice()
     local chosen = text.trim(settings.get("bragi.voice", ""))
     if chosen ~= "" then
@@ -1606,6 +1626,9 @@ local function sayVoice()
         end
     end
     local models = require("bragi.voicemodels")
+    if models.smallReady() then
+        return models.smallVoiceId()
+    end
     if models.turboReady() then
         local made = models.voices()[1]
         if made then
@@ -1622,9 +1645,17 @@ end
 local PREVIEW_TEXT = "Hello, I'm Bragi. This is how I sound when I tell you what I found."
 
 --- How fast Bragi speaks: bragi.speechSpeed, kept to 0.8..1.5 (1 is the
--- voice's normal pace). Goes as `speed` with every `say`.
-function voice.speechSpeed()
-    local speed = tonumber(settings.get("bragi.speechSpeed", "")) or SPEED_DEFAULT
+-- voice's normal pace). Unset, the voice's own pace: the built-in voice's
+-- (voicemodels.SMALL.speed) for it, SPEED_DEFAULT for the others. Goes as
+-- `speed` with every `say`.
+-- @param id  the voice it's for (sayVoice's), or nil for the one replies use
+function voice.speechSpeed(id)
+    local speed = tonumber(settings.get("bragi.speechSpeed", ""))
+    if not speed then
+        id = id or sayVoice()
+        local models = require("bragi.voicemodels")
+        speed = (id or ""):find("^small:") and models.SMALL.speed or SPEED_DEFAULT
+    end
     return math.max(SPEED_MIN, math.min(SPEED_MAX, speed))
 end
 
@@ -1639,7 +1670,7 @@ function voice.preview(id)
     previewCount = previewCount + 1
     local sayId = "preview" .. previewCount
     record("preview", { id = sayId, voice = id })
-    local ok, err = voice.backend.speak(sayId, PREVIEW_TEXT, { voice = id, speed = voice.speechSpeed() })
+    local ok, err = voice.backend.speak(sayId, PREVIEW_TEXT, { voice = id, speed = voice.speechSpeed(id) })
     if not ok then
         return nil, tostring(err or "Couldn't speak")
     end
@@ -1791,9 +1822,9 @@ speak = function(spoken, fields)
         lastEnded.spoke = true
     end
     spokenText["r" .. (replyCount - 20)] = nil
-    local options = { speed = voice.speechSpeed() }
-    fields.speed = options.speed
     local name = sayVoice()
+    local options = { speed = voice.speechSpeed(name) }
+    fields.speed = options.speed
     if name then
         options.voice = name
         fields.voice = name

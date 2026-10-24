@@ -2,8 +2,11 @@
 -- the GPU libraries for NVIDIA GPUs, the voices made from recordings, and
 -- setting the engine up with them.
 --
--- The engine (gitgud.voiceEngine, C++) comes with the app; nothing else
--- does. Everything here is fetched only from the Bragi interface (the
+-- The engine (gitgud.voiceEngine, C++) comes with the app, and so does
+-- Bragi's built-in voice (voicemodels.SMALL: a small model in the
+-- interface's voices/bragi-1, on the processor), which replies use unless
+-- another voice is chosen. Nothing else does. Everything here is fetched
+-- only from the Bragi interface (the
 -- welcome flow's voice step, or Settings), with its size shown first and
 -- nothing downloaded until the user says so. It goes to the local app data
 -- folder (gitgud.localDataPath("bragi/voice"): %LOCALAPPDATA%\Gitgud\bragi\voice
@@ -26,10 +29,10 @@
 --
 -- Baldr comes with the interface (voices/baldr/ref.wav, the project's own
 -- voice): once its model is in, its voice is made from that recording
--- without asking (the conditioning computed once and kept), and replies are
--- in Baldr unless another voice is chosen (Settings offers a Windows voice
--- for faster replies). Making your own voice is optional (Settings).
--- Without the model, replies use the voices Windows has.
+-- without asking (the conditioning computed once and kept), and Settings
+-- offers it for replies, with a Windows voice. Making your own voice is
+-- optional (Settings). Without the built-in voice or Baldr's model, replies
+-- use the voices Windows has.
 --
 --   bragi/voice/models/<package>/   the listening models, unpacked
 --   bragi/voice/gpu/                the GPU libraries, together
@@ -67,6 +70,8 @@
 -- voicemodels.install(groups), voicemodels.installFrom(folder, groups),
 -- voicemodels.cancel(), voicemodels.check(), voicemodels.remove(group),
 -- voicemodels.BALDR, voicemodels.ensureBaldr(), voicemodels.voices(),
+-- voicemodels.SMALL, voicemodels.smallReady(), voicemodels.smallVoiceId(),
+-- voicemodels.smallVoicesDir(), voicemodels.phonemesDir(),
 -- voicemodels.makeVoice(wav, label, onDone, opts),
 -- voicemodels.removeVoice(name), voicemodels.downloadBytes(list),
 -- voicemodels.diskBytes(list), voicemodels.size(bytes), voicemodels.progressText(),
@@ -385,6 +390,25 @@ voicemodels.BALDR = {
     sha256 = "48a258b7220ceaaf7bbf607a02b29964965676d3b7efc52f64f7f68bb60c9c75",
 }
 
+-- Bragi's built-in voice: a small model that comes with the interface
+-- (voices/bragi-1: model.onnx and phonemes.tsv), on the processor, no
+-- download or GPU. Its text is phonemes (bragi.phonemes, over the
+-- dictionaries in phonemes/). How it was made to sound: played at `rate`
+-- (below the model's 24 kHz, which deepens it), at `speed` with the pitch
+-- kept, with `wobble` (random pitch waver, inside the model) and `rough`
+-- (loudness flutter from roughLow to roughHigh Hz).
+voicemodels.SMALL = {
+    name = "bragi-1",
+    label = "Bragi (built in)",
+    rate = 21120,
+    speed = 1.3,
+    wobble = 0.045,
+    rough = 0.15,
+    roughLow = 30,
+    roughHigh = 80,
+    threads = 2,
+}
+
 -- What the engine was doing when a call failed (gitgud.voiceEngine's
 -- lastCrash.call and fault messages), in words.
 local CALLS = {
@@ -688,6 +712,10 @@ function voicemodels.configure()
             provider = gpu and "cuda" or "cpu",
             files = engineFiles(voicemodels.packages("turbo")),
         }
+    end
+    local smallDir = voicemodels.smallVoicesDir()
+    if smallDir then
+        settings.small = { voicesDir = smallDir, threads = voicemodels.SMALL.threads }
     end
     local ok = gitgud.voiceEngineSetup(settings)
     return ok == true
@@ -1358,6 +1386,34 @@ local function interfaceFile(relative)
     return nil
 end
 
+--- The folder the built-in voice is in (its voices folder), or nil when the
+-- interface hasn't got it.
+function voicemodels.smallVoicesDir()
+    local model = interfaceFile("voices/" .. voicemodels.SMALL.name .. "/model.onnx")
+    return model and (model:gsub("[/\\][^/\\]+[/\\][^/\\]+$", "")) or nil
+end
+
+--- The folder with the pronunciation dictionaries the built-in voice reads, or nil.
+function voicemodels.phonemesDir()
+    local gold = interfaceFile("phonemes/en-us-gold.tsv")
+    return gold and (gold:gsub("[/\\][^/\\]+$", "")) or nil
+end
+
+--- The built-in voice's id ("small:bragi-1").
+function voicemodels.smallVoiceId()
+    return "small:" .. voicemodels.SMALL.name
+end
+
+--- Replies can be spoken with the built-in voice: it came with the
+-- interface, and the engine runs (no download, no GPU).
+function voicemodels.smallReady()
+    if voicemodels.engine().test then
+        return true
+    end
+    return voicemodels.engineInstalled() and not voicemodels.engine().faulted
+        and voicemodels.smallVoicesDir() ~= nil and voicemodels.phonemesDir() ~= nil
+end
+
 local baldrTried = false
 
 --- Make Baldr if its model is in and Baldr isn't made yet (once a
@@ -1588,8 +1644,9 @@ local function turboCard(opts)
         else
             sub = made .. ". This computer has no NVIDIA GPU it can use, so the model runs on the processor and "
                 .. "Baldr is slow here: a reply's first words take about 5 to 10 seconds, and long replies fall "
-                .. "behind. The model is about " .. size .. " to download. The Windows voices answer at once; you "
-                .. "can skip this."
+                .. "behind. The model is about " .. size .. " to download. "
+                .. (voicemodels.smallReady() and "Bragi's built-in voice" or "The Windows voices")
+                .. " answer at once; you can skip this."
         end
         rows[#rows + 1] = { kind = "info", title = "Replies in Baldr, Bragi's own voice", sub = sub }
         if s.phase == "failed" and s.group == "turbo" then
@@ -1613,7 +1670,8 @@ local function turboCard(opts)
         elseif voicemodels.turboOnGpu() then
             sub = "Installed. Bragi answers in Baldr, its own voice, on the GPU."
         else
-            sub = "Installed. Bragi answers in Baldr, its own voice, on the processor: slower than the Windows voices."
+            sub = "Installed. Bragi can answer in Baldr on the processor: slower than "
+                .. (voicemodels.smallReady() and "the built-in voice." or "the Windows voices.")
         end
         -- While Baldr is being made there are no numbers: the bar pulses.
         rows[#rows + 1] = { kind = (making and making.builtin) and "progress" or "info", title = "Baldr", sub = sub,
@@ -1623,7 +1681,7 @@ local function turboCard(opts)
         if opts.settings then
             rows[#rows + 1] = { kind = "action", title = "Remove the voice model",
                 sub = "Frees " .. voicemodels.size(voicemodels.diskBytes(voicemodels.packages("turbo")))
-                    .. ". Replies use the Windows voices.",
+                    .. (voicemodels.smallReady() and ". Replies use the built-in voice." or ". Replies use the Windows voices."),
                 button = "Remove", run = function()
                     voicemodels.remove("turbo")
                 end }
@@ -1695,47 +1753,65 @@ local function windowsVoice()
     return type(list) == "table" and list[1] and list[1].id or nil
 end
 
--- Settings: the voice replies use (Baldr by default), the switch to a
--- Windows voice, and making your own (optional).
+-- Settings: the voice replies use (the built-in one by default; Baldr and
+-- voices made from recordings with Baldr's model; a Windows voice), and
+-- making your own (optional, with Baldr's model).
 local function voicesCard(opts)
-    if not voicemodels.turboReady() then
+    local small = voicemodels.smallReady()
+    local turbo = voicemodels.turboReady()
+    if not small and not turbo then
         return nil
     end
     local settings = require("core.settings")
     local chosen = settings.get("bragi.voice", "")
-    local onWindows = chosen ~= "" and not chosen:find("^turbo:")
+    local smallId = voicemodels.smallVoiceId()
+    local onWindows = chosen ~= "" and not chosen:find("^turbo:") and not chosen:find("^small:")
     local rows = {}
     local card = { heading = "Voice for replies", rows = rows }
-    local list = voicemodels.voices()
-    local where = voicemodels.turboOnGpu() and "on the GPU" or "on the processor, slower"
-    for _, v in ipairs(list) do
-        if v.builtin then
-            rows[#rows + 1] = { kind = "info", title = v.name,
-                sub = "Bragi's own voice, " .. where .. "."
-                    .. ((chosen == "" or chosen == v.id) and " Replies use it." or "") }
-        elseif opts.settings then
-            rows[#rows + 1] = { kind = "action", title = v.name,
-                sub = "Made from a recording, " .. where .. "." .. (chosen == v.id and " Replies use it." or ""),
-                button = "Remove", run = function()
-                    voicemodels.removeVoice(v.file)
-                end }
+    local function choose(id)
+        return function()
+            settings.set("bragi.voice", id)
+            app.publish("bragi.voicesChanged")
+        end
+    end
+    if small then
+        local using = chosen == "" or chosen == smallId
+        rows[#rows + 1] = { kind = using and "info" or "action", title = voicemodels.SMALL.label,
+            sub = "Bragi's built-in voice, on the processor: it answers at once." .. (using and " Replies use it." or ""),
+            button = not using and "Use it" or nil, run = not using and choose("") or nil }
+    end
+    if turbo then
+        local where = voicemodels.turboOnGpu() and "on the GPU" or "on the processor, slower"
+        for _, v in ipairs(voicemodels.voices()) do
+            local using = chosen == v.id or (chosen == "" and not small and v.builtin)
+            if v.builtin then
+                rows[#rows + 1] = { kind = using and "info" or "action", title = v.name,
+                    sub = "Bragi's voice from its recording, " .. where .. "." .. (using and " Replies use it." or ""),
+                    button = not using and "Use Baldr" or nil, run = not using and choose(v.id) or nil }
+            elseif opts.settings then
+                rows[#rows + 1] = { kind = "action", title = v.name,
+                    sub = "Made from a recording, " .. where .. "." .. (using and " Replies use it." or ""),
+                    button = "Remove", run = function()
+                        voicemodels.removeVoice(v.file)
+                    end }
+            end
         end
     end
     if onWindows then
         rows[#rows + 1] = { kind = "action", title = "Replies use a Windows voice",
-            sub = "Instant, but not Baldr.", button = "Use Baldr", run = function()
-                settings.set("bragi.voice", "")
-                app.publish("bragi.voicesChanged")
-            end }
+            sub = small and "Not Bragi's own." or "Instant, but not Baldr.",
+            button = small and "Use Bragi's voice" or "Use Baldr", run = choose("") }
     else
-        rows[#rows + 1] = { kind = "action", title = "Faster replies: use a Windows voice",
-            sub = "The voices Windows has answer at once.", button = "Use Windows voice", run = function()
+        rows[#rows + 1] = { kind = "action", title = "Use a Windows voice",
+            sub = "The voices Windows has.", button = "Use Windows voice", run = function()
                 local id = windowsVoice()
                 if id then
-                    settings.set("bragi.voice", id)
-                    app.publish("bragi.voicesChanged")
+                    choose(id)()
                 end
             end }
+    end
+    if not turbo then
+        return card
     end
     if making and making.label then
         -- No numbers to show while the model loads and listens: the bar pulses.
@@ -1780,8 +1856,8 @@ function voicemodels.cards(opts)
         end
         credits[#credits + 1] = { kind = "info", title = "Speech engine",
             sub = "sherpa-onnx (Apache-2.0) and ONNX Runtime (MIT), in the voice folder beside GitGud; the GPU "
-                .. "libraries add ONNX Runtime's CUDA provider. Without Bragi's voice model, replies use the voices "
-                .. "Windows has." }
+                .. "libraries add ONNX Runtime's CUDA provider. The built-in voice runs on the processor; without it, "
+                .. "replies use the voices Windows has." }
         cards[#cards + 1] = { heading = "Voice credits", rows = credits }
     end
     return cards
@@ -1806,6 +1882,14 @@ function voicemodels.credits()
                 link = p.url,
             }
         end
+    end
+    if voicemodels.smallReady() then
+        out[#out + 1] = { title = voicemodels.SMALL.label,
+            line = "Bragi's built-in voice, the project's own: a small model trained from Kokoro-82M (by hexgrad, "
+                .. "under the Apache-2.0 license, " .. LICENCE_LINKS["Apache-2.0"] .. ") with the training code of "
+                .. "Paradee (by Sahil Mahendrakar, Apache-2.0). Its pronunciations are misaki's dictionaries (by "
+                .. "hexgrad, Apache-2.0).",
+            link = "https://huggingface.co/hexgrad/Kokoro-82M" }
     end
     if turbo then
         out[#out + 1] = { title = "Baldr",

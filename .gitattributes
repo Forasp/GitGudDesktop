@@ -1,0 +1,6 @@
+# The Bragi interface's built-in voice: the model is binary, its word lists
+# and the phoneme test data stay LF text everywhere.
+*.onnx binary
+resources/uis/bragi/phonemes/*.tsv text eol=lf
+resources/uis/bragi/voices/*/phonemes.tsv text eol=lf
+tests/data/*.tsv text eol=lf

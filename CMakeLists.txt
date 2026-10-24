@@ -189,6 +189,7 @@ add_library(gitgud_core STATIC
     src/app/TaskRunner.cpp
     src/app/UiPackages.cpp
     src/app/Json.cpp
+    src/app/SortedTable.cpp
     src/ui/ColourMap.cpp
     src/ui/TextSpans.cpp
     src/app/Updater.cpp
@@ -201,6 +202,7 @@ add_library(gitgud_core STATIC
     src/lua/LuaFeatureBindings.cpp
     src/lua/LuaAppBindings.cpp
     src/lua/LuaJsonBindings.cpp
+    src/lua/LuaLookupBindings.cpp
     src/lua/LuaStoreBindings.cpp
     src/lua/LuaVoiceBindings.cpp
     src/lua/LuaLocalDataBindings.cpp
@@ -232,6 +234,7 @@ add_library(gitgud_core STATIC
     src/speech/Gpt2Tokenizer.cpp
     src/speech/Turbo.cpp
     src/speech/TurboOnnx.cpp
+    src/speech/SmallVoice.cpp
     src/speech/OnnxPatch.cpp
     src/platform/Gpu.cpp
     src/platform/CredentialStore.cpp

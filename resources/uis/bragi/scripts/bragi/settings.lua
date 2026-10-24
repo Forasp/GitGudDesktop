@@ -33,7 +33,8 @@
 --                             (off; bragi/voice.lua, "Whose work is told")
 --   bragi.updateSeconds       how often Bragi says what its conversations are
 --                             doing (3 to 120, "10"; bragiSettings.updateSeconds)
---   bragi.speechSpeed         how fast Bragi speaks ("0.8" to "1.5", "1.15")
+--   bragi.speechSpeed         how fast Bragi speaks ("0.8" to "1.5"; unset, the
+--                             voice's own: "1.3" for the built-in voice, "1.15")
 --   bragi.voice               the voice replies speak with: an id from the
 --                             engine's voices list, picked with Preview and
 --                             Use ("" = its default)
@@ -531,7 +532,9 @@ local SECTIONS = {
                     { kind = "choice", title = "Speaking speed",
                       label = speedLabel,
                       pick = function(button)
-                          agent.pickChoice(button, SPEECH_SPEEDS, "bragi.speechSpeed", "1.15")
+                          -- Unset, the voice's own pace (1.3 for the built-in voice).
+                          agent.pickChoice(button, SPEECH_SPEEDS, "bragi.speechSpeed",
+                              string.format("%g", require("bragi.voice").speechSpeed()))
                       end },
                     { kind = "toggle", title = "Narrate while it works",
                       sub = "Say in a few words what the agent is doing, as it goes.",
