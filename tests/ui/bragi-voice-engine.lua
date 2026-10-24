@@ -256,7 +256,7 @@ step(800, "the first reply is the built-in voice's", function()
     end
     check("it named the built-in voice, not the system's default",
         spoke ~= nil and spoke:find("\"voice\":\"small:bragi-1\"", 1, true) ~= nil)
-    check("at its pace", spoke ~= nil and spoke:find("\"speed\":1.3", 1, true) ~= nil)
+    check("at its pace", spoke ~= nil and spoke:find("\"speed\":1.27", 1, true) ~= nil)
     voice.stop()
 end)
 
