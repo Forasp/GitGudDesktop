@@ -13,8 +13,8 @@
        speech engine goes in voice\: sherpa-onnx's C API DLL from its pinned
        CPU release, and ONNX Runtime's core (onnxruntime.dll and
        onnxruntime_providers_shared.dll) from its pinned CUDA release, the
-       GPU build, which runs on the processor (nothing from NVIDIA is in the
-       package; the optional GPU pack adds the CUDA provider later). Both
+       GPU build, run on the processor (nothing from NVIDIA is in the
+       package). Both
        downloaded once into build\sherpa and checked against their SHA-256.
        The app loads them only when voice starts in the Bragi interface.
     3. Checks that every DLL the package's binaries import is in the package
@@ -72,8 +72,7 @@ $PackName = "GitGud-win64.pack"
 
 # The speech engine, pinned: sherpa-onnx's shared Windows build (the C API,
 # no text to speech), and ONNX Runtime 1.28.2's core from sherpa-onnx's CUDA
-# release (the GPU build: the same one whose CUDA provider the Bragi
-# interface's optional GPU pack adds, so they match).
+# release (the GPU build, run on the processor).
 $SherpaVersion = "1.13.8"
 $SherpaAsset = "sherpa-onnx-v$SherpaVersion-win-x64-shared-MD-Release-no-tts-lib.tar.bz2"
 $SherpaUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v$SherpaVersion/$SherpaAsset"

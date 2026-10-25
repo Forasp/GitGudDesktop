@@ -2,12 +2,10 @@
 -- every step (Claude Code missing, signed in, signed out, on an API key;
 -- light or dark, which rebuilds the UI and comes back to the step; import;
 -- with a speech engine, the voice models (sizes shown, nothing downloaded
--- until Download, progress, Stop), Baldr offered on every computer (said
--- plainly to be slow without an NVIDIA GPU; its size; skippable), the GPU
--- libraries only with a GPU (the same flow), then installed: Baldr made and
--- used without asking, on the processor without the GPU libraries and on
--- the GPU with them, no voice step; then microphone, speakers, and the level
--- meter, and training; the summary), Back, Skip, Skip setup, and "Run
+-- until Download, progress, Stop; the only download: replies use the
+-- built-in voice), then installed: the engine set up with the built-in
+-- voice; then microphone, speakers, and the level meter, and training; the
+-- summary), Back, Skip, Skip setup, and "Run
 -- again" from Settings. It asks for no server and no repository; without a
 -- speech engine the voice steps aren't offered.
 --
@@ -56,13 +54,7 @@ end
 voicemodels.engine = function()
     return { installed = engine }
 end
--- The GPU: none (the usual flow), or one the voice pack runs on.
-local gpu = { present = false, devices = {} }
-voicemodels.gpu = function()
-    return gpu
-end
 local realMissing = voicemodels.missing
-local made = {} -- voices the engine was asked to make
 local setups = {} -- what the engine was set up with
 
 -- Downloads asked for (none really start).
@@ -298,21 +290,14 @@ step(400, "voice step: the models first", function()
     check("each model with its size", textOf(1, 2, "Title") == "Speech detection, 644 KB"
         and textOf(1, 4, "Title") == "Speech recognition, 482 MB")
     check("what it does, naming no product", textOf(1, 4, "Sub") == "Turns what you say into text.")
-    check("Baldr is offered too", textOf(2, 1, "Title") == "Replies in Baldr, Bragi's own voice")
-    check("saying plainly it's slow without an NVIDIA GPU", textOf(2, 1, "Sub"):find(
-        "runs on the processor and Baldr is slow here", 1, true) ~= nil)
-    check("with its size, and that it can be skipped", textOf(2, 1, "Sub"):find("The model is about 725 MB to download", 1, true)
-        ~= nil and textOf(2, 1, "Sub"):find("you can skip this", 1, true) ~= nil)
-    check("no GPU libraries without a GPU", textOf(3, 1, "Title") == "")
-    check("no devices before the models", textOf(3, 1, "Choice") == "")
+    check("nothing else to download: the voice for replies comes with the app", textOf(2, 1, "Title") == "")
+    check("no devices before the models", textOf(2, 1, "Choice") == "")
     check("nothing downloaded yet", #downloads == 0)
     check("Download and Install from a folder", textOf(1, 6, "Action") == "Download"
         and textOf(1, 7, "Action") == "Choose folder")
     check("the download names no host", textOf(1, 6, "Sub") == "602 MB, from the models' publishers.")
-    check("Bragi's voice: the model is the download, Baldr is made here", textOf(2, 2, "Title")
-        == "Download Bragi's voice" and textOf(2, 2, "Sub") == "725 MB. Bragi then makes its Baldr voice on this computer.")
     local all = ""
-    for c = 1, 2 do
+    for c = 1, 1 do
         for r = 1, 8 do
             all = all .. " " .. textOf(c, r, "Title") .. " " .. textOf(c, r, "Sub")
         end
@@ -346,124 +331,36 @@ end)
 step(300, "stopped", function()
     check("back to the models card", textOf(1, 1, "Title") == "Voice models" and textOf(1, 6, "Action") == "Download")
     check("no second download", #downloads == 1)
-    -- An NVIDIA GPU the GPU libraries run on.
-    gpu = { present = true, driver = "610.88", cuda = 13030,
-        devices = { { name = "Test GPU 12 GB", memory = 12e9 } } }
-    app.publish("bragi.voiceAvailable")
-end)
-step(400, "with an NVIDIA GPU", function()
-    check("Baldr on the GPU", textOf(2, 1, "Sub"):find("on your NVIDIA GPU", 1, true) ~= nil)
-    check("the GPU libraries follow", textOf(3, 1, "Title") == "Baldr on Test GPU 12 GB")
-    check("with the sizes", textOf(3, 1, "Sub"):find("About 2.4 GB to download with Bragi's voice model", 1, true)
-        ~= nil)
-    check("naming no host or product", not textOf(3, 1, "Sub"):find("PyPI", 1, true)
-        and not textOf(3, 1, "Sub"):find("GitHub", 1, true) and not textOf(3, 1, "Sub"):find("sherpa", 1, true))
-    check("and NVIDIA's terms", textOf(3, 1, "Sub"):find("under NVIDIA's license terms", 1, true) ~= nil)
-    check("still nothing downloaded", #downloads == 1)
-    shot("voice-gpu")
-end)
-step(300, "after the voice-gpu shot", function()
-    clickWidget(welcome.widget(3, 2, "Action"))
-end)
-step(300, "the GPU libraries download", function()
-    check("their first download started", #downloads == 2
-        and downloads[2].url:find("/v1.13.8/sherpa%-onnx%-v1.13.8%-cuda%-13.x") ~= nil
-        and downloads[2].size == 478110488)
-    check("their card shows the install", textOf(3, 1, "Title") == "Installing the GPU libraries")
-    gitgud.emit(downloads[2].task .. ".progress", gitgud.jsonEncode({ phase = "download", done = 239055244,
-        total = 478110488 }))
-end)
-step(200, "GPU libraries progress", function()
-    check("progress in their card", textOf(3, 1, "Sub")
-        == "Downloading the GPU speech engine: 239 MB of 478 MB (50%), 1 of 9.")
-    clickWidget(welcome.widget(3, 2, "Action"))
-end)
-step(200, "GPU libraries stopped", function()
-    check("Stop cancels it", cancels == 2)
-    gitgud.emit(downloads[2].task .. ".error", "cancelled")
-end)
-step(300, "back to the offer", function()
-    check("offered again", textOf(3, 1, "Title") == "Baldr on Test GPU 12 GB")
-    -- No GPU, and the models and Baldr's model as if installed: Baldr is
-    -- made from the interface's recording without asking (the engine's
-    -- part stood in for here), on the processor.
-    gpu = { present = false, devices = {} }
-    voicemodels.missing = function(groups)
-        if groups == nil or groups == "listen" or groups == "turbo" then
-            return {}
-        end
-        return realMissing(groups)
-    end
-    gitgud.voiceMakeVoice = function(task, wav, name)
-        made[#made + 1] = { wav = wav, name = name }
-        gitgud.localDataWrite("bragi/voice/voices/" .. name .. ".voice", "stand-in conditioning")
-        gitgud.emit(task .. ".done", gitgud.jsonEncode({ ok = true, seconds = 17.6 }))
-        return true
-    end
-    gitgud.voiceEngineSetup = function(settings)
-        setups[#setups + 1] = settings
-        return true
-    end
-    app.publish("bragi.voiceAvailable")
-end)
-step(600, "Baldr, on the processor", function()
-    check("Baldr was made once, from the interface's recording", #made == 1 and made[1].name == "baldr"
-        and made[1].wav:find("voices[/\\]baldr[/\\]ref%.wav$") ~= nil)
-    check("Baldr is the first made voice", voicemodels.voices()[1] ~= nil
-        and voicemodels.voices()[1].id == "turbo:baldr")
-    check("without being chosen", settings.get("bragi.voice", "") == "")
-    check("Turbo set up on the processor", #setups > 0 and setups[#setups].tts ~= nil
-        and setups[#setups].tts.provider == "cpu" and setups[#setups].tts.threads == 8
-        and setups[#setups].gpuDir == nil)
-    check("its card says so", textOf(2, 1, "Title") == "Baldr" and textOf(2, 1, "Sub")
-        == "Installed. Bragi can answer in Baldr on the processor: slower than the built-in voice.")
-    check("no voice to make in setup", textOf(3, 1, "Title") ~= "Voice for replies")
-    shot("voice-baldr-cpu")
-end)
-step(300, "after the voice-baldr-cpu shot", function()
-    -- With the GPU libraries in too.
-    gpu = { present = true, driver = "610.88", cuda = 13030,
-        devices = { { name = "Test GPU 12 GB", memory = 12e9 } } }
-    voicemodels.missing = function()
-        return {}
-    end
-    voicemodels.configure()
-    app.publish("bragi.voiceAvailable")
-end)
-step(400, "Baldr, on the GPU", function()
-    check("Turbo set up on the GPU", setups[#setups].tts ~= nil and setups[#setups].tts.provider == "cuda"
-        and setups[#setups].tts.threads == 4 and setups[#setups].tts.cpuThreads == 8
-        and setups[#setups].gpuDir ~= nil and setups[#setups].speakerProvider == nil)
-    check("Baldr's card says so", textOf(2, 1, "Sub") == "Installed. Bragi answers in Baldr, its own voice, on the GPU.")
-    check("the GPU libraries' card", textOf(3, 1, "Title") == "GPU libraries"
-        and textOf(3, 1, "Sub") == "Installed. Baldr runs on Test GPU 12 GB.")
-    check("Baldr made only once", #made == 1)
-    shot("voice-baldr-gpu")
-end)
-step(300, "after the voice-baldr-gpu shot", function()
-    -- No GPU again, the models as if installed and Baldr's model not: the
-    -- devices and words follow Baldr's offer.
-    gpu = { present = false, devices = {} }
+    -- The models as if installed: the engine is set up with them and the
+    -- built-in voice (the engine's part stood in for here).
     voicemodels.missing = function(groups)
         if groups == nil or groups == "listen" then
             return {}
         end
         return realMissing(groups)
     end
+    gitgud.voiceEngineSetup = function(settings)
+        setups[#setups + 1] = settings
+        return true
+    end
+    voicemodels.configure()
     app.publish("bragi.voiceAvailable")
 end)
 step(400, "voice step with the models", function()
     check("the models card says installed", textOf(1, 1, "Title") == "Voice models")
-    check("microphone choice shows the default", textOf(3, 1, "Choice") == "System default")
-    clickWidget(welcome.widget(3, 3, "Action"))
+    check("the engine set up with the built-in voice", #setups > 0 and setups[#setups].small ~= nil
+        and setups[#setups].small.voicesDir:find("voices$") ~= nil and setups[#setups].tts == nil
+        and setups[#setups].gpuDir == nil)
+    check("microphone choice shows the default", textOf(2, 1, "Choice") == "System default")
+    clickWidget(welcome.widget(2, 3, "Action"))
 end)
 step(300, "level meter", function()
     check("the meter started the microphone", tests[#tests] == true and welcome.meter().on)
     gitgud.emit("audio.level", "0.5")
 end)
 step(200, "the bar follows the level", function()
-    local _, _, trackW = gitgud.getRect(welcome.widget(3, 3, "Track"))
-    local _, _, fillW = gitgud.getRect(welcome.widget(3, 3, "Fill"))
+    local _, _, trackW = gitgud.getRect(welcome.widget(2, 3, "Track"))
+    local _, _, fillW = gitgud.getRect(welcome.widget(2, 3, "Fill"))
     check("the bar is about half", trackW and fillW and math.abs(fillW - trackW / 2) <= 2)
     shot("voice")
 end)
@@ -473,7 +370,7 @@ step(300, "after the voice shot", function()
 end)
 step(200, "picking a microphone", function()
     check("the picked microphone goes to the audio layer", used[#used].input == "mic2")
-    check("its name shows", textOf(3, 1, "Choice") == "Headset")
+    check("its name shows", textOf(2, 1, "Choice") == "Headset")
     clickWidget("WelcomeNext")
 end)
 

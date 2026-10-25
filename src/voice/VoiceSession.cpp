@@ -640,9 +640,13 @@ namespace gitgud::voice
         QueueText(say);
     }
 
-    void SpeakSession::Prepare()
+    void SpeakSession::Prepare(const std::string& _Voice)
     {
         Begin(); // no-op while connected
+        if (!_Voice.empty())
+        {
+            QueueText(Message("warm").Set("voice", _Voice));
+        }
     }
 
     void SpeakSession::StopSpeech(const std::string& _Id)

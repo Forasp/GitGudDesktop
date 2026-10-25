@@ -2,14 +2,11 @@
 
 #include "platform/Http.h"
 #include "platform/Shell.h"
-#include "speech/Gpt2Tokenizer.h"
 #include "speech/Listener.h"
 #include "speech/SherpaApi.h"
 #include "speech/SmallVoice.h"
 #include "speech/SpeechText.h"
 #include "speech/Text.h"
-#include "speech/Turbo.h"
-#include "speech/TurboOnnx.h"
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -311,9 +308,8 @@ namespace gitgud::speech
 
         // The speak channel: says spoken one at a time on a thread of its own,
         // sentence by sentence: a "small:<name>" voice (its text is phonemes)
-        // and a "turbo:<name>" voice on the engine's speaking thread, any
-        // other with the system's voices (also when the voice named isn't set
-        // up: `start` then says why in `fallback`).
+        // on the engine's speaking thread, any other with the system's
+        // voices. `warm` loads a small voice before its first say.
         class SpeakLink : public voice::ILink
         {
           public:
@@ -335,10 +331,6 @@ namespace gitgud::speech
                     m_OnClose = std::move(_OnClose);
                 }
                 m_Thread = std::thread([this]() { Loop(); });
-                if (m_pEngine && m_pEngine->TurboConfigured())
-                {
-                    m_pEngine->WarmTurbo(); // the first reply shouldn't wait for it
-                }
                 return true;
             }
 
@@ -383,6 +375,15 @@ namespace gitgud::speech
                     else
                     {
                         m_Says.push_back(std::move(say));
+                    }
+                }
+                else if (type == "warm")
+                {
+                    // Load a small voice now, so its first say doesn't wait.
+                    const std::string& voice = (*parsed)["voice"].AsString();
+                    if (voice.rfind("small:", 0) == 0 && m_pEngine && m_pEngine->SmallConfigured())
+                    {
+                        m_pEngine->WarmSmall(voice.substr(std::strlen("small:")));
                     }
                 }
                 else if (type == "stop")
@@ -528,15 +529,6 @@ namespace gitgud::speech
                     {
                         continue;
                     }
-                    std::string fallback;
-                    // No voice named: the default made voice (Baldr) when
-                    // Turbo is set up; the system's voices only without it
-                    // or when one of theirs is named.
-                    if (say.m_Voice.empty() && m_pEngine && m_pEngine->TurboConfigured() &&
-                        !m_pEngine->State().m_bFaulted)
-                    {
-                        say.m_Voice = m_pEngine->DefaultMadeVoice();
-                    }
                     if (say.m_Voice.rfind("small:", 0) == 0)
                     {
                         if (m_pEngine && m_pEngine->SmallConfigured() &&
@@ -557,21 +549,6 @@ namespace gitgud::speech
                         m_CurrentId.clear();
                         continue;
                     }
-                    if (say.m_Voice.rfind("turbo:", 0) == 0)
-                    {
-                        if (m_pEngine && m_pEngine->TurboConfigured() &&
-                            !m_pEngine->State().m_bFaulted)
-                        {
-                            SpeakTurbo(say);
-                            std::lock_guard<std::mutex> lock(m_Mutex);
-                            m_CurrentId.clear();
-                            continue;
-                        }
-                        fallback = m_pEngine && m_pEngine->State().m_bFaulted
-                                       ? "the speech engine stopped after an internal error"
-                                       : "the voice models for spoken replies aren't installed";
-                        say.m_Voice.clear();
-                    }
                     if (!bsystem)
                     {
                         bsystem = true;
@@ -583,7 +560,7 @@ namespace gitgud::speech
                     }
                     else
                     {
-                        Speak(*pspeech, say, fallback);
+                        Speak(*pspeech, say);
                     }
                     std::lock_guard<std::mutex> lock(m_Mutex);
                     m_CurrentId.clear();
@@ -594,122 +571,6 @@ namespace gitgud::speech
             {
                 std::lock_guard<std::mutex> lock(m_Mutex);
                 return m_bStopCurrent || m_bQuit;
-            }
-
-            // Turbo, one sentence at a time on the engine's speaking thread.
-            void SpeakTurbo(const Say& _Say)
-            {
-                // Turbo loaded first (at once when it is), so `start` says
-                // where it runs: the GPU or the processor.
-                if (m_pEngine)
-                {
-                    struct Ready
-                    {
-                        std::mutex m_Mutex;
-                        std::condition_variable m_Done;
-                        bool m_bDone = false;
-                    };
-
-                    auto pready = std::make_shared<Ready>();
-                    m_pEngine->WarmTurbo(
-                        [pready]()
-                        {
-                            std::lock_guard<std::mutex> lock(pready->m_Mutex);
-                            pready->m_bDone = true;
-                            pready->m_Done.notify_all();
-                        });
-                    std::unique_lock<std::mutex> lock(pready->m_Mutex);
-                    while (!pready->m_bDone && !Stopping())
-                    {
-                        pready->m_Done.wait_for(lock, std::chrono::milliseconds(50));
-                    }
-                }
-                Send(Json::Object()
-                        .Set("type", "start")
-                        .Set("id", _Say.m_Id)
-                        .Set("sampleRate", kTurboRate)
-                        .Set("provider", m_pEngine && m_pEngine->State().m_TurboDevice == "gpu"
-                                             ? "turbo"
-                                             : "turbo-cpu"));
-                const std::string name = _Say.m_Voice.substr(std::strlen("turbo:"));
-                const std::shared_ptr<std::atomic<bool>> pstop = m_pStop;
-                for (const std::string& sentence : SplitForSpeech(_Say.m_Text))
-                {
-                    if (Stopping())
-                    {
-                        break;
-                    }
-
-                    struct Result
-                    {
-                        std::mutex m_Mutex;
-                        std::condition_variable m_Done;
-                        bool m_bDone = false;
-                        bool m_bOk = false;
-                        std::vector<float> m_Audio;
-                        std::string m_Error;
-                    };
-
-                    auto presult = std::make_shared<Result>();
-                    LocalEngine* pengine = m_pEngine;
-                    const double fspeed = _Say.m_fSpeed;
-                    pengine->PostSpeak(
-                        [pengine, presult, sentence, name, fspeed, pstop]()
-                        {
-                            std::vector<float> audio;
-                            std::string error;
-                            const bool bok = pengine->TurboSay(
-                                sentence, name, fspeed, [pstop]() { return pstop->load(); }, audio,
-                                error);
-                            std::lock_guard<std::mutex> lock(presult->m_Mutex);
-                            presult->m_bOk = bok;
-                            presult->m_Audio = std::move(audio);
-                            presult->m_Error = error;
-                            presult->m_bDone = true;
-                            presult->m_Done.notify_all();
-                        });
-                    bool bdone = false;
-                    {
-                        std::unique_lock<std::mutex> lock(presult->m_Mutex);
-                        while (!presult->m_bDone)
-                        {
-                            presult->m_Done.wait_for(lock, 100ms);
-                            if (presult->m_bDone || Stopping() || pengine->State().m_bFaulted)
-                            {
-                                break;
-                            }
-                        }
-                        bdone = presult->m_bDone;
-                    }
-                    if (Stopping())
-                    {
-                        break;
-                    }
-                    if (!bdone || !presult->m_bOk)
-                    {
-                        Send(ErrorMessage(
-                            "tts", bdone ? presult->m_Error : "the speech engine stopped")
-                                .Set("id", _Say.m_Id));
-                        return;
-                    }
-                    const std::vector<float>& audio = presult->m_Audio;
-                    std::string pcm(audio.size() * 2, '\0');
-                    for (std::size_t ni = 0; ni < audio.size(); ++ni)
-                    {
-                        const float f = std::max(-1.0f, std::min(1.0f, audio[ni]));
-                        const int16_t s = static_cast<int16_t>(std::lround(f * 32767.0f));
-                        pcm[2 * ni] = static_cast<char>(s & 0xFF);
-                        pcm[2 * ni + 1] = static_cast<char>((s >> 8) & 0xFF);
-                    }
-                    constexpr std::size_t kPiece = kTurboRate / 10 * 2;
-                    for (std::size_t nat = 0; nat < pcm.size() && !Stopping(); nat += kPiece)
-                    {
-                        SendPcm(pcm.substr(nat, kPiece));
-                    }
-                }
-                Send(Json::Object()
-                        .Set("type", Stopping() ? "stopped" : "end")
-                        .Set("id", _Say.m_Id));
             }
 
             // A small voice: its text is phonemes, said a sentence at a time
@@ -808,18 +669,13 @@ namespace gitgud::speech
                         .Set("id", _Say.m_Id));
             }
 
-            void Speak(ITextToSpeech& _Speech, const Say& _Say, const std::string& _Fallback)
+            void Speak(ITextToSpeech& _Speech, const Say& _Say)
             {
-                Json start = Json::Object()
-                                 .Set("type", "start")
-                                 .Set("id", _Say.m_Id)
-                                 .Set("sampleRate", _Speech.SampleRate())
-                                 .Set("provider", _Speech.Provider());
-                if (!_Fallback.empty())
-                {
-                    start.Set("fallback", _Fallback);
-                }
-                Send(start);
+                Send(Json::Object()
+                        .Set("type", "start")
+                        .Set("id", _Say.m_Id)
+                        .Set("sampleRate", _Speech.SampleRate())
+                        .Set("provider", _Speech.Provider()));
                 for (const std::string& sentence : SplitForSpeech(_Say.m_Text))
                 {
                     if (Stopping())
@@ -887,12 +743,7 @@ namespace gitgud::speech
         {
             std::lock_guard<std::mutex> lock(m_Mutex);
             m_Tasks.push_back([this]() { Unload(); });
-            m_SpeakTasks.push_back(
-                [this]()
-                {
-                    UnloadTurbo();
-                    UnloadSmall();
-                });
+            m_SpeakTasks.push_back([this]() { UnloadSmall(); });
             m_bQuit = true;
         }
         m_Wake.notify_all();
@@ -977,7 +828,6 @@ namespace gitgud::speech
             PostSpeak(
                 [this, pspoken]()
                 {
-                    UnloadTurbo();
                     UnloadSmall();
                     pspoken->store(true);
                 });
@@ -1065,31 +915,6 @@ namespace gitgud::speech
         {
             config.m_WorkDir = (fs::u8path(config.m_AsrDir).parent_path() / "work").u8string();
         }
-        FileList ttsFiles;
-        const Json& tts = _Settings["tts"];
-        if (!tts.IsNull())
-        {
-            if (!tts.IsObject() || tts["dir"].AsString().empty() || tts["lm"].AsString().empty() ||
-                tts["embed"].AsString().empty() || tts["decoder"].AsString().empty() ||
-                tts["tokenizer"].AsString().empty() || tts["voicesDir"].AsString().empty())
-            {
-                _Error = "tts needs dir, embed, lm, decoder, tokenizer, and voicesDir";
-                return false;
-            }
-            for (const Json& file : tts["files"].Items())
-            {
-                std::string sha = file["sha256"].AsString();
-                std::transform(sha.begin(), sha.end(), sha.begin(),
-                    [](unsigned char _C) { return static_cast<char>(std::tolower(_C)); });
-                if (file["path"].AsString().empty() || !file["size"].IsNumber() || sha.size() != 64)
-                {
-                    _Error = "each tts file needs a path, a size, and a SHA-256";
-                    return false;
-                }
-                ttsFiles.push_back({file["path"].AsString(),
-                    {static_cast<std::uint64_t>(file["size"].AsNumber()), sha}});
-            }
-        }
         const Json& small = _Settings["small"];
         if (!small.IsNull() && (!small.IsObject() || small["voicesDir"].AsString().empty()))
         {
@@ -1099,57 +924,9 @@ namespace gitgud::speech
         std::lock_guard<std::mutex> lock(m_Mutex);
         m_Config = std::move(config);
         m_Files = std::move(files);
-        m_GpuDir = _Settings["gpuDir"].AsString();
-        m_Tts = tts.IsObject() ? tts : Json();
-        m_TtsFiles = std::move(ttsFiles);
         m_Small = small.IsObject() ? small : Json();
         m_bConfigured = true;
         return true;
-    }
-
-    std::string LocalEngine::GpuDir() const
-    {
-        std::lock_guard<std::mutex> lock(m_Mutex);
-        if (m_Tts.IsObject() && m_Tts["provider"].AsString("cuda") == "cuda" &&
-            GpuRuntimePresent(m_GpuDir))
-        {
-            return m_GpuDir;
-        }
-        return {};
-    }
-
-    std::string LocalEngine::DefaultMadeVoice() const
-    {
-        std::string dir;
-        {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            dir = m_Tts.IsObject() ? m_Tts["voicesDir"].AsString() : std::string();
-        }
-        if (dir.empty())
-        {
-            return {};
-        }
-        std::error_code ec;
-        if (fs::is_regular_file(fs::u8path(dir) / "baldr.voice", ec))
-        {
-            return "turbo:baldr";
-        }
-        std::vector<std::string> names;
-        for (fs::directory_iterator it(fs::u8path(dir), ec), end; !ec && it != end; it.increment(ec))
-        {
-            if (it->path().extension() == ".voice")
-            {
-                names.push_back(it->path().stem().u8string());
-            }
-        }
-        std::sort(names.begin(), names.end());
-        return names.empty() ? std::string() : "turbo:" + names.front();
-    }
-
-    bool LocalEngine::TurboConfigured() const
-    {
-        std::lock_guard<std::mutex> lock(m_Mutex);
-        return m_Tts.IsObject();
     }
 
     bool LocalEngine::SmallConfigured() const
@@ -1181,8 +958,6 @@ namespace gitgud::speech
         state.m_bFaulted = m_bFaulted.load();
         state.m_FaultCode = m_FaultCode;
         state.m_FaultDetail = m_FaultDetail;
-        state.m_TurboDevice = m_TurboDevice;
-        state.m_GpuError = m_GpuError;
         return state;
     }
 
@@ -1364,13 +1139,9 @@ namespace gitgud::speech
             m_bSpeakInTask = true;
             task();
             m_bSpeakInTask = false;
-            if (m_bFaulted.load() && m_pTurbo)
-            {
-                UnloadTurbo(); // leaks its handles once faulted
-            }
             if (m_bFaulted.load() && m_pSmall)
             {
-                UnloadSmall(); // the same
+                UnloadSmall(); // leaks its handles once faulted
             }
         }
     }
@@ -1644,8 +1415,7 @@ namespace gitgud::speech
             OpenLog();
         }
         std::string error;
-        // Always the app's own libraries: they run on the processor, and
-        // spoken replies move to the GPU when its pack is there.
+        // Always the app's own libraries: they run on the processor.
         if (!LoadSherpa(m_LibraryDir, error))
         {
             _Code = "engine-missing";
@@ -1931,19 +1701,6 @@ namespace gitgud::speech
             });
     }
 
-    // ---- Turbo (speaking thread) ---------------------------------------------------
-
-    struct LocalEngine::TurboState
-    {
-        std::unique_ptr<TurboOnnx> m_pNets;
-        Gpt2Tokenizer m_Tokenizer;
-        std::unique_ptr<TurboSynth> m_pSynth;
-        std::string m_VoicesDir;
-        std::map<std::string, VoiceConditioning> m_Voices;
-        std::string m_LoadError;  // a failed load, until the settings change
-        std::string m_LoadedFrom; // the settings it loaded with
-    };
-
     namespace
     {
 
@@ -1966,231 +1723,6 @@ namespace gitgud::speech
         }
 
     } // namespace
-
-    void LocalEngine::WarmTurbo(std::function<void()> _Done)
-    {
-        PostSpeak(
-            [this, done = std::move(_Done)]()
-            {
-                std::string error;
-                EnsureTurbo(error);
-                if (done)
-                {
-                    done();
-                }
-            });
-    }
-
-    bool LocalEngine::EnsureTurbo(std::string& _Error)
-    {
-        if (m_bFaulted.load())
-        {
-            _Error = "the speech engine stopped after an internal error";
-            return false;
-        }
-        Json tts;
-        FileList files;
-        {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            tts = m_Tts;
-            files = m_TtsFiles;
-        }
-        if (!tts.IsObject())
-        {
-            _Error = "spoken replies in a made voice aren't set up";
-            return false;
-        }
-        // The GPU pack arriving (or going) loads Turbo again, in this run.
-        const std::string gpuDir = GpuDir();
-        const std::string settings = tts.Dump() + "\n" + gpuDir;
-        if (m_pTurbo && m_pTurbo->m_LoadedFrom == settings)
-        {
-            if (!m_pTurbo->m_LoadError.empty())
-            {
-                _Error = m_pTurbo->m_LoadError;
-                return false;
-            }
-            return true;
-        }
-        UnloadTurbo();
-        m_pTurbo = std::make_unique<TurboState>();
-        m_pTurbo->m_LoadedFrom = settings;
-        auto fail = [&](const std::string& _Message)
-        {
-            m_pTurbo->m_LoadError = _Message;
-            _Error = _Message;
-            Log("speak: " + _Message);
-            return false;
-        };
-
-        TakeLastCrash(); // before the marker is reused
-        if (!m_bSpeakMarkerOpen)
-        {
-            m_bSpeakMarkerOpen =
-                m_SpeakMarker.Open((fs::u8path(m_StateDir) / "voice-state-speak").u8string());
-        }
-        {
-            std::lock_guard<std::mutex> lock(m_LogMutex);
-            OpenLog();
-        }
-        std::string error;
-        if (!LoadSherpa(m_LibraryDir, error))
-        {
-            return fail(error);
-        }
-        if (!VerifyFiles(files, error))
-        {
-            return fail(error);
-        }
-        {
-            std::ifstream in(fs::u8path(tts["tokenizer"].AsString()), std::ios::binary);
-            std::stringstream ss;
-            ss << in.rdbuf();
-            if (!m_pTurbo->m_Tokenizer.Load(ss.str(), error))
-            {
-                return fail("the tokenizer didn't load: " + error);
-            }
-        }
-        TurboFiles turboFiles;
-        turboFiles.m_Dir = tts["dir"].AsString();
-        turboFiles.m_Encoder = tts["encoder"].AsString();
-        turboFiles.m_Embed = tts["embed"].AsString();
-        turboFiles.m_Lm = tts["lm"].AsString();
-        turboFiles.m_Decoder = tts["decoder"].AsString();
-        auto threads = [&](const char* _szKey, int64_t _iDefault)
-        {
-            return static_cast<int>(
-                std::min<int64_t>(16, std::max<int64_t>(1, tts[_szKey].AsInt(_iDefault))));
-        };
-        std::string gpuError;
-        if (!gpuDir.empty())
-        {
-            // Loading NVIDIA's libraries runs their code: guarded like any call.
-            bool bcuda = false;
-            if (Call("start the GPU", 120s, [&]() { bcuda = EnableCuda(gpuDir, gpuError); }))
-            {
-                turboFiles.m_bCuda = bcuda;
-            }
-            else if (gpuError.empty())
-            {
-                gpuError = "starting the GPU failed";
-            }
-            if (m_bFaulted.load())
-            {
-                return fail("the speech engine stopped while starting the GPU");
-            }
-        }
-        m_pTurbo->m_VoicesDir = tts["voicesDir"].AsString();
-        const auto t0 = std::chrono::steady_clock::now();
-        auto load = [&]()
-        {
-            turboFiles.m_iThreads = turboFiles.m_bCuda ? threads("threads", 4)
-                                                       : threads("cpuThreads", threads("threads", 4));
-            m_pTurbo->m_pNets = std::make_unique<TurboOnnx>(turboFiles,
-                [this](const char* _szName, std::chrono::milliseconds _Limit,
-                    const std::function<void()>& _Fn) { return Call(_szName, _Limit, _Fn); });
-            if (m_pTurbo->m_pNets->Load(error))
-            {
-                return true;
-            }
-            if (m_bFaulted.load())
-            {
-                m_pTurbo->m_pNets->SetPoisoned();
-            }
-            return false;
-        };
-        bool bloaded = load();
-        if (!bloaded && turboFiles.m_bCuda && !m_bFaulted.load())
-        {
-            // The GPU didn't take the models: the processor does.
-            gpuError = error;
-            Log("speak: Turbo didn't load on the GPU (" + error + "); loading it on the CPU");
-            m_pTurbo->m_pNets.reset();
-            turboFiles.m_bCuda = false;
-            bloaded = load();
-        }
-        {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            m_GpuError = gpuError;
-            m_TurboDevice = bloaded ? (turboFiles.m_bCuda ? "gpu" : "cpu") : "";
-        }
-        if (!gpuError.empty())
-        {
-            Log("speak: the GPU isn't used: " + gpuError);
-        }
-        if (!bloaded)
-        {
-            return fail(
-                error + (m_SpeakException.empty() ? std::string() : " (" + m_SpeakException + ")"));
-        }
-        m_pTurbo->m_pSynth =
-            std::make_unique<TurboSynth>(*m_pTurbo->m_pNets, m_pTurbo->m_Tokenizer);
-        Log(std::string("speak: Turbo loaded on ") + (turboFiles.m_bCuda ? "the GPU" : "the CPU") +
-            " in " +
-            std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - t0)
-                    .count()) +
-            " ms");
-        return true;
-    }
-
-    void LocalEngine::UnloadTurbo()
-    {
-        if (!m_pTurbo)
-        {
-            return;
-        }
-        if (m_pTurbo->m_pNets && m_bFaulted.load())
-        {
-            m_pTurbo->m_pNets->SetPoisoned();
-        }
-        m_pTurbo.reset();
-        std::lock_guard<std::mutex> lock(m_Mutex);
-        m_TurboDevice.clear();
-    }
-
-    bool LocalEngine::TurboSay(const std::string& _Sentence, const std::string& _Name,
-        double _fSpeed, const std::function<bool()>& _Stopped, std::vector<float>& _Audio,
-        std::string& _Error)
-    {
-        if (!EnsureTurbo(_Error))
-        {
-            return false;
-        }
-        if (!ValidVoiceName(_Name))
-        {
-            _Error = "no voice called " + _Name;
-            return false;
-        }
-        TurboState& turbo = *m_pTurbo;
-        auto it = turbo.m_Voices.find(_Name);
-        if (it == turbo.m_Voices.end())
-        {
-            VoiceConditioning voice;
-            if (!voice.Load(
-                    (fs::u8path(turbo.m_VoicesDir) / (_Name + ".voice")).u8string(), _Error))
-            {
-                return false;
-            }
-            it = turbo.m_Voices.emplace(_Name, std::move(voice)).first;
-        }
-        const auto t0 = std::chrono::steady_clock::now();
-        const bool bok =
-            turbo.m_pSynth->Say(_Sentence, it->second, _fSpeed, _Stopped, _Audio, _Error);
-        const double fms =
-            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-                .count();
-        char abuf[160];
-        std::snprintf(abuf, sizeof(abuf), "speak: %d tokens, %.2f s of audio in %.0f ms%s",
-            turbo.m_pSynth->LastTokens(), static_cast<double>(_Audio.size()) / kTurboRate, fms,
-            bok ? "" : " (failed)");
-        Log(abuf);
-        if (!bok && !m_SpeakException.empty())
-        {
-            _Error += " (" + m_SpeakException + ")";
-        }
-        return bok;
-    }
 
     // ---- Small voices (speaking thread) -------------------------------------------
 
@@ -2232,13 +1764,12 @@ namespace gitgud::speech
         m_pSmall.reset();
     }
 
-    bool LocalEngine::SmallSay(const std::string& _Phonemes, const std::string& _Name,
-        double _fSpeed, double _fWobble, std::vector<float>& _Audio, std::string& _Error)
+    SmallVoice* LocalEngine::FindSmall(const std::string& _Name, std::string& _Error)
     {
         if (m_bFaulted.load())
         {
             _Error = "the speech engine stopped after an internal error";
-            return false;
+            return nullptr;
         }
         Json small;
         {
@@ -2248,12 +1779,12 @@ namespace gitgud::speech
         if (!small.IsObject())
         {
             _Error = "the built-in voice isn't set up";
-            return false;
+            return nullptr;
         }
         if (!ValidVoiceName(_Name))
         {
             _Error = "no voice called " + _Name;
-            return false;
+            return nullptr;
         }
         const std::string settings = small.Dump();
         if (m_pSmall && m_pSmall->m_LoadedFrom != settings)
@@ -2270,7 +1801,7 @@ namespace gitgud::speech
         if (failed != state.m_LoadErrors.end())
         {
             _Error = failed->second;
-            return false;
+            return nullptr;
         }
         auto it = state.m_Voices.find(_Name);
         if (it == state.m_Voices.end())
@@ -2280,7 +1811,7 @@ namespace gitgud::speech
             {
                 _Error = error;
                 Log("speak: " + error);
-                return false;
+                return nullptr;
             }
             const int ithreads = static_cast<int>(
                 std::min<int64_t>(16, std::max<int64_t>(1, small["threads"].AsInt(2))));
@@ -2300,7 +1831,7 @@ namespace gitgud::speech
                 state.m_LoadErrors[_Name] = error;
                 _Error = error;
                 Log("speak: the small voice " + _Name + " didn't load: " + error);
-                return false;
+                return nullptr;
             }
             Log("speak: small voice " + _Name + " loaded in " +
                 std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -2309,14 +1840,35 @@ namespace gitgud::speech
                 " ms");
             it = state.m_Voices.emplace(_Name, std::move(pvoice)).first;
         }
+        return it->second.get();
+    }
+
+    void LocalEngine::WarmSmall(const std::string& _Name)
+    {
+        PostSpeak(
+            [this, _Name]()
+            {
+                std::string error;
+                FindSmall(_Name, error); // a failed load is logged, and its say says why
+            });
+    }
+
+    bool LocalEngine::SmallSay(const std::string& _Phonemes, const std::string& _Name,
+        double _fSpeed, double _fWobble, std::vector<float>& _Audio, std::string& _Error)
+    {
+        SmallVoice* pvoice = FindSmall(_Name, _Error);
+        if (!pvoice)
+        {
+            return false;
+        }
         const auto t0 = std::chrono::steady_clock::now();
-        const bool bok = it->second->Say(_Phonemes, _fSpeed, _fWobble, _Audio, _Error);
+        const bool bok = pvoice->Say(_Phonemes, _fSpeed, _fWobble, _Audio, _Error);
         const double fms =
             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                 .count();
         char abuf[160];
         std::snprintf(abuf, sizeof(abuf), "speak: %zu phonemes, %.2f s of audio in %.0f ms%s",
-            it->second->LastIds(), static_cast<double>(_Audio.size()) / kSmallVoiceRate, fms,
+            pvoice->LastIds(), static_cast<double>(_Audio.size()) / kSmallVoiceRate, fms,
             bok ? "" : " (failed)");
         Log(abuf);
         if (!bok && !m_SpeakException.empty())
@@ -2324,66 +1876,6 @@ namespace gitgud::speech
             _Error += " (" + m_SpeakException + ")";
         }
         return bok;
-    }
-
-    void LocalEngine::MakeVoice(
-        const std::string& _Wav, const std::string& _Name, std::function<void(const Json&)> _Done)
-    {
-        PostSpeak(
-            [this, _Wav, _Name, _Done]()
-            {
-                Json result = Json::Object();
-                std::string error;
-                if (!ValidVoiceName(_Name))
-                {
-                    _Done(result.Set("ok", false)
-                            .Set("code", "bad-name")
-                            .Set("message", "a voice name is letters, digits, - and _"));
-                    return;
-                }
-                if (!EnsureTurbo(error))
-                {
-                    _Done(
-                        result.Set("ok", false).Set("code", "engine-files").Set("message", error));
-                    return;
-                }
-                std::vector<float> audio;
-                if (!ReadWav24k(_Wav, audio, error))
-                {
-                    _Done(result.Set("ok", false).Set("code", "bad-wav").Set("message", error));
-                    return;
-                }
-                VoiceConditioning voice;
-                const auto t0 = std::chrono::steady_clock::now();
-                if (!m_pTurbo->m_pSynth->Clone(audio, voice, error))
-                {
-                    _Done(result.Set("ok", false)
-                            .Set("code", m_bFaulted.load() ? State().m_FaultCode
-                                                           : std::string("engine-error"))
-                            .Set("message", error + (m_SpeakException.empty()
-                                                            ? ""
-                                                            : " (" + m_SpeakException + ")")));
-                    return;
-                }
-                const std::string path =
-                    (fs::u8path(m_pTurbo->m_VoicesDir) / (_Name + ".voice")).u8string();
-                if (!voice.Save(path, error))
-                {
-                    _Done(result.Set("ok", false).Set("code", "not-saved").Set("message", error));
-                    return;
-                }
-                m_pTurbo->m_Voices[_Name] = voice;
-                const double fms =
-                    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-                        .count();
-                Log("speak: voice " + _Name + " made from " +
-                    std::to_string(audio.size() / kTurboRate) + " s in " +
-                    std::to_string(static_cast<int>(fms)) + " ms");
-                _Done(result.Set("ok", true)
-                        .Set("seconds",
-                            std::round(static_cast<double>(audio.size()) / kTurboRate * 10) / 10)
-                        .Set("ms", std::round(fms)));
-            });
     }
 
 } // namespace gitgud::speech

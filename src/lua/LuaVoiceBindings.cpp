@@ -40,9 +40,12 @@
 //                                     roughHigh}) }. A "small:<name>"
 //                                     voice's text is its phonemes, and
 //                                     sampleRate is the rate it plays at
-//   gitgud.voiceSpeakPrepare()     -> true | nil, msg. Opens the speak channel
+//   gitgud.voiceSpeakPrepare(voice?)
+//                                  -> true | nil, msg. Opens the speak channel
 //                                     and the speaker now (when listening
-//                                     starts), so the first reply is quick
+//                                     starts), and loads `voice` (a
+//                                     "small:<name>" voice), so the first
+//                                     reply is quick
 //   gitgud.voiceSpeakStop(id?)     stop that reply, or all of them
 //   gitgud.voiceInfo()             -> { available, listening, speaking,
 //                                       playing }; available: a speech
@@ -65,9 +68,8 @@
 // models load when listening starts). Tests use a stand-in: GITGUD_TEST_VOICE
 // or gitgud.voiceTestEngine("fake" | "fault" | nil), under the harness only.
 //   gitgud.voiceEngine()           -> { installed, configured, loaded,
-//                                       faulted, faultCode, fault, gpu,
-//                                       runtimeDir, turbo, turboDevice,
-//                                       gpuError, test, lastCrash }: installed, its
+//                                       faulted, faultCode, fault,
+//                                       runtimeDir, test, lastCrash }: installed, its
 //                                     libraries are there; faulted, it
 //                                     stopped after an internal error (until
 //                                     the app restarts); test, "fake" or
@@ -117,10 +119,8 @@
 #include "app/TaskRunner.h"
 #include "lua/LuaBindings.h"
 #include "platform/Audio.h"
-#include "platform/Gpu.h"
 #include "speech/FakeEngine.h"
 #include "speech/LocalEngine.h"
-#include "speech/OnnxPatch.h"
 #include "speech/SherpaApi.h"
 #include "voice/Pcm.h"
 #include "voice/VoiceSession.h"
@@ -523,7 +523,7 @@ namespace gitgud::lua::bindings
             {
                 return FailWith(_pL, error);
             }
-            g_pSpeak->Prepare();
+            g_pSpeak->Prepare(luaL_optstring(_pL, 1, ""));
             return Ok(_pL);
         }
 
@@ -640,14 +640,7 @@ namespace gitgud::lua::bindings
             SetField(_pL, "configured", state.m_bConfigured);
             SetField(_pL, "loaded", state.m_bLoaded);
             SetField(_pL, "faulted", state.m_bFaulted);
-            SetField(_pL, "gpu", speech::SherpaOnGpu());
             SetField(_pL, "runtimeDir", speech::SherpaDir());
-            SetField(_pL, "turboDevice", state.m_TurboDevice);
-            if (!state.m_GpuError.empty())
-            {
-                SetField(_pL, "gpuError", state.m_GpuError);
-            }
-            SetField(_pL, "turbo", engine.TurboConfigured());
             if (state.m_bFaulted)
             {
                 SetField(_pL, "faultCode", state.m_FaultCode);
@@ -760,158 +753,6 @@ namespace gitgud::lua::bindings
             return Ok(_pL);
         }
 
-        // gitgud.voiceMakeVoice(task, wav, name) -> true | nil, msg
-        int LVoiceMakeVoice(lua_State* _pL)
-        {
-            const std::string task = luaL_checkstring(_pL, 1);
-            const std::string wav = luaL_checkstring(_pL, 2);
-            const std::string name = luaL_checkstring(_pL, 3);
-            auto* pbus = Self(_pL)->EventBus();
-            if (!pbus)
-            {
-                return FailWith(_pL, "no event bus");
-            }
-            if (!TestVoice().empty())
-            {
-                pbus->Publish({task + ".done", Json::Object().Set("ok", true).Set("seconds", 10).Dump()});
-                return Ok(_pL);
-            }
-            speech::LocalEngine& engine = speech::LocalEngine::Instance();
-            if (!engine.TurboConfigured())
-            {
-                return FailWith(_pL, "spoken replies in a made voice aren't set up");
-            }
-            engine.MakeVoice(wav, name, [pbus, task](const Json& _Result) { pbus->Publish({task + ".done", _Result.Dump()}); });
-            return Ok(_pL);
-        }
-
-        // gitgud.gpuInfo() -> { present, driver, cuda, devices = { {name, memory}, ... }, error? }
-        int LGpuInfo(lua_State* _pL)
-        {
-            const platform::NvidiaInfo info = platform::QueryNvidia();
-            lua_newtable(_pL);
-            SetField(_pL, "present", info.m_bPresent);
-            SetField(_pL, "driver", info.m_Driver);
-            SetField(_pL, "cuda", static_cast<lua_Integer>(info.m_iCudaVersion));
-            if (!info.m_Error.empty())
-            {
-                SetField(_pL, "error", info.m_Error);
-            }
-            lua_createtable(_pL, static_cast<int>(info.m_Devices.size()), 0);
-            lua_Integer i = 0;
-            for (const platform::GpuDevice& device : info.m_Devices)
-            {
-                lua_newtable(_pL);
-                SetField(_pL, "name", device.m_Name);
-                SetField(_pL, "memory", static_cast<lua_Integer>(device.m_uMemoryBytes));
-                lua_rawseti(_pL, -2, ++i);
-            }
-            lua_setfield(_pL, -2, "devices");
-            return 1;
-        }
-
-        // gitgud.onnxSetAccuracy(in, out, level) -> nodes changed | nil, msg
-        // gitgud.onnxSetAccuracy(in, out, level, task) -> true | nil, msg: on
-        // a worker; "<task>.progress" ({phase = "patch", done, total}: bytes
-        // read and written) and "<task>.done" (nodes changed) or ".error".
-        int LOnnxSetAccuracy(lua_State* _pL)
-        {
-            const std::string in = luaL_checkstring(_pL, 1);
-            const std::string out = luaL_checkstring(_pL, 2);
-            const int ilevel = static_cast<int>(luaL_checkinteger(_pL, 3));
-            if (lua_isnoneornil(_pL, 4))
-            {
-                int ichanged = 0;
-                std::string error;
-                if (!speech::SetMatMulNBitsAccuracy(in, out, ilevel, ichanged, error))
-                {
-                    return FailWith(_pL, error);
-                }
-                lua_pushinteger(_pL, ichanged);
-                return 1;
-            }
-            const std::string task = luaL_checkstring(_pL, 4);
-            auto* ptasks = Self(_pL)->TaskRunner();
-            if (!ptasks)
-            {
-                return FailWith(_pL, "no task runner");
-            }
-            app::EventBus* pbus = Self(_pL)->EventBus();
-            ptasks->Run(task,
-                [task, in, out, ilevel, pbus]() -> std::string
-                {
-                    auto last = std::chrono::steady_clock::time_point{};
-                    auto report = [&](std::uint64_t _uDone, std::uint64_t _uTotal, bool _bForce)
-                    {
-                        const auto now = std::chrono::steady_clock::now();
-                        if (!pbus || (!_bForce && now - last < std::chrono::milliseconds(200)))
-                        {
-                            return;
-                        }
-                        last = now;
-                        pbus->Publish({task + ".progress", Json::Object()
-                                                               .Set("phase", "patch")
-                                                               .Set("done", static_cast<double>(_uDone))
-                                                               .Set("total", static_cast<double>(_uTotal))
-                                                               .Dump()});
-                    };
-                    namespace fs = std::filesystem;
-                    std::error_code ec;
-                    const std::uint64_t usize = fs::file_size(fs::u8path(in), ec);
-                    std::ifstream file(fs::u8path(in), std::ios::binary);
-                    if (ec || !file)
-                    {
-                        throw std::runtime_error("cannot read " + in);
-                    }
-                    // Read, patch in memory, write: progress over both passes.
-                    std::string model(static_cast<std::size_t>(usize), '\0');
-                    constexpr std::size_t kChunk = 8u << 20;
-                    for (std::size_t nat = 0; nat < model.size(); nat += kChunk)
-                    {
-                        const std::size_t n = std::min(kChunk, model.size() - nat);
-                        if (!file.read(model.data() + nat, static_cast<std::streamsize>(n)))
-                        {
-                            throw std::runtime_error("cannot read " + in);
-                        }
-                        report(nat + n, 2 * usize, false);
-                    }
-                    std::string patched;
-                    int ichanged = 0;
-                    if (!speech::SetMatMulNBitsAccuracyBytes(model, ilevel, patched, ichanged))
-                    {
-                        throw std::runtime_error(in + " isn't an ONNX model");
-                    }
-                    model.clear();
-                    model.shrink_to_fit();
-                    const fs::path part = fs::u8path(out + ".part");
-                    {
-                        std::ofstream dest(part, std::ios::binary | std::ios::trunc);
-                        for (std::size_t nat = 0; dest && nat < patched.size(); nat += kChunk)
-                        {
-                            const std::size_t n = std::min(kChunk, patched.size() - nat);
-                            dest.write(patched.data() + nat, static_cast<std::streamsize>(n));
-                            report(usize + (nat + n) * usize / std::max<std::size_t>(1, patched.size()),
-                                2 * usize, false);
-                        }
-                        if (!dest)
-                        {
-                            fs::remove(part, ec);
-                            throw std::runtime_error("cannot write " + out);
-                        }
-                    }
-                    fs::remove(fs::u8path(out), ec);
-                    fs::rename(part, fs::u8path(out), ec);
-                    if (ec)
-                    {
-                        throw std::runtime_error("cannot write " + out + ": " + ec.message());
-                    }
-                    report(2 * usize, 2 * usize, true);
-                    return std::to_string(ichanged);
-                });
-            lua_pushboolean(_pL, 1);
-            return 1;
-        }
-
         // gitgud.voiceEngineForgetCrash(): the user turned voice back on; the
         // last run's crash isn't reported again (voiceEngine().lastCrash).
         int LVoiceEngineForgetCrash(lua_State*)
@@ -994,9 +835,6 @@ namespace gitgud::lua::bindings
         _Out.push_back({"voiceVoices", LVoiceVoices});
         _Out.push_back({"voiceEngineRelease", LVoiceEngineRelease});
         _Out.push_back({"voiceTestEngine", LVoiceTestEngine});
-        _Out.push_back({"voiceMakeVoice", LVoiceMakeVoice});
-        _Out.push_back({"gpuInfo", LGpuInfo});
-        _Out.push_back({"onnxSetAccuracy", LOnnxSetAccuracy});
         _Out.push_back({"voiceEngineForgetCrash", LVoiceEngineForgetCrash});
         _Out.push_back({"audioDevices", LAudioDevices});
         _Out.push_back({"setAudioDevices", LSetAudioDevices});

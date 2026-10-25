@@ -361,24 +361,17 @@ Zipformer wake word spotter, Parakeet speech recognition, TitaNet speaker
 recognition) for `listen`, and for `speak` a small built-in voice
 (`small:<name>`: a few-MB model in an interface's `voices/<name>` folder,
 `model.onnx` and `phonemes.tsv`, on the processor; its `say` text is
-phonemes, and `sampleRate` is the rate it plays at), Chatterbox Turbo in a
-voice made from a recording (`voiceMakeVoice`), or the system's voices. Its
-libraries live in the `voice` folder beside the exe (sherpa-onnx's CPU
+phonemes, and `sampleRate` is the rate it plays at), or the system's
+voices. Its libraries live in the `voice` folder beside the exe (sherpa-onnx's CPU
 build with ONNX Runtime's GPU build, which runs on the processor) and load
 the first time voice starts (never for an interface that doesn't use
 voice). Its models aren't part of the app: the Bragi interface downloads
 them on the user's OK into the local app data folder and tells the engine
-where they are (`voiceEngineSetup`): the listening models, Chatterbox
-Turbo (`tts`), and the optional GPU pack for NVIDIA GPUs, ONNX Runtime's
-CUDA provider and NVIDIA's CUDA and cuDNN libraries (`gpuDir`); the small
-voices' folder comes with the interface (`small`). The Bragi interface's
-replies use its built-in voice (`voices/bragi-1`, its text made phonemes by
-`bragi/phonemes.lua`) unless another is chosen; it makes Baldr from
-`voices/baldr/ref.wav` once Turbo is in. One ONNX
-Runtime serves both channels. Listening always runs on the processor and
-never waits for the GPU; with the GPU pack, Turbo moves to the GPU the
-next time it loads, in the same run, and stays on the processor (with
-`voiceEngine().gpuError`) if the GPU doesn't start. A build without the `voice` folder
+where they are (`voiceEngineSetup`); the small voices' folder comes with
+the interface (`small`). The Bragi interface's replies use its built-in
+voice (`voices/bragi-1`, its text made phonemes by `bragi/phonemes.lua`)
+unless a system voice is chosen. One ONNX Runtime serves both channels,
+on the processor. A build without the `voice` folder
 has no engine: `voiceInfo().available` is `false` and `voiceListen`,
 `voiceSpeak`, and `voiceSpeakPrepare` return `nil, "Voice isn't
 available"`. The devices and the microphone check work without one.
@@ -408,18 +401,15 @@ exit and is never reported as a crash.
 | `voiceLookback(id, tokens?)` | ask for the newest transcript, up to `tokens` (default the engine's `contextTokens`); `voice.lookback` answers with the same `id` |
 | `voiceTrain(state)` / `voiceEnroll(state)` | wake word training (`start`, `stop`) and voice enrollment (`start`, `stop`, `clear`) |
 | `voiceSpeak(id, text, options?)` | speak `text` (opens the `speak` channel on first use); `options`: `voice`, `sampleRate`, `speed` (1 is normal pace), `voicing` (a small voice's `wobble`, `rough`, `roughLow`, `roughHigh`). A `small:` voice's `text` is its phonemes. Send replies a sentence or paragraph at a time |
-| `voiceSpeakPrepare()` | open the speak channel and the speaker now (Bragi calls it when listening starts), so the first reply waits for neither; `true` or `nil, msg` |
+| `voiceSpeakPrepare(voice?)` | open the speak channel and the speaker now, and load `voice` (a `small:` voice) (Bragi calls it when listening starts), so the first reply waits for none of them; `true` or `nil, msg` |
 | `voiceSpeakStop(id?)` | stop that reply, or all of them; playback goes quiet at once |
 | `voiceInfo()` | `{available, listening, speaking, playing}` (`available`: a speech engine is there; `playing`: the reply id being heard, or `""`) |
-| `voiceEngine()` | the engine inside the app: `{installed, configured, loaded, faulted, faultCode?, fault?, gpu, runtimeDir, turbo, turboDevice, gpuError?, test?, lastCrash?}`. `installed`: its libraries are there (nothing loads to say so); `faulted`: it stopped after an internal error; `gpu`: the CUDA provider started (it stays for the run); `runtimeDir`: where the libraries loaded from (`""` until they load); `turbo`: Chatterbox Turbo is set up; `turboDevice`: where it loaded, `"gpu"` or `"cpu"` (`""` while it isn't loaded); `gpuError`: why it isn't on the GPU it was asked to use; `lastCrash` (`{call, log}`): the call it was in when the app ended without warning last time, and the end of its log (`<app data>/bragi/voice-engine.log`) |
-| `voiceEngineSetup(settings)` | the models and how to run them, used from the next time listening starts: `vadModel`, `asrDir`, `kwsDir`, `speakerModel`, `voiceprintsDir`, `workDir`, `files` (`{ {path, size, sha256}, … }`, checked before loading), plus `asrThreads`, `kwsThreads`, `speakerThreads`, `hotwords`, `partialSeconds`, `wakeWord`, `spotterSpellings`, `mishearings`, and the other listening settings. With Chatterbox Turbo: `tts` (`{dir, encoder, embed, lm, decoder, tokenizer, voicesDir, provider, threads, cpuThreads, files}`: its graphs, where made voices go, `"cuda"` or `"cpu"`, and the processor threads on the GPU and without it); with the GPU pack, `gpuDir` (its folder: Turbo moves there the next time it loads, no restart); with small voices, `small` (`{voicesDir, threads}`: the folder whose `<name>` folders are the `small:<name>` voices, and their processor threads). `true` or `nil, msg` |
+| `voiceEngine()` | the engine inside the app: `{installed, configured, loaded, faulted, faultCode?, fault?, runtimeDir, test?, lastCrash?}`. `installed`: its libraries are there (nothing loads to say so); `faulted`: it stopped after an internal error; `runtimeDir`: where the libraries loaded from (`""` until they load); `lastCrash` (`{call, log}`): the call it was in when the app ended without warning last time, and the end of its log (`<app data>/bragi/voice-engine.log`) |
+| `voiceEngineSetup(settings)` | the models and how to run them, used from the next time listening starts: `vadModel`, `asrDir`, `kwsDir`, `speakerModel`, `voiceprintsDir`, `workDir`, `files` (`{ {path, size, sha256}, … }`, checked before loading), plus `asrThreads`, `kwsThreads`, `speakerThreads`, `hotwords`, `partialSeconds`, `wakeWord`, `spotterSpellings`, `mishearings`, and the other listening settings. With small voices, `small` (`{voicesDir, threads}`: the folder whose `<name>` folders are the `small:<name>` voices, and their processor threads). `true` or `nil, msg` |
 | `voiceSelfTest(task, wav?)` | load every model and run each once (on generated sound, or on `wav`, 16 kHz mono 16-bit); `<task>.done` carries `{ok, loadMs, decodeMs, text, keywords, speaker, code?, message?}`. `true` or `nil, msg` |
 | `voiceVoices()` | the system's voices for spoken replies: `{ {id, name, language}, … }` or `nil, msg` |
 | `voiceEngineRelease()` | release the models now (before removing them); they load again when listening starts |
 | `voiceEngineForgetCrash()` | the last run's crash (`voiceEngine().lastCrash`) isn't reported again this run |
-| `voiceMakeVoice(task, wav, name)` | make a voice from a recording (a WAV file; 10 to 20 s of one person speaking): Chatterbox Turbo's conditioning for it, saved as `<voicesDir>/<name>.voice`; then `say` with `voice` `"turbo:<name>"` speaks in it. `<task>.done` carries `{ok, seconds?, ms?, code?, message?}`. `true` or `nil, msg` |
-| `gpuInfo()` | the NVIDIA GPU, from the driver's own library: `{present, driver, cuda, devices = { {name, memory}, … }, error?}` (`cuda`: the newest CUDA the driver runs, `13030` for 13.3) |
-| `onnxSetAccuracy(in, out, level, task?)` | copy an ONNX graph with `accuracy_level` set on its quantized matmuls (MatMulNBits); the number changed, or `nil, msg`. With `task`, on a worker: `<task>.progress` (`{phase = "patch", done, total}`), then `<task>.done` with the number changed |
 | `voiceTestEngine(mode?)` | tests only (under `GITGUD_SCRIPT`): `"fake"` or `"fault"` swaps in a stand-in engine with a quiet microphone and speaker (`GITGUD_TEST_VOICE` does the same from the start); `nil` goes back |
 | `audioDevices()` | `{inputs = { {id, name, default}, … }, outputs = …}`: the microphones and speakers plugged in (`default`: the system's default device, the one voice opens when none is picked); empty lists where devices can't be listed |
 | `setAudioDevices(input, output)` | the devices voice opens from its next start; `""` or `nil` is the system default. One that's unplugged falls back to the default. A new speaker closes the `speak` channel; the next `voiceSpeak` plays there |

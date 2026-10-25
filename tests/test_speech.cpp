@@ -506,18 +506,13 @@ TEST_CASE("Unpacking reports what it has read, and stops when told", "[speech]")
 }
 #endif
 
-TEST_CASE("A GPU pack never stops listening, and a broken one isn't used", "[speech]")
+TEST_CASE("Listening loads only the app's own libraries, nothing of CUDA", "[speech]")
 {
-    const fs::path dir = TempDir("gpupack");
+    const fs::path dir = TempDir("libraries");
     if (!SherpaFilesPresent(VoiceLibraries()))
     {
         SKIP("no voice libraries beside the test exe");
     }
-    // A pack that arrived after the engine started, from an older layout
-    // too (its own ONNX Runtime beside the provider), and broken.
-    const fs::path gpu = dir / "gpu";
-    WriteFile(gpu / "onnxruntime_providers_cuda.dll", "not a library");
-    WriteFile(gpu / "onnxruntime.dll", "not a library either");
     WriteFile(dir / "vad.onnx", "not a model");
     LocalEngine engine(VoiceLibraries(), (dir / "state").u8string());
     Json settings = Json::Object();
@@ -525,7 +520,6 @@ TEST_CASE("A GPU pack never stops listening, and a broken one isn't used", "[spe
         .Set("asrDir", (dir / "asr").u8string())
         .Set("kwsDir", (dir / "kws").u8string())
         .Set("workDir", (dir / "work").u8string())
-        .Set("gpuDir", gpu.u8string())
         .Set("files", Json::Array().Push(Json::Object()
                               .Set("path", (dir / "vad.onnx").u8string())
                               .Set("size", 11)
@@ -533,7 +527,7 @@ TEST_CASE("A GPU pack never stops listening, and a broken one isn't used", "[spe
     std::string error;
     REQUIRE(engine.Configure(settings, error));
 
-    // Listening loads the app's own libraries whatever the pack: it gets as
+    // Listening loads the app's own libraries: it gets as
     // far as the models (never "engine-missing").
     for (int i = 0; i < 2; ++i)
     {
@@ -551,17 +545,6 @@ TEST_CASE("A GPU pack never stops listening, and a broken one isn't used", "[spe
     CHECK(GetModuleHandleW(L"onnxruntime_providers_cuda.dll") == nullptr);
     CHECK(GetModuleHandleW(L"cudart64_13.dll") == nullptr);
     CHECK(GetModuleHandleW(L"cublas64_13.dll") == nullptr);
-
-    // The broken provider doesn't start: the GPU stays off, with the reason.
-    // A stand-in that isn't a library is never loaded (Windows would stop
-    // the run with a "Bad Image" dialog).
-    CHECK_FALSE(EnableCuda(gpu.u8string(), error));
-    CHECK(error.find("isn't a library") != std::string::npos);
-    CHECK(GetModuleHandleW(L"onnxruntime_providers_cuda.dll") == nullptr);
-    CHECK_FALSE(SherpaOnGpu());
-    CHECK(CudaEpDevice() == nullptr);
-    CHECK_FALSE(EnableCuda((dir / "nothing").u8string(), error));
-    CHECK(error.find("aren't in") != std::string::npos);
 #endif
     CHECK_FALSE(engine.State().m_bFaulted);
 }

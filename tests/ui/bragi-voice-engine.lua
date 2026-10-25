@@ -4,10 +4,9 @@
 -- opens). Before it: what the mic button says with no models. With it:
 -- voice on (hello, ready, listening), a message started and sent (wake,
 -- message), a reply spoken (start, speech, end, playback), voice off.
--- With the voice pack: Baldr made without asking; replies keep the
--- built-in voice (the default), Baldr and a Windows voice a click away;
--- your own voice made (optional), chosen, in Settings, removed.
--- Then
+-- Replies in the built-in voice (the default), a Windows voice a click
+-- away in Settings; an older version's voice files offered for removal;
+-- the built-in voice loaded when listening starts. Then
 -- the engine faulting on hello: voice stops with the restart message. And
 -- the app having closed in the engine last time: voice stays off with the
 -- reason until Settings turns it back on.
@@ -45,6 +44,13 @@ end
 local function lastOf(kind)
     local list = events[kind] or {}
     return list[#list] or {}
+end
+-- The voice the speak channel was asked to load when listening started.
+local prepared = nil
+local realPrepare = gitgud.voiceSpeakPrepare
+gitgud.voiceSpeakPrepare = function(voiceId)
+    prepared = voiceId or ""
+    return realPrepare(voiceId)
 end
 local function last(kind)
     local items = agent.items()
@@ -111,32 +117,29 @@ step(800, "voice off", function()
     check("nothing listening", not gitgud.voiceInfo().listening)
 end)
 
--- With the voice pack (the stand-in counts as having it): Baldr is made
--- without asking; replies keep the built-in voice, the default, and Baldr
--- is one choice away.
-step(300, "the voice pack is in", function()
-    check("replies can use Turbo", voicemodels.turboReady())
-    check("and the built-in voice", voicemodels.smallReady())
+-- Replies use the built-in voice, the default.
+step(300, "the built-in voice is there", function()
+    check("replies can use it", voicemodels.smallReady())
     settings.set("bragi.voice", "")
-    app.publish("bragi.voiceAvailable")
-end)
-step(800, "Baldr is there", function()
-    check("made without asking", voicemodels.voices()[1] ~= nil and voicemodels.voices()[1].id == "turbo:baldr"
-        and voicemodels.voices()[1].name == "Baldr" and voicemodels.voices()[1].builtin)
-    check("nothing chosen", settings.get("bragi.voice", "") == "")
     voice.checkVoices(true)
 end)
 step(300, "the built-in voice speaks replies", function()
     local list = voice.voices().list or {}
     check("first in the list", list[1] ~= nil and list[1].id == "small:bragi-1" and list[1].provider == "Built in")
-    check("then Baldr, as a made voice", list[2] ~= nil and list[2].id == "turbo:baldr"
-        and list[2].provider == "Made voice")
+    check("then only Windows voices", (function()
+        for i = 2, #list do
+            if list[i].provider ~= "Windows" then
+                return false
+            end
+        end
+        return true
+    end)())
     check("the default", voice.voices().default == "small:bragi-1")
     check("in use", voice.chosenVoice() ~= nil and voice.chosenVoice().id == "small:bragi-1")
     check("at its own pace", voice.speechSpeed() == voicemodels.SMALL.speed)
 end)
 
--- Settings: the built-in voice in use, Baldr and a Windows voice one click away.
+-- Settings: the built-in voice in use, a Windows voice one click away.
 local function repliesCard()
     for _, c in ipairs(voicemodels.cards({ settings = true })) do
         if c.heading == "Voice for replies" then
@@ -153,77 +156,13 @@ local function rowTitled(card, title)
     end
     return nil
 end
-step(300, "Baldr instead", function()
+step(300, "a Windows voice instead", function()
     local card = repliesCard()
     check("the built-in voice first, in use", card ~= nil and card.rows[1].title == "Bragi (built in)"
         and card.rows[1].kind == "info" and card.rows[1].sub:find("Replies use it", 1, true) ~= nil)
-    local baldr = rowTitled(card, "Baldr")
-    check("Baldr says where it runs", baldr ~= nil and baldr.sub:find("on the ", 1, true) ~= nil)
-    check("one click away", baldr ~= nil and baldr.button == "Use Baldr")
-    if baldr and baldr.run then
-        baldr.run()
-    end
-end)
-step(300, "replies in Baldr", function()
-    check("Baldr is chosen", settings.get("bragi.voice", "") == "turbo:baldr")
-    voice.checkVoices(true)
-end)
-step(300, "Baldr's pace", function()
-    check("at Baldr's pace", voice.speechSpeed() == 1.15)
-    local card = repliesCard()
-    local back = card and card.rows[1]
-    check("the built-in voice one click away", back ~= nil and back.button == "Use it")
+    check("two rows", card ~= nil and #card.rows == 2)
     local switch = rowTitled(card, "Use a Windows voice")
     check("Settings offers a Windows voice", switch ~= nil and switch.button == "Use Windows voice")
-    if switch and (gitgud.voiceVoices() or {})[1] then
-        switch.run()
-    end
-end)
-step(300, "replies in a Windows voice", function()
-    local windows = (gitgud.voiceVoices() or {})[1]
-    if windows then
-        check("a Windows voice is chosen", settings.get("bragi.voice", "") == windows.id)
-        local back = rowTitled(repliesCard(), "Replies use a Windows voice")
-        check("and Bragi's voice is one click away", back ~= nil and back.button == "Use Bragi's voice")
-        if back then
-            back.run()
-        end
-    else
-        settings.set("bragi.voice", "")
-    end
-end)
-step(300, "back to the built-in voice", function()
-    check("the built-in voice again", settings.get("bragi.voice", "") == "")
-end)
-
--- Making your own voice: optional, in Settings.
-local madeVoice = nil
-step(300, "make your own voice", function()
-    voicemodels.makeVoice("no-such-recording.wav", "Test voice", function(ok, label)
-        madeVoice = { ok = ok, label = label }
-    end)
-end)
-step(500, "the voice is made", function()
-    check("made", madeVoice ~= nil and madeVoice.ok and madeVoice.label == "Test voice")
-    check("listed after Baldr", voicemodels.voices()[2] ~= nil and voicemodels.voices()[2].id == "turbo:test-voice"
-        and voicemodels.voices()[2].name == "Test voice")
-    check("chosen for replies", settings.get("bragi.voice", "") == "turbo:test-voice")
-    voice.checkVoices(true)
-end)
-step(300, "in Settings", function()
-    check("chosen", voice.chosenVoice() ~= nil and voice.chosenVoice().id == "turbo:test-voice")
-    local card = nil
-    for _, c in ipairs(voicemodels.cards({ settings = true })) do
-        if c.heading == "Voice for replies" then
-            card = c
-        end
-    end
-    check("the built-in voice first", card ~= nil and card.rows[1].title == "Bragi (built in)"
-        and card.rows[1].button == "Use it")
-    check("then Baldr, without Remove", card ~= nil and card.rows[2].title == "Baldr" and card.rows[2].button == "Use Baldr")
-    check("then yours, with Remove", card ~= nil and card.rows[3].title == "Test voice" and card.rows[3].button == "Remove")
-    check("the Windows voices one click away", card ~= nil and card.rows[4].title == "Use a Windows voice")
-    check("making one stays optional", card ~= nil and card.rows[5].title == "Make your own voice (optional)")
     check("the welcome flow doesn't ask for a voice", (function()
         for _, c in ipairs(voicemodels.cards()) do
             if c.heading == "Voice for replies" then
@@ -232,11 +171,67 @@ step(300, "in Settings", function()
         end
         return true
     end)())
-    voicemodels.removeVoice("test-voice")
 end)
-step(300, "your voice removed", function()
-    check("Baldr stays", #voicemodels.voices() == 1 and voicemodels.voices()[1].id == "turbo:baldr")
-    check("back to the built-in voice", settings.get("bragi.voice", "") == "")
+step(300, "choose it", function()
+    local switch = rowTitled(repliesCard(), "Use a Windows voice")
+    if switch and (gitgud.voiceVoices() or {})[1] then
+        switch.run()
+    end
+end)
+step(300, "replies in a Windows voice", function()
+    local windows = (gitgud.voiceVoices() or {})[1]
+    if windows then
+        check("a Windows voice is chosen", settings.get("bragi.voice", "") == windows.id)
+        local card = repliesCard()
+        check("it says so", rowTitled(card, "Replies use a Windows voice") ~= nil)
+        check("Bragi's voice is one click away", card ~= nil and card.rows[1].button == "Use it")
+    end
+end)
+step(300, "back", function()
+    local back = repliesCard() and repliesCard().rows[1]
+    if back and back.run then
+        back.run()
+    else
+        settings.set("bragi.voice", "")
+    end
+end)
+step(300, "back to the built-in voice", function()
+    check("the built-in voice again", settings.get("bragi.voice", "") == "")
+end)
+
+-- An older version's voice files (its GPU voice model): Settings offers to
+-- remove them.
+local function oldFilesRow()
+    for _, c in ipairs(voicemodels.cards({ settings = true })) do
+        for _, row in ipairs(c.rows or {}) do
+            if row.title == "Old voice files" then
+                return row
+            end
+        end
+    end
+    return nil
+end
+step(300, "no old files", function()
+    check("nothing offered", oldFilesRow() == nil)
+end)
+step(300, "an older version's files", function()
+    gitgud.localDataWrite("bragi/voice/turbo/tokenizer.json", "{}")
+    gitgud.localDataWrite("bragi/voice/voices/baldr.voice", "x")
+end)
+step(300, "offered for removal", function()
+    local row = oldFilesRow()
+    check("offered", row ~= nil and row.button == "Remove")
+    check("both folders found", #voicemodels.leftovers() == 2)
+end)
+step(300, "remove them", function()
+    local row = oldFilesRow()
+    if row then
+        row.run()
+    end
+end)
+step(300, "removed", function()
+    check("gone", #voicemodels.leftovers() == 0 and gitgud.localDataInfo("bragi/voice/turbo") == nil)
+    check("not offered any more", oldFilesRow() == nil)
     -- Voice starts afresh: its voices list isn't known yet when the first
     -- reply goes out.
     voice.voices().list = nil
@@ -244,6 +239,7 @@ step(300, "your voice removed", function()
 end)
 step(800, "listening again", function()
     check("listening", voice.state() == "listening")
+    check("the built-in voice loaded with it", prepared == "small:bragi-1")
     voice.voices().list = nil -- still not known
     voice.say("Done, the first reply.")
 end)

@@ -2,7 +2,7 @@
 -- Settings, with a stand-in installer (no download, hash, or unpack really
 -- runs; the test plays the tasks' events). Each step shows its line and a
 -- bar driven by its numbers: downloading, checking, unpacking (with the time
--- left once there's a rate), and preparing Bragi's voice model; Stop during
+-- left once there's a rate); Stop during
 -- unpacking stops the unpacker and leaves nothing half unpacked; a step with
 -- no numbers (the models' check) pulses instead of standing still.
 --
@@ -24,14 +24,11 @@ local bragiSettings = require("bragi.settings")
 local voicemodels = require("bragi.voicemodels")
 
 -- ===================================================================
--- Stand-ins: an engine with no models, no GPU, and tasks that only record
+-- Stand-ins: an engine with no models, and tasks that only record
 -- ===================================================================
 
 voicemodels.engine = function()
     return { installed = true }
-end
-voicemodels.gpu = function()
-    return { present = false, devices = {} }
 end
 local calls = {}   -- { kind, task, ... } in order
 local cancelled = {}
@@ -59,10 +56,6 @@ gitgud.extractArchive = function(task, archive, name)
     gitgud.localDataWrite(name .. "/partial.onnx", "half")
     return true
 end
-gitgud.onnxSetAccuracy = function(from, to, level, task)
-    calls[#calls + 1] = { kind = "patch", task = task, from = from, to = to }
-    return true
-end
 gitgud.downloadCancel = function(task)
     cancelled[#cancelled + 1] = task
 end
@@ -83,15 +76,6 @@ end
 local function bar()
     local bars = bragiSettings.progressBars()
     return bars[1] or {}
-end
-local function count(kind)
-    local n = 0
-    for _, c in ipairs(calls) do
-        if c.kind == kind then
-            n = n + 1
-        end
-    end
-    return n
 end
 local function near(a, b)
     return a ~= nil and b ~= nil and math.abs(a - b) < 1e-6
@@ -197,47 +181,6 @@ end, { full = true })
 step(300, "checked", function()
     check("done", voicemodels.state().phase == "done")
     check("no bar left", #bragiSettings.progressBars() == 0)
-end)
-
--- ===================================================================
--- Bragi's voice model: preparing its graphs
--- ===================================================================
-
-local turbo = voicemodels.packages("turbo")
-step(300, "Bragi's voice model", function()
-    voicemodels.missing = function(groups)
-        return groups == "turbo" and turbo or {}
-    end
-    voicemodels.installed = function(group)
-        return group ~= "turbo"
-    end
-    voicemodels.install("turbo")
-end)
-local function finishDownloads(label)
-    step(200, label, function()
-        local d = lastCall("download")
-        if d and voicemodels.state().phase == "download" then
-            emit(d.task, "done", gitgud.localDataPath(d.file))
-        end
-    end)
-end
-for i = 1, #(turbo[1] and turbo[1].downloads or {}) do
-    finishDownloads("its download " .. i)
-end
-step(400, "preparing its graphs", function()
-    local p = lastCall("patch")
-    check("the graphs are patched on a worker", p ~= nil and p.task == "BragiVoicePatch")
-    check("preparing shows", voicemodels.state().phase == "patch")
-    emit(p.task, "progress", { phase = "patch", done = 50, total = 100 })
-end)
-step(300, "half prepared", function()
-    check("its line", line() == "Preparing Bragi's voice model: 50%.")
-    check("its bar", near(bar().fraction, 0.5))
-    voicemodels.cancel()
-    emit(lastCall("patch").task, "done", "12")
-end)
-step(300, "stopped while preparing", function()
-    check("idle, and no next graph started", voicemodels.state().phase == "idle" and count("patch") == 1)
 end)
 
 step(300, "done", function()

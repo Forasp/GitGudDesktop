@@ -1,85 +1,51 @@
---- bragi/voicemodels.lua: the speech engine's models, Baldr's voice model,
--- the GPU libraries for NVIDIA GPUs, the voices made from recordings, and
--- setting the engine up with them.
+--- bragi/voicemodels.lua: the speech engine's listening models, Bragi's
+-- built-in voice, and setting the engine up with them.
 --
 -- The engine (gitgud.voiceEngine, C++) comes with the app, and so does
 -- Bragi's built-in voice (voicemodels.SMALL: a small model in the
 -- interface's voices/bragi-1, on the processor), which replies use unless
--- another voice is chosen. Nothing else does. Everything here is fetched
--- only from the Bragi interface (the
--- welcome flow's voice step, or Settings), with its size shown first and
--- nothing downloaded until the user says so. It goes to the local app data
--- folder (gitgud.localDataPath("bragi/voice"): %LOCALAPPDATA%\Gitgud\bragi\voice
--- on Windows), each file checked against the size and SHA-256 pinned below.
---
--- Three groups of packages:
---   listen  the listening models (speech detection, the wake word spotter,
---           speech recognition, speaker recognition): voice needs them
---   turbo   Baldr's speech model, offered on every computer with the
---           engine: Chatterbox Turbo (Resemble AI, MIT), for replies in
---           Baldr, Bragi's own voice, or a voice made from a recording. It
---           runs on the processor (slow: the welcome flow says so) unless
---           the GPU libraries are in
---   gpu     the GPU libraries, offered only with an NVIDIA GPU whose driver
---           runs CUDA 13: ONNX Runtime's CUDA provider (from sherpa-onnx's
---           CUDA build, the same ONNX Runtime the app ships) and NVIDIA's
---           CUDA and cuDNN libraries, from NVIDIA's own packages on PyPI,
---           under NVIDIA's license terms. Baldr then runs on the GPU;
---           listening stays on the processor
---
--- Baldr comes with the interface (voices/baldr/ref.wav, the project's own
--- voice): once its model is in, its voice is made from that recording
--- without asking (the conditioning computed once and kept), and Settings
--- offers it for replies, with a Windows voice. Making your own voice is
--- optional (Settings). Without the built-in voice or Baldr's model, replies
--- use the voices Windows has.
+-- a Windows voice is chosen. The listening models don't: they're fetched
+-- only from the Bragi interface (the welcome flow's voice step, or
+-- Settings), with their size shown first and nothing downloaded until the
+-- user says so. They go to the local app data folder
+-- (gitgud.localDataPath("bragi/voice"): %LOCALAPPDATA%\Gitgud\bragi\voice on
+-- Windows), each file checked against the size and SHA-256 pinned below:
+-- speech detection, the wake word spotter, speech recognition, speaker
+-- recognition. Without the engine, replies use the voices Windows has.
 --
 --   bragi/voice/models/<package>/   the listening models, unpacked
---   bragi/voice/gpu/                the GPU libraries, together
---   bragi/voice/turbo/              Chatterbox Turbo's graphs and tokenizer
---   bragi/voice/voices/             voices made from recordings (<name>.voice,
---                                   and voices.json with their labels)
 --   bragi/voice/downloads/          downloads in progress (resumed next time)
 --   bragi/voice/staging/            archives being unpacked
 --   bragi/voice/installed.json      { packages = { <id> = { at } } }
 --   bragi/voice/voiceprints/        the user's voiceprint (enrollment)
 --   bragi/voice/work/               the engine's own files (checks, config)
 --
--- Install from a folder: the same files (the archives and wheels as
--- downloaded, or the models unpacked), for a computer that can't download
--- them.
+-- Older versions also put a GPU voice model (turbo/), NVIDIA's libraries
+-- (gpu/) and voices made from recordings (voices/) there; nothing uses
+-- them now, and Settings offers to remove them (voicemodels.leftovers()).
+--
+-- Install from a folder: the same files (the archives as downloaded, or
+-- the models unpacked), for a computer that can't download them.
 --
 -- The engine checks every model file's SHA-256 again before it loads it
--- (remembered by size and time). The listening models' install ends with a
--- self test: every model loaded and run once (gitgud.voiceSelfTest).
--- Chatterbox Turbo's quantized graphs are patched after download
--- (gitgud.onnxSetAccuracy: accuracy_level 4 on their quantized matmuls, many
--- times faster); the pinned SHA-256 is the patched graph's.
---
--- The app's ONNX Runtime is the GPU build, running on the processor. Once
--- the GPU libraries are in, the engine moves Baldr to the GPU the next time
--- it loads Baldr, in the same run (no restart); if the GPU doesn't start,
--- Baldr stays on the processor and Settings says why
--- (voiceEngine().gpuError). Voice never waits for the GPU.
+-- (remembered by size and time). The install ends with a self test: every
+-- model loaded and run once (gitgud.voiceSelfTest).
 --
 -- Public API: voicemodels.PACKAGES, voicemodels.ENGINE,
--- voicemodels.TURBO, voicemodels.engineInstalled(), voicemodels.engine(),
+-- voicemodels.engineInstalled(), voicemodels.engine(),
 -- voicemodels.installed(group), voicemodels.missing(group), voicemodels.packages(group),
--- voicemodels.gpu(), voicemodels.gpuSuitable(), voicemodels.turboReady(), voicemodels.turboOnGpu(),
--- voicemodels.gpuError(), voicemodels.configure(), voicemodels.state(),
+-- voicemodels.configure(), voicemodels.state(),
 -- voicemodels.install(groups), voicemodels.installFrom(folder, groups),
 -- voicemodels.cancel(), voicemodels.check(), voicemodels.remove(group),
--- voicemodels.BALDR, voicemodels.ensureBaldr(), voicemodels.voices(),
+-- voicemodels.leftovers(), voicemodels.removeLeftovers(),
 -- voicemodels.SMALL, voicemodels.smallReady(), voicemodels.smallVoiceId(),
 -- voicemodels.smallVoicesDir(), voicemodels.phonemesDir(),
--- voicemodels.makeVoice(wav, label, onDone, opts),
--- voicemodels.removeVoice(name), voicemodels.downloadBytes(list),
--- voicemodels.diskBytes(list), voicemodels.size(bytes), voicemodels.progressText(),
+-- voicemodels.downloadBytes(list), voicemodels.diskBytes(list),
+-- voicemodels.size(bytes), voicemodels.progressText(),
 -- voicemodels.credits(), voicemodels.cards(opts), voicemodels.faultText(engine),
 -- voicemodels.crashText(crash)
 --
--- Publishes "bragi.voiceModels" (the state) when an install or a voice
--- moves on.
+-- Publishes "bragi.voiceModels" (the state) when an install moves on.
 
 local app = require("core.app")
 
@@ -89,41 +55,16 @@ local ROOT = "bragi/voice"
 local MODELS = ROOT .. "/models"
 local DOWNLOADS = ROOT .. "/downloads"
 local STAGING = ROOT .. "/staging"
-local VOICES = ROOT .. "/voices"
-local VOICE_LABELS = VOICES .. "/voices.json"
 local STATE_FILE = ROOT .. "/installed.json"
 
 local RELEASE = "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
-local HUGGING_FACE = "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/"
-    .. "d21799bd0354adb85e348b8a0442a8405110a2cf/"
-local PYPI = "https://files.pythonhosted.org/packages/"
-local CUDA_ARCHIVE = "sherpa-onnx-v1.13.8-cuda-13.x-cudnn-9.x-onnxruntime1.28.2-win-x64-cuda"
 
--- One file picked out of an archive or wheel into the package's folder.
-local function pick(from, to, size, sha256)
-    return { from = from, to = to, size = size, sha256 = sha256 }
-end
+-- What older versions installed that nothing uses now.
+local LEFTOVERS = { ROOT .. "/turbo", ROOT .. "/gpu", ROOT .. "/voices" }
 
--- An NVIDIA wheel from PyPI (a zip): its DLLs into the GPU folder, and its
--- license beside them.
-local function wheel(id, title, model, file, url, size, sha256, licenceName, picks)
-    return { id = id, group = "gpu", title = title, model = model, credit = "NVIDIA", licence = licenceName,
-        url = PYPI .. url .. file, archive = file, size = size, sha256 = sha256, dest = "gpu", pick = picks,
-        licenceFile = { from = file:match("^(.-%-[%d%.]+)%-") .. ".dist-info/licenses/License.txt",
-            to = "LICENSE-" .. id .. ".txt" } }
-end
-
-local function cu13(name)
-    return "nvidia/cu13/bin/x86_64/" .. name
-end
-
--- The packages, pinned (sherpa-onnx's stack;
--- Chatterbox Turbo for Baldr on every computer; the GPU libraries for
--- NVIDIA GPUs). Kinds:
+-- The packages, pinned (sherpa-onnx's stack). Kinds:
 --   file      downloaded as is into the package's folder
---   archive   unpacked; with `dir`, that folder becomes the package's; with
---             `pick`, those files go to `dest`
---   downloads several files into `dest`, then `patch` (graphs to patch)
+--   archive   unpacked; `dir`, that folder, becomes the package's
 -- `files`: what the engine loads, with sizes and SHA-256 (it checks them
 -- before every first load).
 voicemodels.PACKAGES = {
@@ -184,160 +125,13 @@ voicemodels.PACKAGES = {
             sha256 = "d51abcf31717ef28162f26acb9d44dd4127c3d44c9b8624f699f3425daca8e77" },
       } },
 
-    -- The GPU libraries.
-    { id = "gpu-engine", group = "gpu", title = "The GPU speech engine",
-      model = "ONNX Runtime 1.28.2's CUDA provider (from sherpa-onnx 1.13.8's CUDA build)",
-      credit = "Microsoft", licence = "MIT",
-      url = RELEASE .. "v1.13.8/" .. CUDA_ARCHIVE .. ".tar.bz2", archive = CUDA_ARCHIVE .. ".tar.bz2",
-      size = 478110488, sha256 = "1702e4a1ee68a07422469a7ec1d304a54b43a345ad888daf8e0b0257004a3273",
-      dest = "gpu",
-      -- Only the provider: the app's own voice folder has the matching
-      -- onnxruntime.dll (the same build) and runs it from here.
-      pick = {
-          pick(CUDA_ARCHIVE .. "/lib/onnxruntime_providers_cuda.dll", "onnxruntime_providers_cuda.dll", 267632952,
-              "26bce13391d2178c4fbb1ffeca6e828594ad1c1393c89f2a934bc977b0d1b5b7"),
-      } },
-    wheel("cuda-runtime", "The GPU runtime", "CUDA Runtime 13.4",
-        "nvidia_cuda_runtime-13.4.92-py3-none-win_amd64.whl", "86/00/d5436004268f049214193659ebc36550b5ef3925c3d13b4cc980e13be6f5/",
-        2778543, "08dca5e4aba480c2fd5b55075c0fa71b84ef9dcf0521f2d58baa14a803a7311c", "NVIDIA-CUDA", {
-            pick(cu13("cudart64_13.dll"), "cudart64_13.dll", 551024,
-                "d26fd1c2629594759af569a5252f94e4568d4ebeca67dc323834deb141aa278a"),
-        }),
-    wheel("cublas", "The GPU maths library", "cuBLAS 13.8",
-        "nvidia_cublas-13.8.0.4-py3-none-win_amd64.whl", "a3/df/f1246959833e2c437db8be3e5b477f66b87f8817821ed40de6c7561c9a36/",
-        423266897, "8c5494423bb8a46822cb6b0cb95d7fa4be2d7b96a31155dff083839ec8297910", "NVIDIA-CUDA", {
-            pick(cu13("cublas64_13.dll"), "cublas64_13.dll", 54873200,
-                "60bbba8868290311e9c1657b2193ddec667744eb555ff843f87acb7c039f9efa"),
-            pick(cu13("cublasLt64_13.dll"), "cublasLt64_13.dll", 493474416,
-                "cad63434448e7141629e240ea093ad596a7ef6a0f67b468ba9bc1df6e1eeee33"),
-        }),
-    wheel("cudnn", "The GPU neural network library", "cuDNN 9.27",
-        "nvidia_cudnn_cu13-9.27.0.42-py3-none-win_amd64.whl", "87/6a/e55ff0ac26a5c6e2b21f41c9d04ad096b4ed6da593fba7e25845c61b0532/",
-        436469905, "7d96f634adafd55c72231eb0500ca77ab109ec8ebff7b33000b76e081bc4558e", "NVIDIA-cuDNN", {
-            pick("nvidia/cudnn/bin/cudnn64_9.dll", "cudnn64_9.dll", 270448,
-                "0016bd73ac9192537ae5af6a3f05814316726dad1d1da44f113f0a9ef00ae34c"),
-            pick("nvidia/cudnn/bin/cudnn_adv64_9.dll", "cudnn_adv64_9.dll", 105226864,
-                "041cab1d6439d2558b4a7073a42dd95058d0395463ffb0d37275af11ec0af8d7"),
-            pick("nvidia/cudnn/bin/cudnn_cnn64_9.dll", "cudnn_cnn64_9.dll", 1533040,
-                "7dd1bcc6d8f00ad635f6a8a2cd076faba21626f3412e13c61a6bece3f88eacb1"),
-            pick("nvidia/cudnn/bin/cudnn_engines_precompiled64_9.dll", "cudnn_engines_precompiled64_9.dll", 231660656,
-                "5d9b829228ae18594dafedf718d9612606c8ce6d199aa7151bea53e863baeefe"),
-            pick("nvidia/cudnn/bin/cudnn_engines_runtime_compiled64_9.dll", "cudnn_engines_runtime_compiled64_9.dll",
-                39266928, "8e65eeb0a4a3b7afa48ea3ca71c4b88e355199f85485b6fc0badcc97ebc552ef"),
-            pick("nvidia/cudnn/bin/cudnn_engines_tensor_ir64_9.dll", "cudnn_engines_tensor_ir64_9.dll", 156272,
-                "51afb44ce4b901ccdac1434f9fc9d8d707b690f39ae1e2a6ffca98c5fd9dfa96"),
-            pick("nvidia/cudnn/bin/cudnn_ext64_9.dll", "cudnn_ext64_9.dll", 130160,
-                "a0e0e2e8e8e4678956bbef93fdccc4730bd5edf9b23d38bff49030ebba1940a6"),
-            pick("nvidia/cudnn/bin/cudnn_graph64_9.dll", "cudnn_graph64_9.dll", 116132464,
-                "ccc90435b2fd37b5ddd6a9fa0fd053ad8f46c2dc8b0a6256ef0ebea7f3efbace"),
-            pick("nvidia/cudnn/bin/cudnn_heuristic64_9.dll", "cudnn_heuristic64_9.dll", 94795376,
-                "c0439ee74a3dbec8ecf56fecbc6ac2506efcce702453e36119649545d02509c3"),
-            pick("nvidia/cudnn/bin/cudnn_ops64_9.dll", "cudnn_ops64_9.dll", 37462128,
-                "2bd7f4122eaeccb85538c2a6f7923d7254ad77d7b7149fed0a8139f1e3cf0b07"),
-        }),
-    wheel("cufft", "The GPU signal library", "cuFFT 12.4",
-        "nvidia_cufft-12.4.0.43-py3-none-win_amd64.whl", "7b/cc/be7fe31058127336a66c88414a2ecc6beecf680baf85994a43eaf292b202/",
-        160953139, "4ff7075f2d0b5f69291f70938d37a86ec632cbe5747184c74ba1f50f17accacc", "NVIDIA-CUDA", {
-            pick(cu13("cufft64_12.dll"), "cufft64_12.dll", 232604272,
-                "d353fd42da7729709864731f35888aa177793d2350e56557df4c6ebaaf079ace"),
-        }),
-    wheel("curand", "The GPU random number library", "cuRAND 10.4",
-        "nvidia_curand-10.4.4.72-py3-none-win_amd64.whl", "e2/d4/f59ab342b82ff05ff27d674acd470ba625d788bf71338f7da6c89669d6b9/",
-        56731059, "e0bce83e083ef25976ee74f59e8f067c15149a74538f1be6c2462e286e7c9c68", "NVIDIA-CUDA", {
-            pick(cu13("curand64_10.dll"), "curand64_10.dll", 60045424,
-                "2ae1d341cd7da1dab91e2215c62f627e0e0288ff54cdc9003e908746584b5b2b"),
-        }),
-    wheel("nvrtc", "The GPU compiler", "NVRTC 13.4",
-        "nvidia_cuda_nvrtc-13.4.92-py3-none-win_amd64.whl", "64/5b/aa91896f64444eff1dd7f189f4db05046c7f0ba08c0f531283c1c1aac581/",
-        46972283, "6af7ac5372920f6a7a560d0699348560fe44cb52c1d722d6afd3119f8af948c4", "NVIDIA-CUDA", {
-            pick(cu13("nvrtc64_130_0.dll"), "nvrtc64_130_0.dll", 106038896,
-                "c92027e5eae58b6f272cafb438bf59b55deb02bd326b183956e84e0a180dbd14"),
-            pick(cu13("nvrtc-builtins64_134.dll"), "nvrtc-builtins64_134.dll", 7243376,
-                "73768e90526e8a43d5eb356f0ffad198468e8c15e95d45a84c6c4b12fb9aa02f"),
-        }),
-    wheel("nvjitlink", "The GPU linker", "nvJitLink 13.4",
-        "nvidia_nvjitlink-13.4.92-py3-none-win_amd64.whl", "72/7c/c44bd7277afafed9de262a23baec4dc8dcf7ecbb1b9ecb228821442d1e9b/",
-        39053950, "b286f3a4f227a9363efdec263c7b91788cef1478d2b8a5fa8bab7f3e82ff82fd", "NVIDIA-CUDA", {
-            pick(cu13("nvJitLink_130_0.dll"), "nvJitLink_130_0.dll", 97119344,
-                "6044faf21b4979502588ff9319521dd21a42b9068239d3291e53bc5a063b09bf"),
-        }),
 
-    -- Baldr's speech model (all q4).
-    { id = "turbo", group = "turbo", title = "Bragi's voice model", phrase = "Bragi's voice model",
-      model = "Chatterbox Turbo (ONNX, q4)", credit = "Resemble AI", licence = "MIT",
-      dest = "turbo", size = 724919508, unpacked = 728500000,
-      downloads = {
-          { url = HUGGING_FACE .. "tokenizer.json", file = "tokenizer.json", size = 3562272,
-            sha256 = "3f04e34bea22f9144d1a19151154095bc9ce0430bf421304f5797e716288a906" },
-          { url = HUGGING_FACE .. "onnx/embed_tokens_q4.onnx", file = "embed_tokens_q4.onnx", size = 2844,
-            sha256 = "fd6ba1d22902e8f539d3dd6d7c1c44b98ebb4c84ebbb5e47fcb826ddcf667561" },
-          { url = HUGGING_FACE .. "onnx/embed_tokens_q4.onnx_data", file = "embed_tokens_q4.onnx_data",
-            size = 37286384, sha256 = "f54a51e234b509b64c3a03bb79e1149fba7e2eba6c2d9c222f18883379e1f5d8" },
-          { url = HUGGING_FACE .. "onnx/language_model_q4.onnx", file = "language_model_q4.onnx", size = 274572,
-            sha256 = "b39d03d3f8b943b9e60c6fce3fb41191dbc1df4589f913291db1e214eef669b1" },
-          { url = HUGGING_FACE .. "onnx/language_model_q4.onnx_data", file = "language_model_q4.onnx_data",
-            size = 204456572, sha256 = "2c029dc0acf48752473d8c74c72b5ceaaad76b9886fe106eaf2022142d5b5d5e" },
-          { url = HUGGING_FACE .. "onnx/conditional_decoder_q4.onnx", file = "conditional_decoder_q4.onnx",
-            size = 2179022, sha256 = "dccb7a6cea3472dc7f7d070eeb70ade18e6327fb4ec61a3d62cf211bfed90ea2" },
-          { url = HUGGING_FACE .. "onnx/conditional_decoder_q4.onnx_data",
-            file = "conditional_decoder_q4.onnx_data", size = 246397384,
-            sha256 = "b5c5317e0b79a1a19dd3d5e2b2091ea06b15716716ab801a54eaeb906c6971ec" },
-          { url = HUGGING_FACE .. "onnx/speech_encoder_q4.onnx", file = "speech_encoder_q4.onnx", size = 1200346,
-            sha256 = "37956c20b67bed85a0da4bc83509d67b5969a1b257d1c546516a5236a17ad71e" },
-          { url = HUGGING_FACE .. "onnx/speech_encoder_q4.onnx_data", file = "speech_encoder_q4.onnx_data",
-            size = 229560112, sha256 = "58956db217c6443e49c91bdd54d7cf76b4a243f225c748b7bf746459fc27bc7d" },
-      },
-      patch = {
-          { from = "embed_tokens_q4.onnx", to = "embed_tokens_q4acc4.onnx" },
-          { from = "language_model_q4.onnx", to = "language_model_q4acc4.onnx" },
-          { from = "conditional_decoder_q4.onnx", to = "conditional_decoder_q4acc4.onnx" },
-          { from = "speech_encoder_q4.onnx", to = "speech_encoder_q4acc4.onnx" },
-      },
-      files = {
-          { path = "tokenizer.json", size = 3562272,
-            sha256 = "3f04e34bea22f9144d1a19151154095bc9ce0430bf421304f5797e716288a906" },
-          { path = "embed_tokens_q4acc4.onnx", size = 2844,
-            sha256 = "fd6ba1d22902e8f539d3dd6d7c1c44b98ebb4c84ebbb5e47fcb826ddcf667561" },
-          { path = "embed_tokens_q4.onnx_data", size = 37286384,
-            sha256 = "f54a51e234b509b64c3a03bb79e1149fba7e2eba6c2d9c222f18883379e1f5d8" },
-          { path = "language_model_q4acc4.onnx", size = 277907,
-            sha256 = "d84718f5e961cd63195f6555ae123b2c94a30d26c061ac562cacddd518aec1cb" },
-          { path = "language_model_q4.onnx_data", size = 204456572,
-            sha256 = "2c029dc0acf48752473d8c74c72b5ceaaad76b9886fe106eaf2022142d5b5d5e" },
-          { path = "conditional_decoder_q4acc4.onnx", size = 2196180,
-            sha256 = "208b1610264f8d4192adef3baf78985fdc8ddcc7de8ccb244c7f9aaf116a2d26" },
-          { path = "conditional_decoder_q4.onnx_data", size = 246397384,
-            sha256 = "b5c5317e0b79a1a19dd3d5e2b2091ea06b15716716ab801a54eaeb906c6971ec" },
-          { path = "speech_encoder_q4acc4.onnx", size = 1202002,
-            sha256 = "e8054f90b5b699ae178f9270486a96d7bec17803c357546c45756e09a63e34fb" },
-          { path = "speech_encoder_q4.onnx_data", size = 229560112,
-            sha256 = "58956db217c6443e49c91bdd54d7cf76b4a243f225c748b7bf746459fc27bc7d" },
-      } },
 }
-
--- A package's files on disk are its picks (gpu) or its listed files.
-for _, p in ipairs(voicemodels.PACKAGES) do
-    if p.pick and not p.files then
-        p.files = {}
-        local n = 0
-        for _, f in ipairs(p.pick) do
-            p.files[#p.files + 1] = { path = f.to, size = f.size, sha256 = f.sha256 }
-            n = n + f.size
-        end
-        p.unpacked = n
-    end
-end
 
 local LICENCE_LINKS = {
     ["MIT"] = "https://opensource.org/licenses/MIT",
     ["Apache-2.0"] = "https://www.apache.org/licenses/LICENSE-2.0",
     ["CC-BY-4.0"] = "https://creativecommons.org/licenses/by/4.0/",
-    ["NVIDIA-CUDA"] = "https://docs.nvidia.com/cuda/eula/index.html",
-    ["NVIDIA-cuDNN"] = "https://docs.nvidia.com/deeplearning/cudnn/latest/reference/eula.html",
-}
-local LICENCE_NAMES = {
-    ["NVIDIA-CUDA"] = "NVIDIA CUDA Toolkit license",
-    ["NVIDIA-cuDNN"] = "NVIDIA cuDNN license",
 }
 
 -- How the engine runs on this computer's processor (sherpa-onnx's CPU
@@ -359,35 +153,6 @@ voicemodels.ENGINE = {
     spotterSpellings = { "Braggy", "Broggy" },
     mishearings = { "Braggy", "Braggie", "Broggy", "Braghi", "Brogi", "Bragy", "Bruggie", "Brogy", "Baragi",
         "Raghi", "Raggy", "Roggy", "Rogi", "Rogy", "Ruggy" },
-}
-
--- Chatterbox Turbo's graphs, as the engine loads them: all q4 with
--- accuracy_level 4, the set the spike ran on both the GPU and the
--- processor (q8 was no faster on the processor, and is larger). On the
--- processor 8 threads were fastest (the spike: 3.5 times slower than real
--- time at 8 threads, 4.7 at 4); on the GPU the processor only feeds it. The
--- GPU libraries need a driver that runs CUDA 13, and memory for the models.
-voicemodels.TURBO = {
-    encoder = "speech_encoder_q4acc4.onnx",
-    embed = "embed_tokens_q4acc4.onnx",
-    lm = "language_model_q4acc4.onnx",
-    decoder = "conditional_decoder_q4acc4.onnx",
-    tokenizer = "tokenizer.json",
-    cpuThreads = 8,
-    gpuThreads = 4,
-    minCuda = 13000,
-    minMemory = 6e9,
-}
-
--- Bragi's own voice: made from this recording (24 kHz mono, 17.6 s; the
--- voice server's reference) when Baldr's model is in. Spoken as the
--- server did: sentence by sentence, 1.15 times as fast with the pitch kept
--- (bragi.speechSpeed's default); Turbo has no exaggeration or CFG.
-voicemodels.BALDR = {
-    name = "baldr",
-    label = "Baldr",
-    recording = "voices/baldr/ref.wav",
-    sha256 = "48a258b7220ceaaf7bbf607a02b29964965676d3b7efc52f64f7f68bb60c9c75",
 }
 
 -- Bragi's built-in voice: a small model that comes with the interface
@@ -421,13 +186,9 @@ local CALLS = {
     ["start spotting"] = "listening for the wake word",
     ["detect speech"] = "listening",
     ["identify the speaker"] = "telling your voice from others",
-    ["load the speech models"] = "loading the voice for replies",
-    ["release the speech models"] = "releasing the voice for replies",
-    ["make a voice"] = "making a voice from a recording",
-    ["embed text"] = "speaking a reply",
-    ["start a sentence"] = "speaking a reply",
-    ["generate speech"] = "speaking a reply",
-    ["decode speech"] = "speaking a reply",
+    ["load the small voice"] = "loading the voice for replies",
+    ["release the small voice"] = "releasing the voice for replies",
+    ["say with the small voice"] = "speaking a reply",
 }
 
 local state = { phase = "idle" }
@@ -436,7 +197,6 @@ local rateFrom = nil
 local wired = {}
 local pending = {}
 local cancelled = false
-local making = nil -- { label } while a voice is being made, { error } after a failure
 
 local function publish()
     app.publish("bragi.voiceModels", state)
@@ -475,7 +235,7 @@ end
 -- What's there
 
 --- gitgud.voiceEngine(): { installed, configured, loaded, faulted, faultCode,
--- fault, gpu, runtimeDir, turbo, test, lastCrash }. Tests swap it.
+-- fault, runtimeDir, test, lastCrash }. Tests swap it.
 function voicemodels.engine()
     return gitgud.voiceEngine and gitgud.voiceEngine() or { installed = false }
 end
@@ -483,42 +243,6 @@ end
 --- The engine's libraries are in this build.
 function voicemodels.engineInstalled()
     return voicemodels.engine().installed == true
-end
-
-local gpuInfo = nil
-
---- gitgud.gpuInfo(), asked once: { present, driver, cuda, devices = {
--- {name, memory} }, error }. Tests swap it.
-function voicemodels.gpu()
-    if not gpuInfo then
-        gpuInfo = gitgud.gpuInfo and gitgud.gpuInfo() or { present = false, devices = {} }
-    end
-    return gpuInfo
-end
-
---- The GPU libraries can run here: an NVIDIA GPU with enough memory whose
--- driver runs CUDA 13. Returns ok, and the GPU's name or why not.
-function voicemodels.gpuSuitable()
-    local g = voicemodels.gpu()
-    if not g.present then
-        return false, "no NVIDIA GPU was found" .. (g.error and (" (" .. tostring(g.error) .. ")") or "")
-    end
-    local best = nil
-    for _, d in ipairs(g.devices or {}) do
-        if not best or (d.memory or 0) > (best.memory or 0) then
-            best = d
-        end
-    end
-    if not best then
-        return false, "the NVIDIA driver lists no GPU"
-    end
-    if (g.cuda or 0) < voicemodels.TURBO.minCuda then
-        return false, "the NVIDIA driver (" .. tostring(g.driver) .. ") is too old: update it"
-    end
-    if (best.memory or 0) < voicemodels.TURBO.minMemory then
-        return false, tostring(best.name) .. " has less than 6 GB of memory"
-    end
-    return true, tostring(best.name)
 end
 
 local function readState()
@@ -611,25 +335,6 @@ function voicemodels.installed(groups)
     return #voicemodels.missing(groups) == 0
 end
 
---- Replies can be spoken with Turbo (Baldr): its model is in (on the GPU
--- with the GPU libraries, else on the processor) and the engine runs.
-function voicemodels.turboReady()
-    if voicemodels.engine().test then
-        return true
-    end
-    return voicemodels.engineInstalled() and voicemodels.installed("turbo") and not voicemodels.engine().faulted
-end
-
---- Why Baldr isn't on the GPU although its libraries are in (the engine
--- tried and fell back to the processor), or nil.
-function voicemodels.gpuError()
-    local e = voicemodels.engine()
-    if voicemodels.installed("gpu") and (e.gpuError or "") ~= "" then
-        return e.gpuError
-    end
-    return nil
-end
-
 function voicemodels.downloadBytes(list)
     local n = 0
     for _, p in ipairs(list or voicemodels.packages()) do
@@ -670,8 +375,7 @@ local function engineFiles(list)
 end
 
 --- Tell the engine where the models are (when they're installed), and
--- how to run: Turbo for replies, on the GPU when its libraries are in (the
--- engine moves it there in the same run). True when it took them.
+-- where the built-in voice is. True when it took them.
 function voicemodels.configure()
     if not voicemodels.engineInstalled() or not voicemodels.installed() then
         return false
@@ -694,25 +398,6 @@ function voicemodels.configure()
     settings.voiceprintsDir = gitgud.localDataPath(ROOT .. "/voiceprints")
     settings.workDir = gitgud.localDataPath(ROOT .. "/work")
     settings.files = engineFiles(voicemodels.packages("listen"))
-    local gpu = voicemodels.installed("gpu")
-    if gpu then
-        settings.gpuDir = gitgud.localDataPath(ROOT .. "/gpu")
-    end
-    if voicemodels.installed("turbo") then
-        -- On the GPU with its libraries (the engine falls back to the
-        -- processor, with cpuThreads, if the GPU doesn't start).
-        local t = voicemodels.TURBO
-        settings.tts = {
-            dir = gitgud.localDataPath(ROOT .. "/turbo"),
-            encoder = t.encoder, embed = t.embed, lm = t.lm, decoder = t.decoder,
-            tokenizer = gitgud.localDataPath(ROOT .. "/turbo/" .. t.tokenizer),
-            voicesDir = gitgud.localDataPath(VOICES),
-            threads = gpu and t.gpuThreads or t.cpuThreads,
-            cpuThreads = t.cpuThreads,
-            provider = gpu and "cuda" or "cpu",
-            files = engineFiles(voicemodels.packages("turbo")),
-        }
-    end
     local smallDir = voicemodels.smallVoicesDir()
     if smallDir then
         settings.small = { voicesDir = smallDir, threads = voicemodels.SMALL.threads }
@@ -724,10 +409,9 @@ end
 -- ---------------------------------------------------------------------
 -- Installing
 
---- { phase = idle|download|verify|unpack|copy|patch|check|done|failed,
+--- { phase = idle|download|verify|unpack|copy|check|done|failed,
 -- group, package, done, total, left, index, count, error, note }: done and
--- total are bytes (downloaded, hashed, read by the unpacker, copied,
--- patched); left is the milliseconds to go, once there's a rate.
+-- total are bytes (downloaded, hashed, read by the unpacker, copied); left is the milliseconds to go, once there's a rate.
 function voicemodels.state()
     return state
 end
@@ -741,7 +425,7 @@ local function fail(message)
     set({ phase = "failed", group = state.group, error = tostring(message or "unknown error") })
 end
 
--- "Speech detection" -> "speech detection"; "GPU libraries" stays.
+-- "Speech detection" -> "speech detection"; "ASR model" stays.
 local function lowerFirst(t)
     if t:sub(2, 2):match("%u") then
         return t
@@ -750,8 +434,7 @@ local function lowerFirst(t)
 end
 
 -- The phases with numbers, and their verbs.
-local MEASURED = { download = "Downloading", verify = "Checking", unpack = "Unpacking", copy = "Copying",
-    patch = "Preparing" }
+local MEASURED = { download = "Downloading", verify = "Checking", unpack = "Unpacking", copy = "Copying" }
 
 --- "about 40 seconds", "about 3 minutes".
 local function roughly(ms)
@@ -844,18 +527,6 @@ local function selfTest()
     end)
 end
 
---- After Bragi's voice model or the GPU libraries: the engine takes them
--- in this run (Baldr moves to the GPU the next time it loads), and Baldr is
--- made.
-local function packDone()
-    voicemodels.configure()
-    local note = "Installed. Bragi answers in Baldr, its own voice"
-        .. (voicemodels.installed("gpu") and ", on the GPU." or ", on the processor: slower.")
-    set({ phase = "done", group = state.group, note = note })
-    app.publish("bragi.voiceAvailable")
-    voicemodels.ensureBaldr()
-end
-
 -- Put an unpacked package in place: staging/<id>/<dir> -> models/<id>.
 local function placeUnpacked(p, from)
     gitgud.localDataRemove(packageDir(p))
@@ -864,24 +535,6 @@ local function placeUnpacked(p, from)
     if not ok then
         return nil, err
     end
-    markInstalled(p)
-    return true
-end
-
--- Move a package's picks out of its unpacked archive into its folder.
-local function placePicks(p)
-    local stage = STAGING .. "/" .. p.id
-    for _, f in ipairs(p.pick) do
-        local ok, err = gitgud.localDataMove(stage .. "/" .. f.from, packageDir(p) .. "/" .. f.to)
-        if not ok then
-            gitgud.localDataRemove(stage)
-            return nil, (err or ("no " .. f.from .. " in the download"))
-        end
-    end
-    if p.licenceFile then
-        gitgud.localDataMove(stage .. "/" .. p.licenceFile.from, packageDir(p) .. "/" .. p.licenceFile.to)
-    end
-    gitgud.localDataRemove(stage)
     markInstalled(p)
     return true
 end
@@ -932,102 +585,12 @@ local function unpack(p, archive, onDone)
             onDone(false, detail)
             return
         end
-        if p.pick then
-            onDone(placePicks(p))
-        else
-            onDone(placeUnpacked(p, STAGING .. "/" .. p.id .. "/" .. p.dir))
-        end
+        onDone(placeUnpacked(p, STAGING .. "/" .. p.id .. "/" .. p.dir))
     end, progressFor(p, state.index, state.count))
-end
-
--- Patch a downloaded package's graphs (on a worker, one by one), then
--- mark it installed and `onDone(ok, err)`.
-local function patchGraphs(p, onDone)
-    local index, count = state.index, state.count
-    local i = 0
-    local function nextGraph()
-        i = i + 1
-        local step = (p.patch or {})[i]
-        if not step then
-            for _, f in ipairs(p.files) do
-                local info = gitgud.localDataInfo(packageDir(p) .. "/" .. f.path)
-                if not info or info.size ~= f.size then
-                    onDone(false, f.path .. " didn't come out as expected")
-                    return
-                end
-            end
-            markInstalled(p)
-            onDone(true)
-            return
-        end
-        if cancelled then
-            onDone(false, "cancelled")
-            return
-        end
-        local part = { id = p.id, title = p.title, phrase = p.phrase, part = i }
-        state.index, state.count = index, count
-        begin("patch", part)
-        local from = gitgud.localDataPath(packageDir(p) .. "/" .. step.from)
-        local to = gitgud.localDataPath(packageDir(p) .. "/" .. step.to)
-        local ok, err = gitgud.onnxSetAccuracy(from, to, 4, "BragiVoicePatch")
-        if not ok then
-            onDone(false, err)
-            return
-        end
-        await("BragiVoicePatch", function(done, detail)
-            if not done then
-                onDone(false, detail)
-            else
-                nextGraph()
-            end
-        end, progressFor(part, index, count))
-    end
-    nextGraph()
-end
-
-
--- Download a package's files one by one into its folder, then patch.
-local function fetchDownloads(p, onDone)
-    local i = 0
-    local index, count = state.index, state.count
-    local function nextFile()
-        i = i + 1
-        local f = p.downloads[i]
-        if not f then
-            patchGraphs(p, onDone)
-            return
-        end
-        local target = packageDir(p) .. "/" .. f.file
-        -- A file only gets its name once its checksum passed: one there
-        -- already (an earlier try) is done.
-        local info = gitgud.localDataInfo(target)
-        if info and info.size == f.size then
-            nextFile()
-            return
-        end
-        local ok, err = gitgud.downloadFile("BragiVoiceDownload", {
-            url = f.url, file = target, sha256 = f.sha256, size = f.size })
-        if not ok then
-            onDone(false, err)
-            return
-        end
-        await("BragiVoiceDownload", function(done, detail)
-            if not done then
-                onDone(false, detail)
-                return
-            end
-            nextFile()
-        end, progressFor({ id = p.id, title = p.title, phrase = p.phrase, size = f.size, part = i }, index, count))
-    end
-    nextFile()
 end
 
 -- Download one package and put it in place.
 local function fetchOne(p, onDone)
-    if p.downloads then
-        fetchDownloads(p, onDone)
-        return
-    end
     local target = DOWNLOADS .. "/" .. (p.archive or p.file)
     local ok, err = gitgud.downloadFile("BragiVoiceDownload", {
         url = p.url, file = target, sha256 = p.sha256, size = p.size })
@@ -1093,32 +656,18 @@ local function busy()
     return state.phase ~= "idle" and state.phase ~= "done" and state.phase ~= "failed"
 end
 
--- The finish for a set of groups: the listening models' self test, or the
--- pack's note.
-local function finisher(groups)
-    return groupSet(groups).listen and selfTest or packDone
-end
-
--- Which card shows an install of `groups`.
-local function installGroup(groups)
-    local set = groupSet(groups)
-    return set.listen and "listen" or (set.gpu and "gpu" or "turbo")
-end
-
---- Download what's missing of `groups` (default "listen"; Baldr's model is
--- "turbo", the GPU libraries with it { "gpu", "turbo" }), the user having
--- said yes, then check it.
+--- Download what's missing of `groups` (default "listen", the only group),
+-- the user having said yes, then check it.
 function voicemodels.install(groups)
     if busy() then
         return
     end
     local list = voicemodels.missing(groups)
-    local group = installGroup(groups)
     if #list == 0 then
-        finisher(groups)()
+        selfTest()
         return
     end
-    each(list, group, fetchOne, finisher(groups))
+    each(list, "listen", fetchOne, selfTest)
 end
 
 local function joinPath(folder, ...)
@@ -1126,24 +675,9 @@ local function joinPath(folder, ...)
     return table.concat({ folder, ... }, sep)
 end
 
---- Find a package's files in `folder`: its download (archive or file), its
--- unpacked folder, or (several downloads) each file there or in onnx\.
+--- Find a package's files in `folder`: its download (archive or file), or
+-- its unpacked folder.
 local function findIn(folder, p)
-    if p.downloads then
-        local paths = {}
-        for _, f in ipairs(p.downloads) do
-            local here = joinPath(folder, f.file)
-            local sub = joinPath(folder, "onnx", f.file)
-            if gitgud.pathExists(here) then
-                paths[#paths + 1] = here
-            elseif gitgud.pathExists(sub) then
-                paths[#paths + 1] = sub
-            else
-                return nil
-            end
-        end
-        return { each = paths }
-    end
     local name = p.archive or p.file
     if gitgud.pathExists(joinPath(folder, name)) then
         return { archive = joinPath(folder, name) }
@@ -1230,7 +764,7 @@ function voicemodels.installFrom(folder, groups)
             list[#list + 1] = p
         end
     end
-    local group = installGroup(groups)
+    local group = "listen"
     state.group = group
     if #list == 0 then
         fail("none of the files are in " .. folder)
@@ -1240,26 +774,6 @@ function voicemodels.installFrom(folder, groups)
         local where = found[p.id]
         if where.dir then
             copyFiles(p, where.dir, onDone)
-            return
-        end
-        if where.each then
-            local i = 0
-            local function nextFile()
-                i = i + 1
-                local f = p.downloads[i]
-                if not f then
-                    patchGraphs(p, onDone)
-                    return
-                end
-                checkAndCopy({ id = p.id, title = p.title, phrase = p.phrase, part = i }, where.each[i], f.sha256, packageDir(p) .. "/" .. f.file, function(ok, err)
-                    if not ok then
-                        onDone(false, err)
-                    else
-                        nextFile()
-                    end
-                end)
-            end
-            nextFile()
             return
         end
         if p.archive then
@@ -1288,7 +802,7 @@ function voicemodels.installFrom(folder, groups)
             end
             onDone(ok, err)
         end)
-    end, finisher(groups))
+    end, selfTest)
 end
 
 -- The install's tasks that Stop can end.
@@ -1313,31 +827,21 @@ function voicemodels.check()
     selfTest()
 end
 
---- Remove a group (default "listen": the listening models, the engine's
--- files and downloads in progress too; "turbo": Baldr's model; "gpu": the
--- GPU libraries).
+--- Remove the listening models (the engine's files and downloads in
+-- progress too). `group`: "listen", the only one.
 function voicemodels.remove(group)
-    if busy() then
+    if busy() or (group or "listen") ~= "listen" then
         return
     end
     require("bragi.voice").stop()
     gitgud.voiceEngineRelease()
     local s = readState()
-    if (group or "listen") == "listen" then
-        gitgud.localDataRemove(MODELS)
-        gitgud.localDataRemove(STAGING)
-        gitgud.localDataRemove(DOWNLOADS)
-        gitgud.localDataRemove(ROOT .. "/work")
-        for _, p in ipairs(voicemodels.packages("listen")) do
-            s.packages[p.id] = nil
-        end
-    else
-        -- The runtime may be loaded: what Windows won't delete now goes
-        -- next time (the files are no longer listed as installed).
-        gitgud.localDataRemove(ROOT .. "/" .. group)
-        for _, p in ipairs(voicemodels.packages(group)) do
-            s.packages[p.id] = nil
-        end
+    gitgud.localDataRemove(MODELS)
+    gitgud.localDataRemove(STAGING)
+    gitgud.localDataRemove(DOWNLOADS)
+    gitgud.localDataRemove(ROOT .. "/work")
+    for _, p in ipairs(voicemodels.packages("listen")) do
+        s.packages[p.id] = nil
     end
     writeState(s)
     voicemodels.configure()
@@ -1345,36 +849,40 @@ function voicemodels.remove(group)
     app.publish("bragi.voiceAvailable")
 end
 
--- ---------------------------------------------------------------------
--- Voices made from recordings
-
-local function voiceLabels()
-    local decoded = gitgud.jsonDecode(gitgud.localDataRead(VOICE_LABELS) or "")
-    return type(decoded) == "table" and decoded or {}
-end
-
---- The voices made here: { { id = "turbo:<name>", name = label, file,
--- builtin }, ... }: Baldr first, then the others in the order they were
--- made. A voice counts once its file is there (with the stand-in engine for
--- tests, once it's recorded as made).
-function voicemodels.voices()
-    local labels = voiceLabels()
-    local test = voicemodels.engine().test
+--- The folders older versions installed that are still there (the GPU voice
+-- model, NVIDIA's libraries, voices made from recordings): nothing uses them.
+function voicemodels.leftovers()
     local list = {}
-    for name, entry in pairs(labels) do
-        if type(entry) == "table" and (test or gitgud.localDataInfo(VOICES .. "/" .. name .. ".voice")) then
-            list[#list + 1] = { id = "turbo:" .. name, name = entry.label or name, at = entry.at or "", file = name,
-                builtin = name == voicemodels.BALDR.name }
+    for _, dir in ipairs(LEFTOVERS) do
+        if gitgud.localDataInfo(dir) then
+            list[#list + 1] = dir
         end
     end
-    table.sort(list, function(a, b)
-        if a.builtin ~= b.builtin then
-            return a.builtin
-        end
-        return a.at == b.at and a.name < b.name or a.at < b.at
-    end)
     return list
 end
+
+--- Remove what older versions installed (voicemodels.leftovers()), and
+-- their entries in installed.json.
+function voicemodels.removeLeftovers()
+    for _, dir in ipairs(voicemodels.leftovers()) do
+        gitgud.localDataRemove(dir)
+    end
+    local s = readState()
+    local known = {}
+    for _, p in ipairs(voicemodels.PACKAGES) do
+        known[p.id] = true
+    end
+    for id in pairs(s.packages) do
+        if not known[id] then
+            s.packages[id] = nil
+        end
+    end
+    writeState(s)
+    publish()
+end
+
+-- ---------------------------------------------------------------------
+-- The built-in voice
 
 -- The interface's own copy of a file (the interface folder, or the app's).
 local function interfaceFile(relative)
@@ -1414,105 +922,6 @@ function voicemodels.smallReady()
         and voicemodels.smallVoicesDir() ~= nil and voicemodels.phonemesDir() ~= nil
 end
 
-local baldrTried = false
-
---- Make Baldr if its model is in and Baldr isn't made yet (once a
--- run; quietly). Called when the pack finishes, and when voice starts.
-function voicemodels.ensureBaldr()
-    local b = voicemodels.BALDR
-    if baldrTried or not voicemodels.turboReady() then
-        return
-    end
-    for _, v in ipairs(voicemodels.voices()) do
-        if v.file == b.name then
-            return
-        end
-    end
-    local recording = interfaceFile(b.recording)
-    if not recording then
-        return
-    end
-    baldrTried = true
-    voicemodels.makeVoice(recording, b.label, nil, { name = b.name, builtin = true })
-end
-
---- The voice being made, or why making it failed: { label } / { error }.
-function voicemodels.making()
-    return making
-end
-
--- A file name for a label: lowercase letters, digits, and dashes.
-local function slug(label)
-    local s = tostring(label):lower():gsub("[^%w]+", "-"):gsub("^%-+", ""):gsub("%-+$", "")
-    s = s:sub(1, 40)
-    return s ~= "" and s or "voice"
-end
-
---- Make a voice from a recording (a WAV file, 10 to 20 s of one person
--- speaking clearly): its conditioning is computed once and kept; the
--- recording isn't copied. `onDone(ok, message)`.
-function voicemodels.makeVoice(wav, label, onDone, opts)
-    opts = opts or {}
-    if making and making.label then
-        return
-    end
-    label = tostring(label or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    if label == "" then
-        label = "My voice"
-    end
-    local name = opts.name or slug(label)
-    if not opts.builtin and name == voicemodels.BALDR.name then
-        name = name .. "-2" -- Baldr's own name stays Baldr's
-    end
-    voicemodels.configure()
-    local ok, err = gitgud.voiceMakeVoice("BragiVoiceMake", wav, name)
-    if not ok then
-        making = { error = err }
-        publish()
-        if onDone then
-            onDone(false, err)
-        end
-        return
-    end
-    making = { label = label, builtin = opts.builtin }
-    publish()
-    await("BragiVoiceMake", function(_, detail)
-        local result = gitgud.jsonDecode(detail or "") or {}
-        if result.ok then
-            local labels = voiceLabels()
-            labels[name] = { label = label, at = os.date("%Y-%m-%d %H:%M:%S"), seconds = result.seconds }
-            gitgud.localDataWrite(VOICE_LABELS, gitgud.jsonEncode(labels))
-            making = nil
-            -- A voice you made is the one replies use; Baldr is the
-            -- default without being chosen.
-            if not opts.builtin then
-                require("core.settings").set("bragi.voice", "turbo:" .. name)
-            end
-        else
-            making = { error = result.message or result.code or "it didn't work" }
-        end
-        publish()
-        app.publish("bragi.voicesChanged")
-        if onDone then
-            onDone(result.ok == true, result.ok and label or making.error)
-        end
-    end)
-end
-
---- Remove a made voice (by its file name).
-function voicemodels.removeVoice(name)
-    gitgud.localDataRemove(VOICES .. "/" .. name .. ".voice")
-    local labels = voiceLabels()
-    labels[name] = nil
-    gitgud.localDataWrite(VOICE_LABELS, gitgud.jsonEncode(labels))
-    local settings = require("core.settings")
-    if settings.get("bragi.voice", "") == "turbo:" .. name then
-        settings.set("bragi.voice", "")
-    end
-    publish()
-    app.publish("bragi.voicesChanged")
-end
-
 -- ---------------------------------------------------------------------
 -- Cards (bragiSettings.cards rows), for the welcome flow and Settings
 
@@ -1522,14 +931,6 @@ local function pickFolder(groups)
         if folder and folder ~= "" then
             voicemodels.installFrom(folder, groups)
         end
-    end
-end
-
-local function pickRecording()
-    local wav = gitgud.pickFile and gitgud.pickFile("A recording of the voice", "Recordings (WAV)", "*.wav")
-    if wav and wav ~= "" then
-        local label = wav:match("([^/\\]+)%.[Ww][Aa][Vv]$") or "My voice"
-        voicemodels.makeVoice(wav, label)
     end
 end
 
@@ -1599,6 +1000,12 @@ local function listenCard(opts)
                 end }
         end
     end
+    if opts.settings and #voicemodels.leftovers() > 0 then
+        rows[#rows + 1] = { kind = "action", title = "Old voice files",
+            sub = "Left by an older version (the GPU voice model, NVIDIA's libraries, voices made from recordings) "
+                .. "in " .. gitgud.localDataPath(ROOT) .. ". Nothing uses them now.",
+            button = "Remove", run = voicemodels.removeLeftovers }
+    end
     local settings = require("core.settings")
     local off = settings.get("bragi.voiceOff", "")
     if opts.settings and off ~= "" then
@@ -1611,161 +1018,21 @@ local function listenCard(opts)
     return card
 end
 
--- Where Turbo runs: where the engine loaded it, else the GPU when its
--- libraries are in and didn't fail to start.
-function voicemodels.turboOnGpu()
-    local e = voicemodels.engine()
-    if (e.turboDevice or "") ~= "" then
-        return e.turboDevice == "gpu"
-    end
-    return voicemodels.installed("gpu") and (e.gpuError or "") == ""
-end
-
--- The Baldr card: the Turbo voice model, offered on every computer with
--- the engine (on the processor without a suitable NVIDIA GPU: slower).
-local function turboCard(opts)
-    local s = state
-    local rows = {}
-    local card = { heading = "Baldr, Bragi's voice", rows = rows }
-    local missing = voicemodels.missing("turbo")
-    local gpuOk = voicemodels.gpuSuitable()
-    if busy() and s.group == "turbo" then
-        progressRows(rows, s)
-        rows[1].title = "Installing Bragi's voice"
-        card.progress = true
-    elseif #missing > 0 then
-        local size = voicemodels.size(voicemodels.downloadBytes(missing))
-        local sub
-        local made = "Bragi can answer in Baldr, its own voice. The voice comes with the app as a recording; a "
-            .. "speech model makes Baldr from it and speaks it, all on this computer"
-        if gpuOk then
-            sub = made .. ", on your NVIDIA GPU with the GPU libraries below. The model is about " .. size
-                .. " to download."
-        else
-            sub = made .. ". This computer has no NVIDIA GPU it can use, so the model runs on the processor and "
-                .. "Baldr is slow here: a reply's first words take about 5 to 10 seconds, and long replies fall "
-                .. "behind. The model is about " .. size .. " to download. "
-                .. (voicemodels.smallReady() and "Bragi's built-in voice" or "The Windows voices")
-                .. " answer at once; you can skip this."
-        end
-        rows[#rows + 1] = { kind = "info", title = "Replies in Baldr, Bragi's own voice", sub = sub }
-        if s.phase == "failed" and s.group == "turbo" then
-            rows[#rows + 1] = { kind = "info", title = "The last try didn't finish", sub = tostring(s.error) .. "." }
-        end
-        rows[#rows + 1] = { kind = "action", title = "Download Bragi's voice",
-            sub = size .. ". Bragi then makes its Baldr voice on this computer.",
-            button = s.phase == "failed" and s.group == "turbo" and "Try again" or "Download", primary = gpuOk,
-            run = function()
-                voicemodels.install("turbo")
-            end }
-        rows[#rows + 1] = { kind = "action", title = "Install from a folder",
-            sub = "The same files, downloaded already.", button = "Choose folder", run = pickFolder("turbo") }
-    else
-        local sub
-        if making and making.builtin then
-            sub = "Installed. Making Baldr from its recording: the first time loads the voice model, about a minute."
-        elseif voicemodels.gpuError() then
-            sub = "Installed. Bragi answers in Baldr on the processor: the GPU didn't start ("
-                .. voicemodels.gpuError() .. ")."
-        elseif voicemodels.turboOnGpu() then
-            sub = "Installed. Bragi answers in Baldr, its own voice, on the GPU."
-        else
-            sub = "Installed. Bragi can answer in Baldr on the processor: slower than "
-                .. (voicemodels.smallReady() and "the built-in voice." or "the Windows voices.")
-        end
-        -- While Baldr is being made there are no numbers: the bar pulses.
-        rows[#rows + 1] = { kind = (making and making.builtin) and "progress" or "info", title = "Baldr", sub = sub,
-            fraction = function()
-                return nil
-            end }
-        if opts.settings then
-            rows[#rows + 1] = { kind = "action", title = "Remove the voice model",
-                sub = "Frees " .. voicemodels.size(voicemodels.diskBytes(voicemodels.packages("turbo")))
-                    .. (voicemodels.smallReady() and ". Replies use the built-in voice." or ". Replies use the Windows voices."),
-                button = "Remove", run = function()
-                    voicemodels.remove("turbo")
-                end }
-        end
-    end
-    return card
-end
-
--- The GPU card: NVIDIA's libraries and the engine's CUDA build, only with a
--- suitable NVIDIA GPU (in Settings, also to say why not).
-local function gpuCard(opts)
-    local ok, gpuName = voicemodels.gpuSuitable()
-    local rows = {}
-    local card = { heading = "Faster with your NVIDIA GPU", rows = rows }
-    if not ok and not voicemodels.installed("gpu") then
-        if not opts.settings then
-            return nil
-        end
-        rows[#rows + 1] = { kind = "info", title = "Not for this computer",
-            sub = "Baldr runs on an NVIDIA GPU with at least 6 GB of memory and an up-to-date driver: "
-                .. gpuName .. ". It runs on the processor instead." }
-        return card
-    end
-    local s = state
-    local missing = voicemodels.missing({ "gpu", "turbo" })
-    local gpuPart = voicemodels.missing("gpu")
-    if busy() and s.group == "gpu" then
-        progressRows(rows, s)
-        rows[1].title = "Installing the GPU libraries"
-        card.progress = true
-    elseif #gpuPart > 0 then
-        rows[#rows + 1] = { kind = "info", title = "Baldr on " .. gpuName,
-            sub = "With the GPU libraries, Baldr answers about as fast as you read. About "
-                .. voicemodels.size(voicemodels.downloadBytes(missing)) .. " to download"
-                .. (#missing > #gpuPart and " with Bragi's voice model" or "") .. ": the GPU speech engine and "
-                .. "NVIDIA's GPU libraries, under NVIDIA's license terms. Nothing is downloaded until you choose to." }
-        if s.phase == "failed" and s.group == "gpu" then
-            rows[#rows + 1] = { kind = "info", title = "The last try didn't finish", sub = tostring(s.error) .. "." }
-        end
-        rows[#rows + 1] = { kind = "action", title = "Download the GPU libraries",
-            sub = voicemodels.size(voicemodels.downloadBytes(gpuPart)) .. ", then Bragi's voice model if it isn't in.",
-            button = s.phase == "failed" and s.group == "gpu" and "Try again" or "Download", primary = true,
-            run = function()
-                voicemodels.install({ "gpu", "turbo" })
-            end }
-        rows[#rows + 1] = { kind = "action", title = "Install from a folder",
-            sub = "The same files, downloaded already.", button = "Choose folder",
-            run = pickFolder({ "gpu", "turbo" }) }
-    else
-        local why = voicemodels.gpuError()
-        rows[#rows + 1] = { kind = "info", title = "GPU libraries", sub = why
-            and ("Installed, but the GPU didn't start: " .. why .. ". Baldr runs on the processor.")
-            or ("Installed. Baldr runs on " .. gpuName .. ".") }
-        if opts.settings then
-            rows[#rows + 1] = { kind = "action", title = "Remove them",
-                sub = "Frees " .. voicemodels.size(voicemodels.diskBytes(voicemodels.packages("gpu")))
-                    .. ". Baldr runs on the processor.",
-                button = "Remove", run = function()
-                    voicemodels.remove("gpu")
-                end }
-        end
-    end
-    return card
-end
-
 -- The system's first voice, for "use a Windows voice".
 local function windowsVoice()
     local list = gitgud.voiceVoices and gitgud.voiceVoices() or nil
     return type(list) == "table" and list[1] and list[1].id or nil
 end
 
--- Settings: the voice replies use (the built-in one by default; Baldr and
--- voices made from recordings with Baldr's model; a Windows voice), and
--- making your own (optional, with Baldr's model).
-local function voicesCard(opts)
-    local small = voicemodels.smallReady()
-    local turbo = voicemodels.turboReady()
-    if not small and not turbo then
+-- Settings: the voice replies use: the built-in one by default, or a
+-- Windows voice.
+local function voicesCard()
+    if not voicemodels.smallReady() then
         return nil
     end
     local settings = require("core.settings")
     local chosen = settings.get("bragi.voice", "")
-    local smallId = voicemodels.smallVoiceId()
-    local onWindows = chosen ~= "" and not chosen:find("^turbo:") and not chosen:find("^small:")
+    local onWindows = chosen ~= "" and not chosen:find("^small:")
     local rows = {}
     local card = { heading = "Voice for replies", rows = rows }
     local function choose(id)
@@ -1774,33 +1041,11 @@ local function voicesCard(opts)
             app.publish("bragi.voicesChanged")
         end
     end
-    if small then
-        local using = chosen == "" or chosen == smallId
-        rows[#rows + 1] = { kind = using and "info" or "action", title = voicemodels.SMALL.label,
-            sub = "Bragi's built-in voice, on the processor: it answers at once." .. (using and " Replies use it." or ""),
-            button = not using and "Use it" or nil, run = not using and choose("") or nil }
-    end
-    if turbo then
-        local where = voicemodels.turboOnGpu() and "on the GPU" or "on the processor, slower"
-        for _, v in ipairs(voicemodels.voices()) do
-            local using = chosen == v.id or (chosen == "" and not small and v.builtin)
-            if v.builtin then
-                rows[#rows + 1] = { kind = using and "info" or "action", title = v.name,
-                    sub = "Bragi's voice from its recording, " .. where .. "." .. (using and " Replies use it." or ""),
-                    button = not using and "Use Baldr" or nil, run = not using and choose(v.id) or nil }
-            elseif opts.settings then
-                rows[#rows + 1] = { kind = "action", title = v.name,
-                    sub = "Made from a recording, " .. where .. "." .. (using and " Replies use it." or ""),
-                    button = "Remove", run = function()
-                        voicemodels.removeVoice(v.file)
-                    end }
-            end
-        end
-    end
+    rows[#rows + 1] = { kind = onWindows and "action" or "info", title = voicemodels.SMALL.label,
+        sub = "Bragi's built-in voice, on the processor: it answers at once." .. (onWindows and "" or " Replies use it."),
+        button = onWindows and "Use it" or nil, run = onWindows and choose("") or nil }
     if onWindows then
-        rows[#rows + 1] = { kind = "action", title = "Replies use a Windows voice",
-            sub = small and "Not Bragi's own." or "Instant, but not Baldr.",
-            button = small and "Use Bragi's voice" or "Use Baldr", run = choose("") }
+        rows[#rows + 1] = { kind = "info", title = "Replies use a Windows voice", sub = "Not Bragi's own." }
     else
         rows[#rows + 1] = { kind = "action", title = "Use a Windows voice",
             sub = "The voices Windows has.", button = "Use Windows voice", run = function()
@@ -1810,42 +1055,18 @@ local function voicesCard(opts)
                 end
             end }
     end
-    if not turbo then
-        return card
-    end
-    if making and making.label then
-        -- No numbers to show while the model loads and listens: the bar pulses.
-        rows[#rows + 1] = { kind = "progress", title = "Making " .. making.label,
-            sub = "The first time loads the voice model: it can take a minute.", fraction = function()
-                return nil
-            end }
-    else
-        if making and making.error then
-            rows[#rows + 1] = { kind = "info", title = "That recording didn't work", sub = tostring(making.error) .. "." }
-        end
-        rows[#rows + 1] = { kind = "action", title = "Make your own voice (optional)",
-            sub = "From a WAV recording: 10 to 20 seconds of one person speaking clearly. Only what the model "
-                .. "needs is kept, not the recording.",
-            button = "Choose recording", run = pickRecording }
-    end
     return card
 end
 
---- The engine's cards: Voice models, Baldr (the Turbo model, on every
--- computer with the engine), the GPU libraries (with a suitable NVIDIA
--- GPU, or always in Settings), then in Settings the voice for replies
--- (Baldr, the Windows voices, making your own) and the credits. A card
+--- The engine's cards: Voice models, then in Settings the voice for
+-- replies (the built-in one, or a Windows voice) and the credits. A card
 -- installing something has `progress = true`: its first row's sub is
 -- voicemodels.progressText.
--- @param opts  { settings = true: Check, Repair, Remove, credits, and the off switch after a crash }
+-- @param opts  { settings = true: Check, Repair, Remove, old files, credits, and the off switch after a crash }
 function voicemodels.cards(opts)
     opts = opts or {}
-    local cards = { listenCard(opts), turboCard(opts) }
-    local gpu = gpuCard(opts)
-    if gpu then
-        cards[#cards + 1] = gpu
-    end
-    local voices = opts.settings and voicesCard(opts) or nil
+    local cards = { listenCard(opts) }
+    local voices = opts.settings and voicesCard() or nil
     if voices then
         cards[#cards + 1] = voices
     end
@@ -1855,9 +1076,8 @@ function voicemodels.cards(opts)
             credits[#credits + 1] = { kind = "info", title = c.title, sub = c.line }
         end
         credits[#credits + 1] = { kind = "info", title = "Speech engine",
-            sub = "sherpa-onnx (Apache-2.0) and ONNX Runtime (MIT), in the voice folder beside GitGud; the GPU "
-                .. "libraries add ONNX Runtime's CUDA provider. The built-in voice runs on the processor; without it, "
-                .. "replies use the voices Windows has." }
+            sub = "sherpa-onnx (Apache-2.0) and ONNX Runtime (MIT), in the voice folder beside GitGud, on the "
+                .. "processor. Without them, replies use the voices Windows has." }
         cards[#cards + 1] = { heading = "Voice credits", rows = credits }
     end
     return cards
@@ -1866,15 +1086,12 @@ end
 -- ---------------------------------------------------------------------
 -- Words
 
---- The credits: the listening models, and Baldr's and the GPU libraries'
--- when they're in.
+--- The credits: the listening models and the built-in voice.
 -- { { title, line, link }, ... }.
 function voicemodels.credits()
     local out = {}
-    local turbo = voicemodels.installed("turbo")
-    local gpu = voicemodels.installed("gpu")
     for _, p in ipairs(voicemodels.PACKAGES) do
-        if p.group == "listen" or (turbo and p.group == "turbo") then
+        if p.group == "listen" then
             out[#out + 1] = {
                 title = p.title,
                 line = p.model .. ", by " .. p.credit .. ", under the " .. p.licence .. " license ("
@@ -1890,17 +1107,6 @@ function voicemodels.credits()
                 .. "Paradee (by Sahil Mahendrakar, Apache-2.0). Its pronunciations are misaki's dictionaries (by "
                 .. "hexgrad, Apache-2.0).",
             link = "https://huggingface.co/hexgrad/Kokoro-82M" }
-    end
-    if turbo then
-        out[#out + 1] = { title = "Baldr",
-            line = "Bragi's own voice, the project's own: its recording comes with the Bragi interface." }
-    end
-    if gpu then
-        out[#out + 1] = { title = "NVIDIA libraries",
-            line = "CUDA runtime, cuBLAS, cuFFT, cuRAND, NVRTC, nvJitLink, and cuDNN, from NVIDIA's packages, under "
-                .. LICENCE_NAMES["NVIDIA-CUDA"] .. " (" .. LICENCE_LINKS["NVIDIA-CUDA"] .. ") and the "
-                .. LICENCE_NAMES["NVIDIA-cuDNN"] .. " (" .. LICENCE_LINKS["NVIDIA-cuDNN"] .. "); their license "
-                .. "files are in " .. gitgud.localDataPath(ROOT .. "/gpu") .. "." }
     end
     return out
 end
@@ -1921,10 +1127,6 @@ function voicemodels.faultText(e)
     elseif code == "engine-files" then
         return "The voice models need repairing: " .. detail .. ". Settings, Appearance and voice, Voice models."
     elseif code == "engine-missing" then
-        if voicemodels.installed("gpu") then
-            return "The GPU libraries didn't load: " .. detail .. ". Restart GitGud, or remove them in "
-                .. "Settings, Appearance and voice."
-        end
         return "The speech engine's files are missing or damaged: " .. detail .. ". Reinstall GitGud to fix them."
     elseif code == "engine-error" then
         return "Voice stopped: the speech engine failed several times in a row (" .. detail .. ")."

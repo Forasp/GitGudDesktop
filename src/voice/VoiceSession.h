@@ -253,8 +253,9 @@ namespace gitgud::voice
         void Say(const std::string& _Id, const std::string& _Text, const std::string& _Voice = {},
             int _iSampleRate = 0, double _fSpeed = 0.0, const app::Json& _Voicing = app::Json());
         // Connect and open the speaker now, so the first reply doesn't wait
-        // for either. No-op while connected.
-        void Prepare();
+        // for either (no-op while connected), and have the engine load
+        // `_Voice` (a small voice; "" for none).
+        void Prepare(const std::string& _Voice = {});
         // Stop that utterance, or everything when `_Id` is "".
         void StopSpeech(const std::string& _Id = {});
 

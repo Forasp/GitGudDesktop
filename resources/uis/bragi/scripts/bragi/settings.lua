@@ -16,7 +16,7 @@
 --   bragi.listen              listen for the wake word
 --   bragi.wakeWord            what wakes it ("Bragi")
 --   bragi.closingPhrase       what ends dictation ("over and out"; "" = Send only)
---   bragi.endWaitSeconds      the wait once you seem done (2 to 10)
+--   bragi.endWaitSeconds      the wait once you seem done (2 to 10, from your pause)
 --   bragi.showHeard           show what was heard and changed under a spoken
 --                             message (for troubleshooting; off)
 --   bragi.voiceApprovals      ask permission cards aloud and take a spoken
@@ -423,8 +423,7 @@ local modelsCard = nil
 --- A section's cards with voice in them: all of them while voice is
 -- available, else the first `keep` cards. With `keep` (the section with
 -- the voice models), the engine's cards (bragi/voicemodels.lua: Voice
--- models, Baldr, the GPU libraries, the voice for replies, the credits)
--- come last.
+-- models, the voice for replies, the credits) come last.
 local function voiceGated(all, keep)
     return function()
         local models = require("bragi.voicemodels")
@@ -491,7 +490,7 @@ local SECTIONS = {
                     { kind = "input", title = "Closing phrase", sub = "Pauses never send. Say this phrase, or press Send.",
                       key = "bragi.closingPhrase", default = "over and out" },
                     { kind = "input", title = "Wait when you seem done",
-                      sub = "When you seem finished, Bragi waits this many seconds (2 to 10), then goes ahead.",
+                      sub = "When you seem finished, Bragi goes ahead this many seconds (2 to 10) after you paused.",
                       key = "bragi.endWaitSeconds", default = "3", number = true },
                     { kind = "toggle", title = "Show what was heard",
                       sub = "Under each spoken message: what was heard and what was changed. For troubleshooting.",

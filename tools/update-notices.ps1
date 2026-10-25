@@ -114,41 +114,18 @@ Speech detection: Silero VAD by the Silero team, under the MIT license.
 Wake word spotter: the Zipformer keyword spotter (GigaSpeech, 3.3M) by the
 Next-gen Kaldi project, under the Apache License 2.0.
 "@
-$sections += Format-Section "Voice pack for NVIDIA GPUs (downloaded by the Bragi interface when you choose; not included)" @"
-The Bragi interface offers an optional voice pack on computers with a
-suitable NVIDIA GPU. It is not part of GitGud Desktop and is never installed
-with it: the Bragi interface's welcome flow or Settings downloads it, when
-you choose to, from its makers' own downloads into your local app data
-folder. GitGud Desktop does not distribute any of it.
-
-ONNX Runtime 1.28.2's CUDA provider (onnxruntime_providers_cuda.dll, MIT),
-from the sherpa-onnx project's CUDA release, the same build whose core
-ships in the voice folder (its license text and third-party notices are
-above).
-
-NVIDIA's CUDA runtime, cuBLAS, cuFFT, cuRAND, NVRTC and nvJitLink, from
-NVIDIA's own packages on PyPI (nvidia-cuda-runtime, nvidia-cublas,
-nvidia-cufft, nvidia-curand, nvidia-cuda-nvrtc, nvidia-nvjitlink), under
-the NVIDIA CUDA Toolkit End User License Agreement
-(https://docs.nvidia.com/cuda/eula/index.html), and cuDNN, from
-nvidia-cudnn-cu13, under the NVIDIA cuDNN Software License Agreement
-(https://docs.nvidia.com/deeplearning/cudnn/latest/reference/eula.html).
-They come to your computer from NVIDIA's packages with their license files,
-which the voice pack keeps beside them. The CUDA agreement lets
-applications distribute some runtime libraries (its Attachment A lists
-cudart, cuBLAS, cuFFT, cuRAND and NVRTC, but not nvJitLink), and the cuDNN
-agreement names only some of its runtime files; GitGud Desktop doesn't rely
-on either grant, because it never distributes these files.
-
-Chatterbox Turbo by Resemble AI, under the MIT license, from Resemble AI's
-ONNX export on Hugging Face (ResembleAI/chatterbox-turbo-ONNX). After
-download its quantized graphs are changed on your computer (an accuracy
-setting on their quantized matrix multiplications, for speed); its weights
-are not.
-
-Baldr, the Bragi interface's voice for replies: the recording it is made
-from (resources/uis/bragi/voices/baldr/ref.wav, which ships with the
-interface) is the project's own.
+$sections += Format-Section "Bragi's built-in voice (ships with the Bragi interface)" @"
+Bragi's built-in voice (resources/uis/bragi/voices/bragi-1, which ships with
+the interface) is the project's own model, trained from Kokoro-82M by
+hexgrad (Apache License 2.0, https://huggingface.co/hexgrad/Kokoro-82M) with
+the training code of Paradee by Sahil Mahendrakar (Apache License 2.0,
+https://github.com/sahilmahendrakar/paradee), on sentences from WikiText-103
+(Creative Commons Attribution-ShareAlike 3.0; the sentences themselves don't
+ship). Its pronunciation dictionaries (resources/uis/bragi/phonemes) are
+misaki's American English dictionaries by hexgrad (Apache License 2.0,
+https://github.com/hexgrad/misaki), unchanged, and the Bragi interface's
+bragi/phonemes.lua follows misaki's English rules. The Apache License 2.0
+text is above.
 "@
 
 # LF throughout, even where this script was checked out with CRLF (the

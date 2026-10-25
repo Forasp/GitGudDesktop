@@ -11,7 +11,7 @@
 -- user's OK (bragi/voicemodels.lua); until they're installed, or in a
 -- build without the engine, voice.available() is false and the mic button
 -- says why (voice.unavailableText()). Spoken replies use Bragi's built-in
--- voice, Baldr, or a system voice (Settings).
+-- voice, or a system voice (Settings).
 --
 --   off -> connecting -> listening (for the wake word)
 --       -> hearing (a message: its text shows live in the prompt box)
@@ -19,8 +19,9 @@
 --
 -- A message ends with the closing phrase, Send, or when the user is logically
 -- done: after each pause the filter judges the text so far, and when it
--- says complete, Bragi waits bragi.endWaitSeconds (2 to 10) and ends it
--- (`send` reason "done"). Anything heard in that wait cancels it.
+-- says complete, Bragi ends it bragi.endWaitSeconds (2 to 10) after the
+-- pause, the judging counted in (at least HEARD.END_WAIT_MIN_MS after the answer;
+-- `send` reason "done"). Anything heard in that wait cancels it.
 --
 -- Every heard message goes through the pre-pass filter
 -- (prompts/heard-text.md) on its own helper before anything else sees it.
@@ -140,7 +141,7 @@
 --
 -- Bragi may say its own name (or "Baldr", close to it). A wake while a
 -- reply plays, or just after, may be Bragi hearing itself, so it never
--- stops the reply on its own (Baldr cut itself off when
+-- stops the reply on its own (a reply once cut itself off when
 -- the spotter heard it). The reply keeps playing until the wake is
 -- confirmed as you: words heard that aren't the reply's own and, once your
 -- voice is enrolled (`ready` says so), your voice (the engine tags the
@@ -214,32 +215,22 @@ voice.backend = {
     health = function(onDone)
         local models = require("bragi.voicemodels")
         local test = models.engine().test
-        local turbo = models.turboReady() and #models.voices() > 0
-        local small = models.smallReady()
         local chosen = settings.get("bragi.voice", "")
         local tts = voice.PROVIDER_NAMES.windows
-        if small and (chosen == "" or chosen:find("^small:")) then
+        if models.smallReady() and (chosen == "" or chosen:find("^small:")) then
             tts = voice.PROVIDER_NAMES.small
-        elseif turbo and (chosen == "" or chosen:find("^turbo:")) then
-            tts = voice.PROVIDER_NAMES[models.turboOnGpu() and "turbo" or "turbo-cpu"]
         end
         onDone({ sttProvider = test and "The test engine" or voice.PROVIDER_NAMES.parakeet,
             ttsProvider = test and "The test engine" or tts })
     end,
-    -- The built-in voice, the voices made from recordings (with Baldr's
-    -- model), then the system's; the default is the first of them.
+    -- The built-in voice, then the system's; the default is the first of
+    -- them.
     voices = function(onDone, onError)
         local models = require("bragi.voicemodels")
         local out = {}
         if models.smallReady() then
             out[1] = { id = models.smallVoiceId(), name = models.SMALL.label, provider = "Built in",
                 description = voice.PROVIDER_NAMES.small }
-        end
-        if models.turboReady() then
-            for _, v in ipairs(models.voices()) do
-                out[#out + 1] = { id = v.id, name = v.name, provider = "Made voice",
-                    description = voice.PROVIDER_NAMES[models.turboOnGpu() and "turbo" or "turbo-cpu"] }
-            end
         end
         local list, err = gitgud.voiceVoices()
         if not list and #out == 0 then
@@ -283,8 +274,9 @@ voice.backend = {
         end
         return gitgud.voiceSpeak(id, body, options)
     end,
-    speakPrepare = function()
-        return gitgud.voiceSpeakPrepare()
+    -- `voiceId`: a voice to load now ("small:<name>"), or nil.
+    speakPrepare = function(voiceId)
+        return gitgud.voiceSpeakPrepare(voiceId)
     end,
     speakStop = function(id)
         gitgud.voiceSpeakStop(id)
@@ -315,8 +307,6 @@ voice.backend = {
 voice.PROVIDER_NAMES = {
     parakeet = "Speech recognition, on this computer",
     small = "Bragi's built-in voice, on the processor",
-    turbo = "Baldr's voice model, on the GPU",
-    ["turbo-cpu"] = "Baldr's voice model, on the processor (slower)",
     windows = "Windows voices, on this computer",
 }
 
@@ -342,13 +332,15 @@ end
 
 local LOG_FILE = "bragi/voice-log.txt"
 local LOG_LINES = 400
--- The lookback and echoes (one table: this file is near Lua's 200 locals).
+-- The lookback, echoes, and the done wait (one table: this file is near
+-- Lua's 200 locals).
 local HEARD = {
     CONTEXT_SOME = 1000,      -- tokens of lookback first
     CONTEXT_MORE = 5000,      -- as far back as it goes
     SHORT_WORDS = 25,         -- a message with fewer words always gets the lookback
     LOOKBACK_WAIT_MS = 5000,  -- a lookback not answered by then: the filter goes on without it
     ECHO_MIN_WORDS = 4,       -- fewer heard words ("yes") are never taken as an echo of a whole text
+    END_WAIT_MIN_MS = 500,    -- the shortest "sounds done" wait, however long the judge took
 }
 local LOOKBACK_TOKENS = HEARD.CONTEXT_MORE -- what the engine keeps for a lookback (listen hello)
 local SPOKEN_MAX = 400      -- characters voice.speakable keeps
@@ -356,7 +348,7 @@ local SPOKEN_CUT = 160      -- characters kept when the summarizer fails or keep
 local ECHO_REPLY_WORDS = 15 -- a reply shorter than this may be said nearly as it is
 local ECHO_SUMMARY_WORDS = 10
 local ECHO_TRIPLES = 0.6    -- of a summary's word triples found in the reply: said again, not retold
-local SPEED_DEFAULT = 1.15  -- bragi.speechSpeed when unset (1 is the voice's normal pace)
+local SPEED_DEFAULT = 1.15  -- bragi.speechSpeed for a Windows voice when unset (1 is its normal pace)
 local SPEED_MIN, SPEED_MAX = 0.8, 1.5
 local LEVEL_BARS = 9
 local LEVEL_MS = 110
@@ -1452,18 +1444,22 @@ local function judge(id, sofar)
         if not still or not answer or answer.complete ~= true or doneTimer then
             return
         end
+        -- The wait runs from the pause: the judge's time counts toward it.
         local seconds = voice.endWait()
+        local judgedMs = gitgud.now() - started
+        local waitMs = math.max(HEARD.END_WAIT_MIN_MS, seconds * 1000 - judgedMs)
         doneTimer = {
             id = id,
-            timer = gitgud.after(seconds * 1000, function()
+            timer = gitgud.after(waitMs, function()
                 doneTimer = nil
                 if hearing == h then
-                    record("done", { id = id, seconds = seconds })
+                    record("done", { id = id, seconds = seconds, judgedMs = judgedMs, waitMs = waitMs })
                     voice.backend.send("done")
                 end
             end),
         }
-        setState("hearing", "Sounds done. Sending in " .. seconds .. " s unless you go on")
+        setState("hearing", "Sounds done. Sending in " .. math.max(1, math.floor(waitMs / 1000 + 0.5))
+            .. " s unless you go on")
     end, { latest = true })
 end
 
@@ -1610,10 +1606,9 @@ function voice.chosenVoice()
 end
 
 --- The `voice` a `say` carries, or nil for the system's default. With no
--- voice chosen, the built-in voice when the interface has it, else Baldr
--- (the first made voice) whenever its model is in: that comes from this
--- computer's own list, so the first reply after voice starts is Bragi's own
--- even before the engine's voices list arrives (it went to the Windows voice).
+-- voice chosen, the built-in voice when the interface has it: that comes
+-- from this computer's own files, so the first reply after voice starts is
+-- Bragi's own even before the engine's voices list arrives.
 local function sayVoice()
     local chosen = text.trim(settings.get("bragi.voice", ""))
     if chosen ~= "" then
@@ -1629,16 +1624,6 @@ local function sayVoice()
     if models.smallReady() then
         return models.smallVoiceId()
     end
-    if models.turboReady() then
-        local made = models.voices()[1]
-        if made then
-            return made.id
-        end
-    end
-    if voices.list then
-        local default = voices.default
-        return type(default) == "string" and default:find("^turbo:") and default or nil
-    end
     return nil
 end
 
@@ -1646,7 +1631,7 @@ local PREVIEW_TEXT = "Hello, I'm Bragi. This is how I sound when I tell you what
 
 --- How fast Bragi speaks: bragi.speechSpeed, kept to 0.8..1.5 (1 is the
 -- voice's normal pace). Unset, the voice's own pace: the built-in voice's
--- (voicemodels.SMALL.speed) for it, SPEED_DEFAULT for the others. Goes as
+-- (voicemodels.SMALL.speed) for it, SPEED_DEFAULT for a Windows voice. Goes as
 -- `speed` with every `say`.
 -- @param id  the voice it's for (sayVoice's), or nil for the one replies use
 function voice.speechSpeed(id)
@@ -3576,10 +3561,11 @@ function voice.toggle()
     voice.checkVoices(true) -- the voices for replies, known before the first one
     warmHelpers()
     agent.warm()
-    -- Connect for speech and open the speaker now, so the first reply
-    -- doesn't wait for either.
+    -- Connect for speech, open the speaker, and load the built-in voice
+    -- now, so the first reply waits for none of them.
     if settings.get("bragi.speak", true) and voice.backend.speakPrepare then
-        voice.backend.speakPrepare()
+        local v = sayVoice()
+        voice.backend.speakPrepare(v and v:find("^small:") and v or nil)
     end
 end
 
@@ -4473,7 +4459,7 @@ function voice.init()
     end
     helpers.init()
     voice.noticeCrash(require("bragi.voicemodels").engine())
-    -- A pack installed or a voice made: the voices for replies again.
+    -- The models installed or the voice changed: the voices for replies again.
     for _, signal in ipairs({ "bragi.voiceAvailable", "bragi.voicesChanged" }) do
         app.subscribe(signal, function()
             gitgud.after(0, function()
@@ -4481,14 +4467,6 @@ function voice.init()
             end)
         end)
     end
-    -- Baldr, Bragi's own voice, once its model is in (made once,
-    -- without asking).
-    app.subscribe("bragi.voiceAvailable", function()
-        require("bragi.voicemodels").ensureBaldr()
-    end)
-    gitgud.after(3000, function()
-        require("bragi.voicemodels").ensureBaldr()
-    end)
     -- A conversation shown while voice is on starts its session now, as
     -- the one shown when listening began did: the first spoken message
     -- doesn't wait out Claude Code's start-up (Bragi's

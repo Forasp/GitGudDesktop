@@ -13,11 +13,8 @@
 // (ONNX Runtime keeps global state and threads).
 //
 // The libraries are the sherpa-onnx 1.13.8 CPU build (MD runtime, without
-// text to speech) with ONNX Runtime 1.28.2's GPU build, which runs on the
-// processor until EnableCuda() adds the CUDA execution provider from the
-// optional GPU pack (its onnxruntime_providers_cuda.dll and NVIDIA's
-// libraries, in their own folder) in the same run. Load() refuses any other
-// ONNX Runtime.
+// text to speech) with ONNX Runtime 1.28.2, run on the processor. Load()
+// refuses any other ONNX Runtime.
 // -----------------------------------------------------------------------------
 
 #include "sherpa-onnx/c-api/c-api.h"
@@ -89,23 +86,6 @@ namespace gitgud::speech
     // always loads them from the app's own voice folder.
     bool LoadSherpa(const std::string& _Dir, std::string& _Error);
     std::string SherpaDir();
-
-    // Add the CUDA execution provider from the GPU pack in `_GpuDir`: its
-    // NVIDIA libraries load first, by full path, then ONNX Runtime registers
-    // onnxruntime_providers_cuda.dll from there by full path (nothing is
-    // copied beside onnxruntime.dll and the search path is never changed).
-    // Needs LoadSherpa first. Once it worked it stays (later calls say so);
-    // a failure can be tried again (the pack repaired). False with `_Error`.
-    bool EnableCuda(const std::string& _GpuDir, std::string& _Error);
-    // EnableCuda worked: sessions can use CudaEpDevice().
-    bool SherpaOnGpu();
-    // For SessionOptionsAppendExecutionProvider_V2: the CUDA device (an
-    // OrtEpDevice*) and the environment it was registered in (an OrtEnv*),
-    // or nullptr before EnableCuda worked.
-    const void* CudaEpDevice();
-    void* CudaEnv();
-    // Whether `_Dir` holds the GPU pack's provider (a file check).
-    bool GpuRuntimePresent(const std::string& _Dir);
 
     // ONNX Runtime's API table (OrtApi, for `_uVersion`) from the loaded
     // onnxruntime.dll, for engines that use it directly; nullptr until

@@ -25,10 +25,8 @@
 -- The voice step shows when the build has the speech engine
 -- (bragi/voicemodels.lua, engineInstalled), and is where its models are
 -- fetched: sizes shown first, nothing downloaded without the user's OK
--- (Download, or Install from a folder). Baldr's model is offered there
--- too, on every computer (saying plainly that it's slow without a suitable
--- NVIDIA GPU; skippable), and with such a GPU the GPU libraries. Baldr is
--- then made without asking; making your own voice is in Settings. The devices and words follow
+-- (Download, or Install from a folder). Replies use Bragi's built-in
+-- voice, which comes with the interface. The devices and words follow
 -- once the models are installed. Training shows when bragi/voice.lua says voice is
 -- available.
 --
@@ -265,8 +263,7 @@ local progressCard = nil
 
 local function voiceCards()
     local models = require("bragi.voicemodels")
-    -- The engine's cards: the models, Baldr, the GPU libraries (with a
-    -- suitable GPU).
+    -- The engine's cards: the models.
     local cards = models.cards()
     progressCard = nil
     for i, card in ipairs(cards) do

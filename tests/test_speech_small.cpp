@@ -1,9 +1,9 @@
-// The small built-in voice (src/speech/SmallVoice, SpeechText's Roughen,
-// app/SortedTable for the pronunciation dictionaries) and its path through the
-// speak channel. The real model is the one the app ships
-// (resources/uis/bragi/voices/bragi-1, copied beside the binaries), run on the
-// app's own ONNX Runtime (voice/ beside the binaries); those tests skip when
-// either isn't there.
+// The small built-in voice (src/speech/SmallVoice, SpeechText's sentences
+// and roughness, app/SortedTable for the pronunciation dictionaries) and its
+// path through the speak channel, with the system's voices for any other.
+// The real model is the one the app ships (resources/uis/bragi/voices/bragi-1,
+// copied beside the binaries), run on the app's own ONNX Runtime (voice/
+// beside the binaries); those tests skip when either isn't there.
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -18,9 +18,11 @@
 #include <cmath>
 #include <condition_variable>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <mutex>
 #include <random>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -266,6 +268,103 @@ TEST_CASE("The speak channel plays a small voice at the rate it's asked for", "[
     CHECK(nbytes > 2 * 24000); // over a second of 16-bit audio for two sentences
     plink->Close();
 }
+
+TEST_CASE("Replies are split into sentences, a long first one at a clause", "[speech][small]")
+{
+    CHECK(SplitForSpeech("Done. The pull request is open.") ==
+          std::vector<std::string>{"Done.", "The pull request is open."});
+    CHECK(SplitForSpeech(
+              "I checked the build on the main branch, and it passed this morning. The only "
+              "warning was "
+              "here.") == std::vector<std::string>{"I checked the build on the main branch,",
+                              "and it passed this morning.", "The only warning was here."});
+    // Version numbers and file names stay whole; quotes stay with their sentence.
+    CHECK(SplitForSpeech("Open 1.5.3 and Listen.cpp now. He said \"go.\" Then stop!") ==
+          std::vector<std::string>{
+              "Open 1.5.3 and Listen.cpp now.", "He said \"go.\"", "Then stop!"});
+    // A long sentence without a period breaks at a comma.
+    const std::string longText(250, 'a');
+    const auto pieces = SplitForSpeech(longText + ", " + longText);
+    CHECK(pieces.size() == 2);
+}
+
+TEST_CASE("Warming a small voice loads it before its first say", "[speech][small]")
+{
+    if (!VoiceThere())
+    {
+        SKIP("no voice model or ONNX Runtime beside the tests");
+    }
+    const fs::path state = TempDir("warm");
+    std::unique_ptr<LocalEngine> pengine = SmallEngine(state);
+    std::unique_ptr<gitgud::voice::ILink> plink = pengine->MakeLink("speak");
+    std::string error;
+    REQUIRE(plink->Open([](bool, const std::string&) {}, [](int, const std::string&) {}, error));
+    REQUIRE(plink->SendText(R"({"type":"warm","voice":"small:bragi-1"})"));
+    // The engine log says when it loaded; nothing was said.
+    const fs::path log = state / "voice-engine.log";
+    const auto deadline = std::chrono::steady_clock::now() + 60s;
+    std::string text;
+    for (;;)
+    {
+        std::ifstream in(log, std::ios::binary);
+        std::stringstream ss;
+        ss << in.rdbuf();
+        text = ss.str();
+        if (text.find("small voice bragi-1 loaded") != std::string::npos)
+        {
+            break;
+        }
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        std::this_thread::sleep_for(20ms);
+    }
+    CHECK(text.find("phonemes,") == std::string::npos);
+    plink->Close();
+}
+
+#if defined(_WIN32)
+TEST_CASE("A say in no small voice uses the system's voices", "[speech][small]")
+{
+    const fs::path dir = TempDir("system");
+    LocalEngine engine((dir / "no-libraries").u8string(), dir.u8string());
+    std::string error;
+    if (engine.Voices(error).empty())
+    {
+        SKIP("no system voices");
+    }
+    std::unique_ptr<gitgud::voice::ILink> plink = engine.MakeLink("speak");
+    std::mutex mutex;
+    std::vector<Json> messages;
+    REQUIRE(plink->Open(
+        [&](bool _bBinary, const std::string& _Data)
+        {
+            if (!_bBinary)
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                messages.push_back(Json::Parse(_Data).value_or(Json()));
+            }
+        },
+        [](int, const std::string&) {}, error));
+    REQUIRE(plink->SendText(R"({"type":"say","id":"r1","text":"Hello."})"));
+    const auto deadline = std::chrono::steady_clock::now() + 30s;
+    for (;;)
+    {
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (!messages.empty() && messages.back()["type"].AsString() != "start")
+            {
+                break;
+            }
+        }
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        std::this_thread::sleep_for(10ms);
+    }
+    std::lock_guard<std::mutex> lock(mutex);
+    CHECK(messages.front()["type"].AsString() == "start");
+    CHECK(messages.front()["provider"].AsString() == "windows");
+    CHECK(messages.back()["type"].AsString() == "end");
+    plink->Close();
+}
+#endif
 
 TEST_CASE("Without small voices set up, a small voice's say is an error", "[speech][small]")
 {

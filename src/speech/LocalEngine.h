@@ -4,15 +4,11 @@
 // LocalEngine: the speech engine inside the app, behind the voice links
 // (voice/Link.h). The listen channel runs the Listener (speech/Listener.h)
 // on the models; the speak channel speaks with a small built-in voice
-// (speech/SmallVoice.h, Configure's `small`: phonemes in, from Lua), with
-// Chatterbox Turbo (speech/Turbo.h) in a voice made from a recording, when
-// its models are set up (Configure's `tts`), else with the system's voices
-// (speech/TextToSpeech.h).
+// (speech/SmallVoice.h, Configure's `small`: phonemes in, from Lua), or
+// with the system's voices (speech/TextToSpeech.h).
 //
-// One ONNX Runtime serves both: the CPU build in the `voice` folder beside
-// the exe, or the GPU runtime (the voice pack: sherpa-onnx's CUDA build
-// with NVIDIA's CUDA and cuDNN libraries) from Configure's `runtimeDir`.
-// Which one loads is decided once per process.
+// One ONNX Runtime serves both, on the processor: the one in the `voice`
+// folder beside the exe.
 //
 // Its libraries (sherpa-onnx and ONNX Runtime, in the `voice` folder beside
 // the exe) load the first time the models do: when the Bragi interface turns
@@ -20,7 +16,7 @@
 //
 // Guards, because the libraries run in the app's process:
 // - Two engine threads make every call into them: one for listening, one
-//   for speaking (Turbo), each owning its handles, each with its own
+//   for speaking (the small voices), each owning its handles, each with its own
 //   watchdog and crash marker ("voice-state", "voice-state-speak"). A
 //   fault on either stops both.
 // - Every call goes through Call(): exceptions are caught (a failed decode
@@ -61,6 +57,8 @@
 namespace gitgud::speech
 {
 
+    class SmallVoice;
+
     struct EngineState
     {
         bool m_bInstalled = false;  // the libraries are there (nothing loaded)
@@ -69,8 +67,6 @@ namespace gitgud::speech
         bool m_bFaulted = false;    // no more calls until the app restarts
         std::string m_FaultCode;    // "engine-fault" or "engine-hung"
         std::string m_FaultDetail;
-        std::string m_TurboDevice; // "gpu" or "cpu" once Turbo loaded, else ""
-        std::string m_GpuError;    // why Turbo isn't on the GPU it was asked to use
     };
 
     // What the crash marker held at start: the call the app was in when it
@@ -102,44 +98,22 @@ namespace gitgud::speech
         // `files`, [{path, size, sha256}], each checked before loading. Takes
         // effect at the next load (models load when listening starts and
         // unload when it stops). Also:
-        //   gpuDir      the GPU pack's folder: with its provider there and
-        //               tts.provider "cuda", Turbo loads (again) on the GPU,
-        //               in the same run; if the GPU doesn't start, on the
-        //               processor (State().m_GpuError says why)
-        //   tts         Turbo: {dir, encoder, embed, lm, decoder, tokenizer,
-        //               voicesDir, provider, threads, cpuThreads, files};
-        //               absent: system voices only
         //   small       small voices: {voicesDir, threads}: "small:<name>" is
         //               <voicesDir>/<name> (model.onnx, phonemes.tsv), and its
-        //               `say` text is phonemes; absent: none
+        //               `say` text is phonemes; absent: system voices only
         bool Configure(const app::Json& _Settings, std::string& _Error);
 
-        // Turbo is set up (Configure's `tts`), not necessarily loaded.
-        bool TurboConfigured() const;
         // Small voices are set up (Configure's `small`).
         bool SmallConfigured() const;
         // Say `_Phonemes` with small voice `_Name` (speaking thread; it loads
         // the first time). 24 kHz audio, or false with `_Error`.
         bool SmallSay(const std::string& _Phonemes, const std::string& _Name, double _fSpeed,
             double _fWobble, std::vector<float>& _Audio, std::string& _Error);
-        // The voice a `say` without one uses when Turbo is set up:
-        // "turbo:baldr" when Baldr is made, else the first made voice; ""
-        // when none is.
-        std::string DefaultMadeVoice() const;
-        // Make a voice from a recording (a WAV file): its conditioning saved
-        // as <voicesDir>/<_Name>.voice. `_Done` gets {ok, seconds?, code?,
-        // message?} on the speaking thread.
-        void MakeVoice(const std::string& _Wav, const std::string& _Name,
-            std::function<void(const app::Json&)> _Done);
-        // Say `_Sentence` with Turbo in voice `_Name` (speaking thread). False
-        // with `_Error`. `_Stopped` is asked between tokens.
-        bool TurboSay(const std::string& _Sentence, const std::string& _Name, double _fSpeed,
-            const std::function<bool()>& _Stopped, std::vector<float>& _Audio, std::string& _Error);
         // Run `_Task` on the speaking thread.
         void PostSpeak(std::function<void()> _Task);
-        // Load Turbo now, in the background (the speak channel opened); then
-        // `_Done` on the speaking thread, if given.
-        void WarmTurbo(std::function<void()> _Done = nullptr);
+        // Load small voice `_Name` now, in the background (the speak
+        // channel's `warm`), so its first say doesn't wait.
+        void WarmSmall(const std::string& _Name);
 
         // A link for "listen" or "speak" (voice::LinkFactory).
         std::unique_ptr<voice::ILink> MakeLink(const std::string& _Channel);
@@ -207,16 +181,14 @@ namespace gitgud::speech
         void CloseListens(const app::Json& _Error, const std::string& _Reason);
         void OpenLog();
 
-        // Speaking thread: load Turbo (and the runtime) if it isn't.
-        bool EnsureTurbo(std::string& _Error);
-        void UnloadTurbo();
         // Speaking thread: the runtime, the speak marker and the log, before
         // a small voice loads. False with `_Error`.
         bool PrepareSmall(std::string& _Error);
         void UnloadSmall();
+        // Speaking thread: small voice `_Name`, loaded the first time; null
+        // with `_Error` when it isn't set up or didn't load.
+        SmallVoice* FindSmall(const std::string& _Name, std::string& _Error);
         void SpeakLoop();
-        // The GPU pack's folder when Turbo should use it and it's there, else "".
-        std::string GpuDir() const;
 
         void OnListenText(const std::shared_ptr<ListenState>& _pState, const std::string& _Text);
         void OnListenAudio(const std::shared_ptr<ListenState>& _pState, const std::string& _Pcm);
@@ -232,11 +204,6 @@ namespace gitgud::speech
             m_Files; // path, size, sha
         bool m_bConfigured = false;
         bool m_bLoaded = false;
-        std::string m_GpuDir;
-        std::string m_TurboDevice; // see EngineState
-        std::string m_GpuError;
-        app::Json m_Tts; // Configure's `tts` (null: none)
-        FileList m_TtsFiles;
         app::Json m_Small; // Configure's `small` (null: none)
         std::string m_FaultCode;
         std::string m_FaultDetail;
@@ -284,8 +251,6 @@ namespace gitgud::speech
         bool m_bVerifiedRead = false;
 
         // Speaking thread only.
-        struct TurboState;
-        std::unique_ptr<TurboState> m_pTurbo;
         struct SmallState;
         std::unique_ptr<SmallState> m_pSmall;
         std::string m_SpeakException;

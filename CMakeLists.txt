@@ -44,9 +44,8 @@ option(GITGUD_PROFILE_INSTRUMENT "Profile every C++ function (slow; profiling bu
 # `lib` folder of a sherpa-onnx v1.13.8 shared Windows release (see
 # docs/BUILDING.md) to copy its C API DLL there, and GITGUD_ORT_DIR at the
 # `lib` folder of its CUDA release for ONNX Runtime 1.28.2's core
-# (onnxruntime.dll and onnxruntime_providers_shared.dll: the GPU build, which
-# runs on the processor until the optional GPU pack adds the CUDA provider);
-# without them the build works and voice stays unavailable.
+# (onnxruntime.dll and onnxruntime_providers_shared.dll: the GPU build, run
+# on the processor); without them the build works and voice stays unavailable.
 set(GITGUD_SHERPA_DIR "" CACHE PATH "sherpa-onnx's lib folder (sherpa-onnx-c-api.dll)")
 set(GITGUD_ORT_DIR "" CACHE PATH "ONNX Runtime's GPU build lib folder (onnxruntime.dll, onnxruntime_providers_shared.dll)")
 
@@ -231,12 +230,7 @@ add_library(gitgud_core STATIC
     src/speech/LocalEngine.cpp
     src/speech/FakeEngine.cpp
     src/speech/SpeechText.cpp
-    src/speech/Gpt2Tokenizer.cpp
-    src/speech/Turbo.cpp
-    src/speech/TurboOnnx.cpp
     src/speech/SmallVoice.cpp
-    src/speech/OnnxPatch.cpp
-    src/platform/Gpu.cpp
     src/platform/CredentialStore.cpp
     src/platform/Shell.cpp
     src/platform/CrashHandler.cpp
@@ -285,7 +279,7 @@ target_include_directories(gitgud_core PRIVATE ${STB_INCLUDE_DIRS})
 # sherpa-onnx's C API header only: the library itself is loaded at run time
 # (speech/SherpaApi.cpp), so nothing links against it.
 target_include_directories(gitgud_core PUBLIC ${CMAKE_SOURCE_DIR}/third_party/sherpa-onnx/include)
-# ONNX Runtime's C API header only, for spoken replies (speech/TurboOnnx.cpp):
+# ONNX Runtime's C API header only, for spoken replies (speech/SmallVoice.cpp):
 # the runtime itself is the one sherpa-onnx loads.
 target_include_directories(gitgud_core PRIVATE ${CMAKE_SOURCE_DIR}/third_party/onnxruntime/include)
 

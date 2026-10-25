@@ -180,8 +180,7 @@ sherpa-onnx's C API DLL from its CPU release
 Runtime's core (`onnxruntime.dll`, `onnxruntime_providers_shared.dll`)
 from its CUDA release
 (`sherpa-onnx-v1.13.8-cuda-13.x-cudnn-9.x-onnxruntime1.28.2-win-x64-cuda`):
-the GPU build, which needs nothing from NVIDIA and runs on the processor
-until the optional GPU pack adds the CUDA provider (in the same run). Point
+the GPU build, which needs nothing from NVIDIA and runs on the processor. Point
 `GITGUD_SHERPA_DIR` and `GITGUD_ORT_DIR` at the two `lib` folders
 (`package.cmd` downloads and checks both into `build\sherpa` the first
 time, unpacking only those DLLs; with both there, `GITGUD_ORT_DIR` is
@@ -195,12 +194,12 @@ Without it the app builds and runs, and the Bragi interface says voice
 isn't part of the build. The models aren't part of any build: the Bragi
 interface downloads them (about 602 MB) into
 `%LOCALAPPDATA%\Gitgud\bragi\voice` when the user says so, from its
-welcome flow or Settings. So do Bragi's voice model (Chatterbox Turbo, for
-replies in Baldr) and the optional GPU pack for NVIDIA GPUs (ONNX
-Runtime's CUDA provider and NVIDIA's CUDA and cuDNN libraries from
-NVIDIA's packages): they are never in the package or the installer. The build compiles against ONNX
-Runtime's C API header (`third_party/onnxruntime/include`) for it and links
-nothing of it.
+welcome flow or Settings: they are never in the package or the installer.
+Bragi's built-in voice for replies is part of the Bragi interface
+(`resources/uis/bragi/voices/bragi-1`, a small ONNX model, with its
+pronunciation dictionaries in `resources/uis/bragi/phonemes`) and runs on
+the same ONNX Runtime. The build compiles against ONNX Runtime's C API
+header (`third_party/onnxruntime/include`) for it and links nothing of it.
 
 ## Run
 
@@ -342,14 +341,8 @@ last two, so every release needs them), the Linux .deb and .rpm, and
   refused) and skip without. The real models' smoke test is hidden:
   `gitgud_tests "[.voice-models]"` with `GITGUD_TEST_VOICE_MODELS` set to a
   folder of `vad\`, `kws\`, `parakeet\`, and `speaker\` as unpacked from
-  the downloads. Chatterbox Turbo's cases (`"[turbo]"`) run without models;
-  its real run is hidden too: `gitgud_tests "[.voice-gpu]"` with
-  `GITGUD_TEST_TURBO_DIR` (the Turbo download, graphs patched),
-  `GITGUD_TEST_TURBO_REF` (a recording) and `GITGUD_TEST_VOICE_MODELS`: on
-  the processor, then a broken GPU pack (it stays on the processor and
-  says why), then with `GITGUD_TEST_VOICE_GPU` (a folder with the GPU
-  pack's libraries) on the GPU, in the same run. It runs in a process of
-  its own: once the GPU has started it stays for the process.
+  the downloads. The built-in voice's cases (`"[small]"`) run its real
+  model from `bin\resources` on the voice DLLs, and skip without them.
 - **UI (Lua, scripted)**: `tests/ui/*.lua` drive the real UI without
   touching your mouse or keyboard and save screenshots:
 
@@ -394,11 +387,9 @@ last two, so every release needs them), the Linux .deb and .rpm, and
   `LOCALAPPDATA` and checks them; it isn't in the usual suite. Nor is
   `bragi-voice-exit.lua`: with the real models in a scratch `LOCALAPPDATA`
   and `GITGUD_TEST_QUIET_AUDIO=1` (the real engine with a quiet microphone
-  and speaker), it turns voice on, speaks one reply in Baldr
-  (`GITGUD_TEST_EXIT_DEVICE=cpu` or `gpu`), and closes the window; run it
-  repeatedly and check that the engine's markers are clear and its log
-  says `exit: models released`. `gitgud_tests "[.voice-exit]"` does the
-  same with the engine alone, in child processes.
+  and speaker), it turns voice on, speaks one reply in the built-in voice,
+  and closes the window; run it repeatedly and check that the engine's
+  markers are clear and its log says `exit: models released`.
 - **Perforce**: the `[p4][server]` engine cases and the `p4.lua` /
   `depot-p4.lua` UI scripts need `p4.exe` and `p4d.exe` from Perforce's
   downloads. Point `GITGUD_P4` and `GITGUD_TEST_P4D` at them, or the server

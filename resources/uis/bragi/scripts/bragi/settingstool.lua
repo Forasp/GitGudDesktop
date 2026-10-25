@@ -153,7 +153,7 @@ settingsTool.SETTINGS = {
           return settings.get("bragi.summaryLength", "short") == "medium" and "medium" or "short"
       end },
     { id = "endWaitSeconds", label = "Wait when you seem done", key = "bragi.endWaitSeconds",
-      about = "Seconds Bragi waits once you seem done speaking, 2 to 10.",
+      about = "Seconds after you pause that Bragi goes ahead once you seem done speaking, 2 to 10.",
       kind = "number", min = 2, max = 10, decimals = 1,
       read = function()
           return short(voice().endWait())
