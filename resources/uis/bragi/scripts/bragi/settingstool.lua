@@ -111,7 +111,9 @@ end
 -- places, or the choices), and for the app: label, the setting's key, how it
 -- reads now, and how it's shown. kind is "number" (in min..max, kept to
 -- `decimals` places; with `clamp`, a value outside is set to the nearer
--- end instead of refused), "onOff" (true or false), "choice" (one of choices) or
+-- end instead of refused, and `adjust` moves a value it doesn't take to one
+-- it does; `range` says the range in words when min..max doesn't), "onOff"
+-- (true or false), "choice" (one of choices) or
 -- "voice" (an id or name, checked against the server's list when it's set).
 settingsTool.SETTINGS = {
     { id = "speechSpeed", label = "Speaking speed", key = "bragi.speechSpeed",
@@ -153,7 +155,8 @@ settingsTool.SETTINGS = {
           return settings.get("bragi.summaryLength", "short") == "medium" and "medium" or "short"
       end },
     { id = "endWaitSeconds", label = "Wait when you seem done", key = "bragi.endWaitSeconds",
-      about = "Seconds Bragi waits once you seem done speaking, 2 to 10.",
+      about = "Seconds Bragi waits once you seem done speaking, 2 to 10. Not used while the turn-taking "
+          .. "model decides when you're done.",
       kind = "number", min = 2, max = 10, decimals = 1,
       read = function()
           return short(voice().endWait())
@@ -207,19 +210,28 @@ settingsTool.SETTINGS = {
           return choiceLabel(agent.EFFORTS, v == EFFORT_DEFAULT and "" or v)
       end },
     -- Clamped rather than refused ("give me updates every
-    -- 30 seconds", 3 seconds to 2 minutes): a value past either end is the end.
+    -- 30 seconds", 3 seconds to 2 minutes, or 0: as it happens): a value
+    -- past either end is the end, and 1 or 2 is 3.
     { id = "updateSeconds", label = "Spoken updates every", key = "bragi.updateSeconds",
-      about = "Seconds between Bragi's spoken updates on what its conversations are doing, "
-          .. bragiSettings.UPDATE_SECONDS.min .. " to " .. bragiSettings.UPDATE_SECONDS.max
+      about = "Seconds between Bragi's spoken updates on what its conversations are doing: 0 (the default) "
+          .. "says each new thing as it happens; else " .. bragiSettings.UPDATE_SECONDS.shortest .. " to "
+          .. bragiSettings.UPDATE_SECONDS.max
           .. " (\"updates every 30 seconds\"; two minutes is 120). Finished work and questions are said "
-          .. "at once. A value past either end is set to that end.",
+          .. "at once. A value past either end is set to that end, and 1 or 2 to "
+          .. bragiSettings.UPDATE_SECONDS.shortest .. ".",
       kind = "number", min = bragiSettings.UPDATE_SECONDS.min, max = bragiSettings.UPDATE_SECONDS.max,
       decimals = 0, clamp = true,
+      adjust = function(n)
+          local shortest = bragiSettings.UPDATE_SECONDS.shortest
+          return (n > 0 and n < shortest) and shortest or n
+      end,
       read = function()
           return tostring(bragiSettings.updateSeconds())
       end,
+      range = "0 (as it happens) or " .. bragiSettings.UPDATE_SECONDS.shortest .. " to "
+          .. bragiSettings.UPDATE_SECONDS.max,
       show = function(v)
-          return short(v) .. " s"
+          return (tonumber(v) or 0) <= 0 and "0 s (as it happens)" or (short(v) .. " s")
       end },
 }
 
@@ -254,7 +266,7 @@ local function finite(n)
 end
 
 local function range(s)
-    return format(s.min, s.decimals) .. " to " .. format(s.max, s.decimals)
+    return s.range or (format(s.min, s.decimals) .. " to " .. format(s.max, s.decimals))
 end
 
 local function choiceList(s)
@@ -311,6 +323,9 @@ local function checkValue(s, v)
         local rounded = round(n, s.decimals)
         if s.clamp and (rounded < s.min or rounded > s.max) then
             return format(math.max(s.min, math.min(s.max, rounded)), s.decimals), nil, n
+        end
+        if s.adjust and s.adjust(rounded) ~= rounded then
+            return format(s.adjust(rounded), s.decimals), nil, n
         end
         if rounded < s.min - 1e-9 or rounded > s.max + 1e-9 then
             return nil, s.id .. " must be from " .. range(s) .. "; " .. format(n, s.decimals + 2)
@@ -432,7 +447,7 @@ function settingsTool.definitions()
                 .. "\"dark theme\", \"stop narrating\", \"switch to Sonnet\", \"think harder\", \"give me "
                 .. "updates every 30 seconds\"). It applies at once, and the conversation shows "
                 .. "the change with an Undo. Values outside a setting's range or choices are refused "
-                .. "(updateSeconds is set to the nearer end instead; say the value it got). "
+                .. "(updateSeconds is set to the nearer value it takes instead; say the value it got). "
                 .. "Only these:" .. list,
             inputSchema = {
                 type = "object",

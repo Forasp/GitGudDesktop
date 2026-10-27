@@ -1,6 +1,7 @@
 #include "speech/Listener.h"
 
 #include "speech/Text.h"
+#include "speech/TextClassifier.h"
 
 #include <algorithm>
 #include <cctype>
@@ -305,6 +306,12 @@ namespace gitgud::speech
                                  .Set("device", "cpu"));
             ready.Set("keywords", m_pKws != nullptr);
             ready.Set("vocabulary", m_Config.m_bHotwords);
+            ready.Set("decider", m_Recognizer.Decider() != nullptr);
+            if (!m_Recognizer.DeciderError().empty())
+            {
+                ready.Set("deciderError", m_Recognizer.DeciderError());
+                m_Log("listen: no turn-taking model: " + m_Recognizer.DeciderError());
+            }
             if (m_Recognizer.SpeakerReady())
             {
                 Voiceprint print;
@@ -353,6 +360,15 @@ namespace gitgud::speech
                 return;
             }
             const long long ifrom = std::max(m_iSpeechStart, m_iSendCut);
+            if (m_pGrow && m_bSpeaking)
+            {
+                // The speech still going is the message's: the last decode
+                // hears it, a short one too, and the rest of the utterance
+                // is the next message's. Its own text goes in below, as in
+                // utterances mode.
+                m_pGrow->Accept(ifrom, m_iNow);
+                m_iSendCut = m_iNow;
+            }
             if (m_bSpeaking && m_iNow - ifrom > kRate * 3 / 10)
             {
                 const std::vector<float> audio = RingSlice(ifrom, m_iNow);
@@ -418,6 +434,10 @@ namespace gitgud::speech
                 SendError("bad-request", "playback state must be started or stopped");
             }
         }
+        else if (type == "decide")
+        {
+            OnDecide(json);
+        }
         else if (type == "train")
         {
             OnTrain(json["state"].AsString());
@@ -430,6 +450,66 @@ namespace gitgud::speech
         {
             SendError("unknown-type", "unknown type '" + type + "'");
         }
+    }
+
+    double Listener::SilenceSeconds() const
+    {
+        if (m_bSpeaking || m_iLastSpeechEnd < 0)
+        {
+            return 0;
+        }
+        return static_cast<double>(std::max(0LL, m_iNow - m_iLastSpeechEnd)) / kRate;
+    }
+
+    void Listener::OnDecide(const Json& _Json)
+    {
+        Json reply = Json::Object();
+        reply.Set("type", "decision").Set("id", _Json["id"]);
+        TextClassifier* pdecider = m_Recognizer.Decider();
+        if (!pdecider)
+        {
+            reply.Set("error", m_Recognizer.DeciderError().empty() ? "no turn-taking model"
+                                                                   : m_Recognizer.DeciderError());
+            m_Send(reply);
+            return;
+        }
+        const double fpause = SilenceSeconds();
+        std::string second = _Json["second"].AsString();
+        const std::string pause = Format("%.1f", fpause);
+        for (std::size_t nat = second.find("{pause}"); nat != std::string::npos;
+             nat = second.find("{pause}", nat + pause.size()))
+        {
+            second.replace(nat, 7, pause);
+        }
+        const int imax = AppTokens(_Json["maxLength"], 256, 8, 512);
+        const int ifirst = AppTokens(_Json["firstMax"], 40, 0, 512);
+        const std::vector<int64_t> ids =
+            pdecider->Encode(_Json["first"].AsString(), second, imax, ifirst);
+        TextClassifier::Outputs outputs;
+        double fms = 0;
+        if (!pdecider->Classify(ids, outputs, &fms))
+        {
+            reply.Set("error", "the turn-taking model failed");
+            m_Send(reply);
+            return;
+        }
+        Json out = Json::Object();
+        for (const auto& [name, values] : outputs)
+        {
+            Json list = Json::Array();
+            for (const float fvalue : values)
+            {
+                list.Push(static_cast<double>(fvalue));
+            }
+            out.Set(name, list);
+        }
+        reply.Set("outputs", out)
+            .Set("pause", fpause)
+            .Set("speaking", m_bSpeaking)
+            .Set("tokens", static_cast<double>(ids.size()))
+            .Set("ms", fms)
+            .Set("t", Ms(m_iNow));
+        m_Send(reply);
     }
 
     void Listener::OnTrain(const std::string& _State)
@@ -673,6 +753,20 @@ namespace gitgud::speech
         }
 
         m_Ring.insert(m_Ring.end(), samples.begin(), samples.end());
+        if (m_pGrow)
+        {
+            if (m_pGrow->End() == m_iNow)
+            {
+                m_pGrow->Append(samples.data(), ncount);
+            }
+            else
+            {
+                // Out of step (never expected): catch up from the ring.
+                const std::vector<float> missing =
+                    RingSlice(m_pGrow->End(), m_iNow + static_cast<long long>(ncount));
+                m_pGrow->Append(missing.data(), missing.size());
+            }
+        }
         const std::size_t ncap =
             static_cast<std::size_t>((m_Config.m_fMaxUtteranceSeconds + 10) * kRate);
         if (m_Ring.size() > ncap + kRate)
@@ -751,8 +845,14 @@ namespace gitgud::speech
             }
         }
 
-        const long long ievery =
-            std::max(static_cast<long long>(m_Config.m_fPartialSeconds * kRate), m_iPartialCost);
+        double fevery = m_Config.m_fPartialSeconds;
+        if (m_pGrow)
+        {
+            const bool blong = static_cast<double>(m_pGrow->End() - m_pGrow->LiveStart()) / kRate >
+                               m_Config.m_fGrowLongAfterSeconds;
+            fevery = blong ? m_Config.m_fGrowEveryLongSeconds : m_Config.m_fGrowEverySeconds;
+        }
+        const long long ievery = std::max(static_cast<long long>(fevery * kRate), m_iPartialCost);
         if (m_Msg.m_bActive && m_bSpeaking && m_iNow - m_iLastPartial >= ievery)
         {
             SendPartial(false);
@@ -768,6 +868,10 @@ namespace gitgud::speech
 
     void Listener::SendVad(bool _bSpeaking, long long _iT, bool _bGated)
     {
+        if (!_bSpeaking)
+        {
+            m_iLastSpeechEnd = _iT;
+        }
         Json out = Json::Object();
         out.Set("type", "vad").Set("speaking", _bSpeaking).Set("t", Ms(_iT));
         if (_bGated)
@@ -874,6 +978,10 @@ namespace gitgud::speech
                 segment.m_bScored = m_Lookback.back().m_bScored;
             }
             m_Msg.m_Parts.push_back(segment);
+            if (m_pGrow)
+            {
+                m_pGrow->Accept(m_iLastS0, m_iLastS1);
+            }
             m_Msg.m_bPauseMode = PauseModeFor(segment.m_Text, {_iAt}, m_iLastS0, m_iLastS1);
             if (m_Msg.m_bPauseMode)
             {
@@ -923,6 +1031,10 @@ namespace gitgud::speech
                 m_iGateChecks, m_iGateLows, bdrop ? "dropped" : "kept"));
             if (bdrop)
             {
+                if (m_pGrow)
+                {
+                    m_pGrow->Reject(_iS0, _iS1);
+                }
                 // As with a wake utterance without words: a message the
                 // spotter started in it goes too.
                 if (m_Msg.m_bActive && !m_Msg.m_bFromApp && m_Msg.m_Parts.empty() &&
@@ -1059,6 +1171,24 @@ namespace gitgud::speech
                 m_Log("listen: nothing recognized in the wake utterance; message dropped");
                 CancelMessage();
             }
+            else if (m_pGrow && m_Msg.m_bActive && _iS1 > m_Msg.m_iT0 &&
+                     !OverlapsPlayback(_iS0, _iS1))
+            {
+                // Too quiet or short to decode alone: with the message's
+                // context the growing transcript may still hear it, unless
+                // it isn't the user's (as below).
+                Segment probe{Ms(_iS0), Ms(_iS1), ""};
+                TagSpeaker(probe, fscore, static_cast<double>(_nCount) / kRate, fsms);
+                if (!m_Voiceprint.m_Vector.empty() && probe.m_Speaker == "other" &&
+                    !m_Msg.m_Parts.empty())
+                {
+                    m_pGrow->Reject(_iS0, _iS1);
+                }
+                else
+                {
+                    m_pGrow->Accept(_iS0, _iS1);
+                }
+            }
             return;
         }
 
@@ -1079,6 +1209,10 @@ namespace gitgud::speech
                 m_Log(Format("listen: utterance %.2f-%.2f s during playback is %s; dropped",
                     static_cast<double>(_iS0) / kRate, static_cast<double>(_iS1) / kRate,
                     becho ? "the reply's own words" : "not the user's voice"));
+                if (m_pGrow)
+                {
+                    m_pGrow->Reject(_iS0, _iS1);
+                }
                 if (m_Msg.m_bActive && !m_Msg.m_bFromApp && m_Msg.m_Parts.empty() &&
                     m_Msg.m_iT0 <= _iS1)
                 {
@@ -1104,11 +1238,19 @@ namespace gitgud::speech
         {
             m_Log(Format("listen: utterance %.2f-%.2f s isn't the user's voice; kept out of the message",
                 static_cast<double>(_iS0) / kRate, static_cast<double>(_iS1) / kRate));
+            if (m_pGrow)
+            {
+                m_pGrow->Reject(_iS0, _iS1);
+            }
         }
         if (m_Msg.m_bActive && _iS1 > m_Msg.m_iT0 && !bnotUser)
         {
             const bool bfirst = m_Msg.m_Parts.empty() || bstarted;
             m_Msg.m_Parts.push_back(segment);
+            if (m_pGrow)
+            {
+                m_pGrow->Accept(_iS0, _iS1);
+            }
             if (bwake && !m_Msg.m_bFromApp)
             {
                 // A later utterance ending with the name switches dictation to
@@ -1324,10 +1466,96 @@ namespace gitgud::speech
         return text;
     }
 
+    GrowingTranscript::Settings Listener::GrowSettings() const
+    {
+        GrowingTranscript::Settings settings;
+        settings.m_iRate = kRate;
+        settings.m_fKeepBefore = m_Config.m_fKeepBeforeSeconds;
+        settings.m_fKeepAfter = m_Config.m_fKeepAfterSeconds;
+        settings.m_fGapMax = m_Config.m_fGapMaxSeconds;
+        settings.m_fGapKeep = m_Config.m_fGapKeepSeconds;
+        settings.m_fFadeSeconds = m_Config.m_fFadeSeconds;
+        settings.m_fFillLevel = m_Config.m_fFillLevel;
+        settings.m_fBufferSeconds = m_Config.m_fBufferSeconds;
+        settings.m_fSnapSeconds = m_Config.m_fBufferSnapSeconds;
+        settings.m_fAsrMaxSeconds = m_Config.m_fAsrMaxSeconds;
+        return settings;
+    }
+
+    GrowingTranscript::DecodeFn Listener::GrowDecode(double& _fMs)
+    {
+        return [this, &_fMs](const float* _pSamples, std::size_t _nCount, bool& _bOk)
+        {
+            double fms = 0;
+            const std::string text = m_Recognizer.RecognizeWhole(_pSamples, _nCount,
+                m_Config.m_bGrowHotwords ? m_Hotwords : std::string(), &fms, &_bOk);
+            _fMs += fms;
+            return text;
+        };
+    }
+
+    void Listener::SetGrowOpen()
+    {
+        // The utterance being spoken, after the last one judged (and after a
+        // `send` cut).
+        m_pGrow->SetOpen(
+            m_bSpeaking ? std::max({m_iSpeechStart, m_iSendCut, m_iLastS1}) : -1);
+    }
+
+    std::string Listener::CurrentText() const
+    {
+        return m_pGrow && !m_GrowText.empty() ? m_GrowText : MessageText();
+    }
+
     void Listener::SendPartial(bool _bForce)
     {
         if (!m_Msg.m_bActive)
         {
+            return;
+        }
+        if (m_pGrow)
+        {
+            // One pass over the live buffer, with the speech still going on.
+            if (!_bForce && !m_bSpeaking)
+            {
+                return;
+            }
+            SetGrowOpen();
+            double fms = 0;
+            bool bok = true;
+            const std::string text = FixText(m_pGrow->Live(GrowDecode(fms), bok));
+            // Leave time for the rest of the audio work.
+            m_iPartialCost =
+                static_cast<long long>(fms * m_Config.m_fGrowCostFactor * kRate / 1000);
+            if (bok || !text.empty())
+            {
+                m_GrowText = text;
+            }
+            m_Log(Format("listen: growing pass %.2f-%.2f s, %d buffer(s) closed, decode %.0f ms%s "
+                         "(%s): %d words",
+                static_cast<double>(m_pGrow->LiveStart()) / kRate,
+                static_cast<double>(m_pGrow->End()) / kRate,
+                static_cast<int>(m_pGrow->ClosedCount()), fms, bok ? "" : ", failed",
+                m_pGrow->Describe(true).c_str(), static_cast<int>(SplitWords(text).size())));
+            m_iLastPartial = m_iNow;
+            Json partial = Json::Object();
+            // The utterances' own texts beside it: a pass over the whole
+            // recording sometimes hears less than they did.
+            partial.Set("type", "partial")
+                .Set("id", m_Msg.m_Id)
+                .Set("text", CurrentText())
+                .Set("utterances", MessageText())
+                .Set("t", Ms(m_iNow));
+            if (m_iLastSpeechEnd >= 0)
+            {
+                partial.Set("speechEnd", Ms(m_iLastSpeechEnd));
+            }
+            const char* szspeaker = MessageSpeaker();
+            if (*szspeaker)
+            {
+                partial.Set("speaker", szspeaker);
+            }
+            m_Send(partial);
             return;
         }
         std::string text = MessageText();
@@ -1352,6 +1580,10 @@ namespace gitgud::speech
         m_iLastPartial = m_iNow;
         Json partial = Json::Object();
         partial.Set("type", "partial").Set("id", m_Msg.m_Id).Set("text", text).Set("t", Ms(m_iNow));
+        if (m_iLastSpeechEnd >= 0)
+        {
+            partial.Set("speechEnd", Ms(m_iLastSpeechEnd));
+        }
         // Who is speaking, once some of it is scored: the app needs it to
         // tell its own voice from the user's while a reply plays.
         const char* szspeaker = MessageSpeaker();
@@ -1368,11 +1600,16 @@ namespace gitgud::speech
         {
             return;
         }
-        m_Send(Json::Object()
-                .Set("type", "pause")
-                .Set("id", m_Msg.m_Id)
-                .Set("t", Ms(_iS1))
-                .Set("text", MessageText()));
+        Json pause = Json::Object();
+        pause.Set("type", "pause")
+            .Set("id", m_Msg.m_Id)
+            .Set("t", Ms(_iS1))
+            .Set("text", CurrentText());
+        if (m_pGrow)
+        {
+            pause.Set("utterances", MessageText());
+        }
+        m_Send(pause);
     }
 
     void Listener::StartMessage(long long _iT0, long long _iWakeAt, bool _bFromApp)
@@ -1383,6 +1620,19 @@ namespace gitgud::speech
         m_Msg.m_iT0 = _iT0;
         m_Msg.m_iWakeAt = _iWakeAt;
         m_Msg.m_Id = "m" + std::to_string(++m_iMsgCount);
+        m_pGrow.reset();
+        m_GrowText.clear();
+        if (Growing())
+        {
+            // From the message's start (as far back as the ring goes) to the
+            // ring's end: the spotter starts one before m_iNow takes in the
+            // chunk it has, which the ring already holds.
+            const long long istart = std::max(_iT0, m_iRingStart);
+            m_pGrow = std::make_unique<GrowingTranscript>(GrowSettings(), istart);
+            const std::vector<float> audio =
+                RingSlice(istart, m_iRingStart + static_cast<long long>(m_Ring.size()));
+            m_pGrow->Append(audio.data(), audio.size());
+        }
         m_Send(Json::Object()
                 .Set("type", "wake")
                 .Set("id", m_Msg.m_Id)
@@ -1395,18 +1645,44 @@ namespace gitgud::speech
 
     void Listener::FinishMessage(const char* _szEndedBy)
     {
+        const bool bclosing = std::string(_szEndedBy) == "closing";
         std::string text = MessageText();
-        if (std::string(_szEndedBy) == "closing")
+        std::string live;
+        bool bfinalOk = true;
+        if (m_pGrow)
+        {
+            // One last pass over the live buffer; the last partial's text
+            // stays beside it for the app to fall back to.
+            SetGrowOpen();
+            double fms = 0;
+            text = FixText(m_pGrow->Final(GrowDecode(fms), m_bSpeaking, bfinalOk));
+            live = m_GrowText;
+            m_Log(Format("listen: growing final %.2f-%.2f s, %d buffer(s) closed, %d decodes, last "
+                         "%.0f ms%s (%s): %d words, live %d",
+                static_cast<double>(m_pGrow->Start()) / kRate,
+                static_cast<double>(m_pGrow->End()) / kRate,
+                static_cast<int>(m_pGrow->ClosedCount()), m_pGrow->Decodes(), fms,
+                bfinalOk ? "" : ", failed", m_pGrow->Describe(m_bSpeaking).c_str(),
+                static_cast<int>(SplitWords(text).size()),
+                static_cast<int>(SplitWords(live).size())));
+            if (bclosing)
+            {
+                StripTrailingPhrase(live, m_ClosingPhrase);
+            }
+        }
+        if (bclosing)
         {
             StripTrailingPhrase(text, m_ClosingPhrase);
         }
+        // The last decode of a growing message heard the speech still going.
+        const bool bnow = m_Msg.m_Parts.empty() || (m_pGrow && m_bSpeaking);
         Json out = Json::Object();
         out.Set("type", "message")
             .Set("id", m_Msg.m_Id)
             .Set("text", text)
             .Set("endedBy", _szEndedBy)
             .Set("t0", Ms(m_Msg.m_iT0))
-            .Set("t1", m_Msg.m_Parts.empty() ? Ms(m_iNow) : m_Msg.m_Parts.back().m_iT1)
+            .Set("t1", bnow ? Ms(m_iNow) : m_Msg.m_Parts.back().m_iT1)
             .Set("wakeAt", Ms(m_Msg.m_iWakeAt));
         PruneLookback();
         out.Set("context", NewestSegments(Ms(m_Msg.m_iT0), m_iMessageContextTokens));
@@ -1432,9 +1708,20 @@ namespace gitgud::speech
         {
             out.Set("speakerScore", Round(fsum / static_cast<double>(iscored), 100));
         }
+        if (m_pGrow)
+        {
+            std::string utterances = MessageText();
+            if (bclosing)
+            {
+                StripTrailingPhrase(utterances, m_ClosingPhrase);
+            }
+            out.Set("live", live).Set("utterances", utterances).Set("finalOk", bfinalOk);
+        }
         m_Send(out);
         m_Log(std::string("listen: message (") + _szEndedBy + ")");
         m_Msg = Message{};
+        m_pGrow.reset();
+        m_GrowText.clear();
     }
 
     void Listener::CancelMessage()
@@ -1445,6 +1732,8 @@ namespace gitgud::speech
         }
         const std::string id = m_Msg.m_Id;
         m_Msg = Message{};
+        m_pGrow.reset();
+        m_GrowText.clear();
         m_Send(Json::Object().Set("type", "cancelled").Set("id", id));
     }
 

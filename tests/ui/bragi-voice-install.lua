@@ -1,9 +1,12 @@
 --- tests/ui/bragi-voice-install.lua: the voice models installed for real,
 -- from a folder with the downloads (GITGUD_TEST_VOICE_FOLDER: the four
 -- files as the sherpa-onnx releases have them), into the scratch local app
--- data; checked by the engine (every model loaded and run once); then
--- removed. Needs a build with the speech engine. Not in the default suite:
--- it unpacks about 800 MB.
+-- data; checked by the engine (every model loaded and run once). Then the
+-- turn-taking model on its own, from GITGUD_TEST_DECIDER_FOLDER when it's
+-- set (its two files), else from the same folder (where it isn't): an
+-- install of its own, never Baldr's. Then removed, the turn-taking model
+-- with the rest. Needs a build with the speech engine. Not in the default
+-- suite: it unpacks about 260 MB.
 --
 -- Run it like bragi-voice.lua, with GITGUD_TEST_VOICE_FOLDER set and a
 -- scratch LOCALAPPDATA. Prints "[check] ...".
@@ -61,10 +64,30 @@ step(600000, "installed and checked", function()
     check("released after the check", not gitgud.voiceEngine().loaded)
     check("the downloads folder is empty", #gitgud.localDataList("bragi/voice/staging") == 0)
 end)
+local deciderFolder = os.getenv("GITGUD_TEST_DECIDER_FOLDER")
+step(300, "the turn-taking model on its own", function()
+    voicemodels.installFrom(deciderFolder or folder, "decide")
+end)
+step(60000, "its own install", function()
+    local s = voicemodels.state()
+    check("the install finished", finished())
+    check("as the turn-taking model's", s.group == "decide")
+    if deciderFolder then
+        check("installed", s.phase == "done" and voicemodels.deciderReady())
+        check("with its own note", s.note == "Installed. Bragi uses it the next time listening starts.")
+    else
+        check("not in that folder", s.phase == "failed" and tostring(s.error):find("none of the files", 1, true) ~= nil)
+    end
+    check("Baldr isn't made", #voicemodels.voices() == 0)
+end)
 step(500, "removed", function()
     voicemodels.remove()
     check("all four missing again", #voicemodels.missing() == 4)
     check("the models folder is gone", gitgud.localDataInfo("bragi/voice/models") == nil)
+    local kept = gitgud.jsonDecode(gitgud.localDataRead("bragi/voice/installed.json") or "") or {}
+    local packages = type(kept.packages) == "table" and kept.packages or {}
+    check("the turn-taking model isn't listed as installed", packages.decide == nil)
+    check("nor the listening models", packages.asr == nil and packages.vad == nil)
 end)
 step(300, "done", function()
     gitgud.emit("window.close", "")

@@ -13,15 +13,29 @@
 // wake through the spotter (the transcript may be the app's echo). With a
 // voiceprint, speech that isn't the user's is gated out.
 //
+// With transcribe "growing" the message's text comes from one recording
+// decoded again as it grows (speech/GrowingTranscript.h) instead of its
+// utterances' texts: only accepted utterances are heard, partials carry the
+// whole text so far, and `message` carries the last decode (`text`), the
+// last partial's text (`live`) and whether the last decode worked
+// (`finalOk`), so the app can fall back.
+//
+// With a turn-taking model (Recognizer::Decider), `decide` runs it on the
+// app's texts and answers with a `decision`: the app says what to read and
+// decides what the answer means. "{pause}" in the text becomes the silence
+// since the speech ended, as the engine heard it.
+//
 // Runs on the engine's thread only: every call, and every Send.
 // -----------------------------------------------------------------------------
 
 #include "app/Json.h"
+#include "speech/GrowingTranscript.h"
 #include "speech/Recognizer.h"
 #include "speech/Voiceprint.h"
 
 #include <deque>
 #include <functional>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -79,6 +93,10 @@ namespace gitgud::speech
         void OnKeyword(long long _iAt);
         void OnEnroll(const std::string& _State);
         void OnTrain(const std::string& _State);
+        void OnDecide(const app::Json& _Json);
+        // Seconds of silence since the speech ended (0 while speaking, or
+        // before any speech).
+        double SilenceSeconds() const;
         void CheckTimers();
         void SendPartial(bool _bForce);
         void SendPause(long long _iS1);
@@ -109,6 +127,19 @@ namespace gitgud::speech
         void RestoreDeadlines();
         static app::Json SegmentJson(const Segment& _Segment);
         std::vector<float> RingSlice(long long _iFrom, long long _iTo) const;
+        // Growing mode: is it on, its settings, and a decode for it that adds
+        // its time to `_fMs`.
+        bool Growing() const
+        {
+            return m_Config.m_Transcribe == "growing";
+        }
+        GrowingTranscript::Settings GrowSettings() const;
+        GrowingTranscript::DecodeFn GrowDecode(double& _fMs);
+        // Tells the growing transcript where the speech not judged yet starts.
+        void SetGrowOpen();
+        // The message's text so far: the growing transcript's last pass, or
+        // its utterances' texts.
+        std::string CurrentText() const;
 
         static long long Ms(long long _iSamples)
         {
@@ -170,6 +201,13 @@ namespace gitgud::speech
         std::deque<Segment> m_Lookback;
         Message m_Msg;
         int m_iMsgCount = 0;
+        // Growing mode: the message's transcript (null when no message) and
+        // its last live pass's text.
+        std::unique_ptr<GrowingTranscript> m_pGrow;
+        std::string m_GrowText;
+        // Where speech last ended (samples; -1 before any), for the pause the
+        // app measures (partial's `speechEnd`).
+        long long m_iLastSpeechEnd = -1;
 
         bool m_bTraining = false;
         int m_iTrainCount = 0;

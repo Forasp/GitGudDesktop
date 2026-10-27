@@ -225,11 +225,14 @@ add_library(gitgud_core STATIC
     src/speech/Recognizer.cpp
     src/speech/Voiceprint.cpp
     src/speech/Listener.cpp
+    src/speech/GrowingTranscript.cpp
     src/speech/TextToSpeech.cpp
     src/speech/LocalEngine.cpp
     src/speech/FakeEngine.cpp
     src/speech/SpeechText.cpp
     src/speech/Gpt2Tokenizer.cpp
+    src/speech/WordPiece.cpp
+    src/speech/TextClassifier.cpp
     src/speech/Turbo.cpp
     src/speech/TurboOnnx.cpp
     src/speech/OnnxPatch.cpp

@@ -16,10 +16,17 @@
 --                                   the next ids, and which project holds
 --                                   each task, board, and session
 --   bragi/store/<id>/tasks.json     numbered tasks: title, body, state,
---                                   labels, comments
+--                                   labels, comments (each with its
+--                                   author, when one was given), assignee
+--                                   ("bragi" or a person's name), events
+--                                   (what happened to it, oldest first:
+--                                   created, moved, closed, reopened,
+--                                   assigned, agent; the task view's
+--                                   activity)
 --   bragi/store/<id>/boards.json    the project's boards: columns, each with
 --                                   its cards' task ids in order
---   bragi/store/<id>/sessions.json  agent sessions on its tasks
+--   bragi/store/<id>/sessions.json  agent sessions on its tasks (with the
+--                                   agent's conversation each runs in)
 --   bragi/store/user/boards.json    boards of your own (any project's tasks)
 --   bragi/wikis/<id>.wiki.git       each project's wiki, a bare Git
 --   bragi/wikis/shared.wiki.git     repository (gitgud.bare*): pages as
@@ -198,11 +205,68 @@ local function labelsOf(value)
     return out
 end
 
+local MAX_EVENTS = 50 -- a task's history keeps this many, the newest
+
+--- Note what happened to a task (its activity): kind (created, moved,
+-- closed, reopened, assigned, agent) and the words shown ("Moved to Done").
+local function noteEvent(t, kindName, words, stamp)
+    if t.events == nil and t.created and kindName ~= "created" then
+        -- A task from before histories: it starts with when it was made.
+        t.events = { { kind = "created", text = "Created", at = t.created } }
+    end
+    t.events = list(t.events)
+    t.events[#t.events + 1] = { kind = kindName, text = words, at = stamp or now() }
+    while #t.events > MAX_EVENTS do
+        table.remove(t.events, 1)
+    end
+end
+
+--- A task's history, newest first; a task from before histories says only
+-- when it was made.
+local function eventsOut(t)
+    local out = {}
+    local events = list(t.events)
+    for i = #events, 1, -1 do
+        local e = events[i]
+        out[#out + 1] = { kind = e.kind, text = e.text, at = e.at }
+    end
+    if #out == 0 and t.created then
+        out[1] = { kind = "created", text = "Created", at = t.created }
+    end
+    return out
+end
+
+--- Who a task is assigned to, as a list (the API's shape): "bragi" or a
+-- person's name; empty when no one.
+local function assigneesOf(t)
+    return (t.assignee and t.assignee ~= "") and { t.assignee } or {}
+end
+
+--- The assignee a request asks for: body.assignee, or the first of
+-- body.assignees; "" for no one; nil when it doesn't say.
+local function assigneeIn(body)
+    local value = body.assignee
+    if value == nil and body.assignees ~= nil then
+        value = list(body.assignees)[1] or ""
+    end
+    if value == nil then
+        return nil
+    end
+    return text.trim(tostring(value))
+end
+
+local function assignedWords(who)
+    if who == "" then
+        return "Unassigned"
+    end
+    return "Assigned to " .. (who:lower() == "bragi" and "Bragi" or who)
+end
+
 local function issueOut(project, t)
     return {
         id = t.id, number = t.number, title = t.title, body = t.body or "", state = t.state,
         labels = list(t.labels), comments = #list(t.comments), created_at = t.created, updated_at = t.updated,
-        closed_at = t.closed, html_url = "", is_pull = false,
+        closed_at = t.closed, html_url = "", is_pull = false, assignees = assigneesOf(t), events = eventsOut(t),
         repository = { full_name = repoName(project) },
     }
 end
@@ -245,6 +309,11 @@ local function createTask(project, body)
         id = nextId(index, "task"), number = number, title = title, body = tostring(body.body or ""),
         state = "open", labels = labelsOf(body.labels), comments = {}, created = stamp, updated = stamp,
     }
+    local who = assigneeIn(list(body))
+    if who and who ~= "" then
+        t.assignee = who
+    end
+    noteEvent(t, "created", "Created", stamp)
     data.tasks[#data.tasks + 1] = t
     writeJson(tasksFile(project), data)
     index.tasks[tostring(t.id)] = project
@@ -270,11 +339,18 @@ local function patchTask(project, number, body)
     if body.state == "open" or body.state == "closed" then
         if body.state ~= t.state then
             t.closed = body.state == "closed" and now() or nil
+            noteEvent(t, body.state == "closed" and "closed" or "reopened",
+                body.state == "closed" and "Closed" or "Reopened")
         end
         t.state = body.state
     end
     if body.labels ~= nil then
         t.labels = labelsOf(body.labels)
+    end
+    local who = assigneeIn(body)
+    if who and who ~= (t.assignee or "") then
+        t.assignee = who ~= "" and who or nil
+        noteEvent(t, "assigned", assignedWords(who))
     end
     t.updated = now()
     writeJson(tasksFile(project), data)
@@ -283,7 +359,7 @@ local function patchTask(project, number, body)
 end
 
 local function commentOut(c)
-    return { id = c.id, body = c.body, created_at = c.created, updated_at = c.updated }
+    return { id = c.id, body = c.body, author = c.author, created_at = c.created, updated_at = c.updated }
 end
 
 local function addComment(project, number, body)
@@ -292,6 +368,10 @@ local function addComment(project, number, body)
     local t = findTask(data, number) or fail(NotFound)
     local stamp = now()
     local c = { id = nextId(index, "comment"), body = tostring(list(body).body or ""), created = stamp, updated = stamp }
+    local author = list(body).author
+    if type(author) == "string" and text.trim(author) ~= "" then
+        c.author = text.trim(author)
+    end
     t.comments = list(t.comments)
     t.comments[#t.comments + 1] = c
     t.updated = stamp
@@ -352,7 +432,7 @@ local function boardOut(b)
                         cards[#cards + 1] = {
                             issue_id = t.id, repo = repoName(project), number = t.number, title = t.title,
                             state = t.state, is_pull = false, column_id = col.id, sorting = #cards,
-                            labels = list(t.labels), assignees = {}, html_url = "", updated_at = t.updated,
+                            labels = list(t.labels), assignees = assigneesOf(t), html_url = "", updated_at = t.updated,
                         }
                     end
                 end
@@ -504,6 +584,13 @@ local function moveCard(boardId, issueId, body)
     end
     putCard(col, issueId, body.position)
     saveBoard(where, data, b, "board.card.moved")
+    if col ~= from then
+        local project, tasks, t = taskById(loadIndex(), issueId)
+        if t then
+            noteEvent(t, "moved", "Moved to " .. tostring(col.title or "another column"))
+            writeJson(tasksFile(project), tasks)
+        end
+    end
     return cardOut(b, issueId)
 end
 
@@ -574,7 +661,21 @@ end
 -- Agent sessions
 -- ===================================================================
 
-local SESSION_FIELDS = { "status", "summary", "branch", "title", "machine", "comment_id" }
+local SESSION_FIELDS = { "status", "summary", "branch", "title", "machine", "comment_id", "conversation" }
+
+--- What a session's status says on its task's history, or nil (waiting
+-- and working come and go with every turn: not noted).
+local SESSION_WORDS = { done = "Bragi finished", failed = "Bragi got stuck" }
+
+--- Note an agent session's news on its task.
+local function noteSession(project, number, words)
+    local tasks = loadTasks(project)
+    local t = findTask(tasks, number)
+    if t and words then
+        noteEvent(t, "agent", words)
+        writeJson(tasksFile(project), tasks)
+    end
+end
 
 local function sessionOut(project, s)
     local out = { id = s.id, repo = repoName(project), issue = s.issue, created = s.created, updated = s.updated }
@@ -619,6 +720,7 @@ local function createSession(project, number, body)
     writeJson(sessionsFile(project), data)
     index.sessions[tostring(s.id)] = project
     writeJson(INDEX, index)
+    noteSession(project, number, "Bragi started working")
     server.publishEvent({ type = "agent.session.created", repo = repoName(project), issue = number, id = s.id })
     return sessionOut(project, s)
 end
@@ -628,6 +730,7 @@ local function patchSession(id, body)
     local data = loadSessions(project)
     for _, s in ipairs(data.sessions) do
         if s.id == id then
+            local was = s.status
             for _, k in ipairs(SESSION_FIELDS) do
                 if list(body)[k] ~= nil then
                     s[k] = body[k]
@@ -635,6 +738,9 @@ local function patchSession(id, body)
             end
             s.updated = now()
             writeJson(sessionsFile(project), data)
+            if s.status ~= was then
+                noteSession(project, s.issue, SESSION_WORDS[s.status])
+            end
             server.publishEvent({ type = "agent.session.updated", repo = repoName(project), issue = s.issue, id = id })
             return sessionOut(project, s)
         end

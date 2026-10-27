@@ -6,6 +6,7 @@
 // speaker/ as the Bragi interface installs them.
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include "app/Json.h"
 #include "platform/Http.h"
@@ -16,15 +17,19 @@
 #include "speech/Recognizer.h"
 #include "speech/SherpaApi.h"
 #include "speech/Text.h"
+#include "speech/WordPiece.h"
 
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
 #include <random>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
@@ -712,7 +717,8 @@ TEST_CASE("The real models load, transcribe, and spot", "[.voice-models]")
     Json settings = Json::Object();
     settings.Set("vadModel", (models / "vad" / "silero_vad.onnx").u8string())
         .Set("asrDir",
-            (models / "parakeet" / "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8").u8string())
+            (models / "parakeet" / "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8")
+                .u8string())
         .Set("kwsDir",
             (models / "kws" / "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01").u8string())
         .Set("speakerModel", (models / "speaker" / "nemo_en_titanet_large.onnx").u8string())
@@ -724,7 +730,8 @@ TEST_CASE("The real models load, transcribe, and spot", "[.voice-models]")
     std::condition_variable wake;
     std::optional<Json> result;
     engine.SelfTest(
-        (models / "parakeet" / "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8" / "test_wavs" / "0.wav")
+        (models / "parakeet" / "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8" /
+            "test_wavs" / "0.wav")
             .u8string(),
         [&](const Json& _Result)
         {
@@ -744,8 +751,9 @@ TEST_CASE("The real models load, transcribe, and spot", "[.voice-models]")
 
     // Listening: hello, a message the app starts, the clip as mic frames,
     // then the app ends it.
-    std::ifstream wav(
-        models / "parakeet" / "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8" / "test_wavs" / "0.wav",
+    std::ifstream wav(models / "parakeet" /
+                          "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8" /
+                          "test_wavs" / "0.wav",
         std::ios::binary);
     std::stringstream ss;
     ss << wav.rdbuf();
@@ -799,7 +807,8 @@ TEST_CASE("Wake word training and voice enrollment run on the real models", "[.v
         SKIP("set GITGUD_TEST_VOICE_MODELS, with the voice libraries beside the test exe");
     }
     const fs::path models = fs::u8path(szmodels);
-    const fs::path asr = models / "parakeet" / "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8";
+    const fs::path asr =
+        models / "parakeet" / "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8";
     const fs::path dir = TempDir("training");
     LocalEngine engine(VoiceLibraries(), (dir / "state").u8string());
     Json settings = Json::Object();
@@ -902,7 +911,8 @@ TEST_CASE("The reply's own words heard during playback are dropped", "[.voice-mo
         SKIP("set GITGUD_TEST_VOICE_MODELS, with the voice libraries beside the test exe");
     }
     const fs::path models = fs::u8path(szmodels);
-    const fs::path asr = models / "parakeet" / "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8";
+    const fs::path asr =
+        models / "parakeet" / "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8";
     const fs::path dir = TempDir("echo");
     LocalEngine engine(VoiceLibraries(), (dir / "state").u8string());
     Json settings = Json::Object();
@@ -912,6 +922,11 @@ TEST_CASE("The reply's own words heard during playback are dropped", "[.voice-mo
             (models / "kws" / "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01").u8string())
         .Set("speakerModel", (models / "speaker" / "nemo_en_titanet_large.onnx").u8string())
         .Set("workDir", (dir / "work").u8string());
+    // Either way a message is made: its utterances' texts, or one growing
+    // recording (where the reply's audio must stay out of what's decoded).
+    const std::string mode = GENERATE(as<std::string>(), "utterances", "growing");
+    settings.Set("transcribe", mode).Set("asrMaxSeconds", 30);
+    INFO(mode);
     std::string error;
     REQUIRE(engine.Configure(settings, error));
     std::ifstream wav(asr / "test_wavs" / "0.wav", std::ios::binary);
@@ -961,7 +976,8 @@ TEST_CASE("Someone else's words stay out of the enrolled user's message", "[.voi
         SKIP("set GITGUD_TEST_VOICE_MODELS, with the voice libraries beside the test exe");
     }
     const fs::path models = fs::u8path(szmodels);
-    const fs::path asr = models / "parakeet" / "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8";
+    const fs::path asr =
+        models / "parakeet" / "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8";
     const fs::path kws = models / "kws" / "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01";
     const fs::path dir = TempDir("other");
     LocalEngine engine(VoiceLibraries(), (dir / "state").u8string());
@@ -973,6 +989,9 @@ TEST_CASE("Someone else's words stay out of the enrolled user's message", "[.voi
         .Set("voiceprintsDir", (dir / "voiceprints").u8string())
         .Set("workDir", (dir / "work").u8string())
         .Set("enrollMinSeconds", 1);
+    const std::string mode = GENERATE(as<std::string>(), "utterances", "growing");
+    settings.Set("transcribe", mode).Set("asrMaxSeconds", 30);
+    INFO(mode);
     std::string error;
     REQUIRE(engine.Configure(settings, error));
     auto read = [](const fs::path& _Path)
@@ -1020,4 +1039,314 @@ TEST_CASE("Someone else's words stay out of the enrolled user's message", "[.voi
     CHECK(text.find("heaven") == std::string::npos);
     CHECK(message["speaker"].AsString() == "user");
     plink->Close();
+}
+
+// Hidden: recordings said to the engine in real time, as a message the app
+// started and ended with Send, in each transcribe mode, for comparing what
+// each hears and how far behind it falls. GITGUD_TEST_VOICE_MODELS, plus
+// GITGUD_TEST_REPLAY_LIST (a file of 16 kHz mono 16-bit WAV paths, one a
+// line) and GITGUD_TEST_REPLAY_OUT (a file it writes: a JSON line a
+// recording and mode). GITGUD_TEST_REPLAY_MODES limits the modes
+// ("utterances,growing").
+TEST_CASE("Recordings replayed in each transcribe mode", "[.voice-replay]")
+{
+    const char* szmodels = std::getenv("GITGUD_TEST_VOICE_MODELS");
+    const char* szlist = std::getenv("GITGUD_TEST_REPLAY_LIST");
+    const char* szout = std::getenv("GITGUD_TEST_REPLAY_OUT");
+    if (!szmodels || !szlist || !szout || !SherpaFilesPresent(VoiceLibraries()))
+    {
+        SKIP("set GITGUD_TEST_VOICE_MODELS, GITGUD_TEST_REPLAY_LIST and GITGUD_TEST_REPLAY_OUT, "
+             "with the voice libraries beside the test exe");
+    }
+    const fs::path models = fs::u8path(szmodels);
+    std::vector<std::string> paths;
+    {
+        std::ifstream list(fs::u8path(szlist));
+        std::string line;
+        while (std::getline(list, line))
+        {
+            while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+            {
+                line.pop_back();
+            }
+            if (!line.empty())
+            {
+                paths.push_back(line);
+            }
+        }
+    }
+    REQUIRE(!paths.empty());
+    std::vector<std::string> modes = {"utterances", "growing"};
+    if (const char* szmodes = std::getenv("GITGUD_TEST_REPLAY_MODES"))
+    {
+        modes.clear();
+        std::stringstream ss(szmodes);
+        std::string mode;
+        while (std::getline(ss, mode, ','))
+        {
+            modes.push_back(mode);
+        }
+    }
+    // The samples of a WAV's data chunk; none for any other format than
+    // 16 kHz mono 16-bit (other audio would play at the wrong speed).
+    auto read = [](const std::string& _Path)
+    {
+        std::ifstream wav(fs::u8path(_Path), std::ios::binary);
+        std::stringstream ss;
+        ss << wav.rdbuf();
+        const std::string all = ss.str();
+        auto u32 = [&](std::size_t _nAt)
+        {
+            return static_cast<std::uint32_t>(static_cast<unsigned char>(all[_nAt])) |
+                   (static_cast<std::uint32_t>(static_cast<unsigned char>(all[_nAt + 1])) << 8) |
+                   (static_cast<std::uint32_t>(static_cast<unsigned char>(all[_nAt + 2])) << 16) |
+                   (static_cast<std::uint32_t>(static_cast<unsigned char>(all[_nAt + 3])) << 24);
+        };
+        bool bformat = false;
+        std::size_t nat = 12;
+        while (nat + 8 <= all.size())
+        {
+            const std::string id = all.substr(nat, 4);
+            const std::uint32_t nsize = u32(nat + 4);
+            if (id == "fmt " && nat + 24 <= all.size())
+            {
+                const unsigned nchannels = static_cast<unsigned char>(all[nat + 10]);
+                const unsigned nbits = static_cast<unsigned char>(all[nat + 22]);
+                bformat = nchannels == 1 && u32(nat + 12) == 16000 && nbits == 16;
+            }
+            if (id == "data")
+            {
+                if (!bformat)
+                {
+                    WARN(_Path << " isn't 16 kHz mono 16-bit; skipped");
+                    return std::string();
+                }
+                return all.substr(nat + 8, std::min<std::size_t>(nsize, all.size() - nat - 8));
+            }
+            nat += 8 + nsize + (nsize & 1);
+        }
+        return std::string();
+    };
+    // Recordings already in the file are skipped: a run stopped part way
+    // goes on where it was.
+    std::set<std::pair<std::string, std::string>> done;
+    {
+        std::ifstream in(fs::u8path(szout), std::ios::binary);
+        std::string line;
+        while (std::getline(in, line))
+        {
+            const Json row = Json::Parse(line).value_or(Json());
+            if (!row["path"].IsNull())
+            {
+                done.emplace(row["mode"].AsString(), row["path"].AsString());
+            }
+        }
+    }
+    std::ofstream out(fs::u8path(szout), std::ios::binary | std::ios::app);
+    const fs::path dir = TempDir("replay");
+    for (const std::string& mode : modes)
+    {
+        LocalEngine engine(VoiceLibraries(), (dir / ("state-" + mode)).u8string());
+        Json settings = Json::Object();
+        settings.Set("vadModel", (models / "vad" / "silero_vad.onnx").u8string())
+            .Set("asrDir", (models / "parakeet" /
+                               "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8")
+                               .u8string())
+            .Set("kwsDir", (models / "kws" / "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01")
+                               .u8string())
+            .Set("workDir", (dir / "work").u8string())
+            .Set("transcribe", mode)
+            .Set("asrMaxSeconds", 30);
+        // GITGUD_TEST_REPLAY_SETTINGS: more engine settings, as JSON.
+        if (const char* szmore = std::getenv("GITGUD_TEST_REPLAY_SETTINGS"))
+        {
+            const Json more = Json::Parse(szmore).value_or(Json());
+            for (const std::string& key : more.Keys())
+            {
+                settings.Set(key, more[key]);
+            }
+        }
+        std::string error;
+        REQUIRE(engine.Configure(settings, error));
+        for (const std::string& path : paths)
+        {
+            if (done.count({mode, path}) > 0)
+            {
+                continue;
+            }
+            std::string pcm = read(path);
+            if (pcm.empty())
+            {
+                continue;
+            }
+            const double fseconds = static_cast<double>(pcm.size()) / 32000.0;
+            pcm.append(16000 * 2, '\0'); // a second of quiet before Send
+            std::unique_ptr<gitgud::voice::ILink> plink = engine.MakeLink("listen");
+            Received received;
+            REQUIRE(plink->Open(received.OnMessage(), received.OnClose(), error));
+            REQUIRE(plink->SendText(
+                R"({"type":"hello","version":0,"sampleRate":16000,"endBy":"app"})"));
+            REQUIRE(WaitFor([&]() { return received.Last()["type"].AsString() == "ready"; }, 120s));
+            REQUIRE(plink->SendText(R"({"type":"wake"})"));
+            // 20 ms frames on the clock; how far behind it a send returns
+            // is how far the engine fell behind.
+            const auto start = std::chrono::steady_clock::now();
+            double flagMax = 0;
+            for (std::size_t nat = 0; nat < pcm.size(); nat += 640)
+            {
+                const auto due = start + std::chrono::microseconds(
+                                             static_cast<long long>(nat) * 1000000 / 32000);
+                std::this_thread::sleep_until(due);
+                REQUIRE(plink->SendBinary(
+                    pcm.data() + nat, std::min<std::size_t>(640, pcm.size() - nat)));
+                flagMax = std::max(flagMax, std::chrono::duration<double, std::milli>(
+                                                std::chrono::steady_clock::now() - due)
+                                                .count());
+            }
+            const auto sent = std::chrono::steady_clock::now();
+            REQUIRE(plink->SendText(R"({"type":"send","reason":"button"})"));
+            REQUIRE(WaitFor([&]() { return !received.LastOf("message").IsNull(); }, 300s));
+            const double fendMs =
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - sent)
+                    .count();
+            const Json message = received.LastOf("message");
+            int ipartials = 0;
+            {
+                std::lock_guard<std::mutex> lock(received.m_Mutex);
+                for (const std::string& textLine : received.m_Texts)
+                {
+                    if (Json::Parse(textLine).value_or(Json())["type"].AsString() == "partial")
+                    {
+                        ++ipartials;
+                    }
+                }
+            }
+            Json row = Json::Object();
+            row.Set("mode", mode)
+                .Set("path", path)
+                .Set("seconds", fseconds)
+                .Set("text", message["text"].AsString())
+                .Set("live", message["live"].AsString())
+                .Set("finalOk", message["finalOk"].IsNull() ? true : message["finalOk"].AsBool())
+                .Set("partials", ipartials)
+                .Set("lagMaxMs", flagMax)
+                .Set("endMs", fendMs);
+            out << row.Dump() << "\n";
+            out.flush();
+            plink->Close();
+        }
+        // The engine's log, after any from a run before.
+        std::ifstream log(dir / ("state-" + mode) / "voice-engine.log", std::ios::binary);
+        std::ofstream logs(fs::u8path(szout).replace_extension("." + mode + ".log"),
+            std::ios::binary | std::ios::app);
+        logs << log.rdbuf();
+    }
+}
+
+// Hidden: the turn-taking classifier against the reference answers its
+// training tools give (GITGUD_TEST_DECIDER: a folder with model.int8.onnx,
+// vocab.txt, and expected.json: WordPiece ids for some texts, and the
+// outputs for some inputs), on the real listening models
+// (GITGUD_TEST_VOICE_MODELS). `decide` fills in "{pause}" itself.
+TEST_CASE("The turn-taking model answers as its reference does", "[.voice-decider]")
+{
+    const char* szmodels = std::getenv("GITGUD_TEST_VOICE_MODELS");
+    const char* szdecider = std::getenv("GITGUD_TEST_DECIDER");
+    if (!szmodels || !szdecider || !SherpaFilesPresent(VoiceLibraries()))
+    {
+        SKIP("set GITGUD_TEST_VOICE_MODELS and GITGUD_TEST_DECIDER, with the voice libraries "
+             "beside the test exe");
+    }
+    const fs::path models = fs::u8path(szmodels);
+    const fs::path decider = fs::u8path(szdecider);
+    auto read = [](const fs::path& _Path)
+    {
+        std::ifstream in(_Path, std::ios::binary);
+        std::stringstream ss;
+        ss << in.rdbuf();
+        return ss.str();
+    };
+    const Json expected = Json::Parse(read(decider / "expected.json")).value_or(Json());
+    REQUIRE(expected.IsObject());
+
+    WordPiece tokenizer;
+    std::string error;
+    REQUIRE(tokenizer.Load(read(decider / "vocab.txt"), error));
+    for (const Json& item : expected["ids"].Items())
+    {
+        INFO(item["text"].AsString());
+        const std::vector<int64_t> ids = tokenizer.Encode(item["text"].AsString());
+        std::vector<int64_t> want;
+        for (const Json& id : item["ids"].Items())
+        {
+            want.push_back(id.AsInt());
+        }
+        CHECK(ids == want);
+    }
+
+    const fs::path dir = TempDir("decider");
+    LocalEngine engine(VoiceLibraries(), (dir / "state").u8string());
+    Json settings = Json::Object();
+    settings.Set("vadModel", (models / "vad" / "silero_vad.onnx").u8string())
+        .Set("asrDir",
+            (models / "parakeet" / "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8")
+                .u8string())
+        .Set("kwsDir",
+            (models / "kws" / "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01").u8string())
+        .Set("deciderModel", (decider / "model.int8.onnx").u8string())
+        .Set("deciderVocab", (decider / "vocab.txt").u8string())
+        .Set("workDir", (dir / "work").u8string());
+    REQUIRE(engine.Configure(settings, error));
+    std::unique_ptr<gitgud::voice::ILink> plink = engine.MakeLink("listen");
+    Received received;
+    REQUIRE(plink->Open(received.OnMessage(), received.OnClose(), error));
+    REQUIRE(plink->SendText(R"({"type":"hello","version":0,"sampleRate":16000,"endBy":"app"})"));
+    REQUIRE(WaitFor([&]() { return received.Last()["type"].AsString() == "ready"; }, 60s));
+    INFO(received.Last().Dump());
+    REQUIRE(received.Last()["decider"].AsBool());
+
+    int iid = 0;
+    for (const Json& item : expected["cases"].Items())
+    {
+        // The pause as the reference had it (no speech has been heard, so
+        // the engine's own "{pause}" would be 0.0).
+        std::string second = item["second"].AsString();
+        char szpause[16];
+        std::snprintf(szpause, sizeof(szpause), "%.1f", item["pause"].AsNumber());
+        second.replace(second.find("{pause}"), 7, szpause);
+        const std::string id = "d" + std::to_string(++iid);
+        Json request = Json::Object();
+        request.Set("type", "decide")
+            .Set("id", id)
+            .Set("first", item["first"].AsString())
+            .Set("second", second)
+            .Set("maxLength", expected["maxLength"].AsNumber())
+            .Set("firstMax", expected["firstMax"].AsNumber());
+        REQUIRE(plink->SendText(request.Dump()));
+        REQUIRE(WaitFor([&]() { return received.LastOf("decision")["id"].AsString() == id; }, 10s));
+        const Json reply = received.LastOf("decision");
+        INFO(item["second"].AsString() << "\n" << reply.Dump());
+        REQUIRE(reply["error"].IsNull());
+        CHECK(reply["tokens"].AsInt() == item["tokens"].AsInt());
+        for (const std::string& name : item["outputs"].Keys())
+        {
+            const Json& want = item["outputs"][name];
+            const Json& got = reply["outputs"][name];
+            REQUIRE(got.Size() == want.Size());
+            // Quantized graphs round differently in other ONNX Runtime
+            // versions and with other graph fusions (about 0.01 to 0.02).
+            for (std::size_t ni = 0; ni < want.Size(); ++ni)
+            {
+                CHECK(std::abs(got[ni].AsNumber() - want[ni].AsNumber()) < 0.03);
+            }
+        }
+    }
+
+    // "{pause}": nothing heard yet, so no pause.
+    REQUIRE(plink->SendText(
+        R"({"type":"decide","id":"p","first":"x","second":"message: hello | pause: {pause} s"})"));
+    REQUIRE(WaitFor([&]() { return received.LastOf("decision")["id"].AsString() == "p"; }, 10s));
+    CHECK(received.LastOf("decision")["pause"].AsNumber() == 0.0);
+    plink->Close();
+    REQUIRE(WaitFor([&]() { return !engine.State().m_bLoaded; }, 30s));
 }

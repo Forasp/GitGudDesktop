@@ -379,6 +379,19 @@ namespace gitgud::voice
         QueueText(lookback);
     }
 
+    void ListenSession::Decide(const Json& _Fields)
+    {
+        Json decide = Message("decide");
+        for (const std::string& key : _Fields.Keys())
+        {
+            if (key != "type")
+            {
+                decide.Set(key, _Fields[key]);
+            }
+        }
+        QueueText(decide);
+    }
+
     void ListenSession::Train(const std::string& _State)
     {
         QueueText(Message("train").Set("state", _State));
@@ -650,12 +663,21 @@ namespace gitgud::voice
             stop.Set("id", _Id);
         }
         QueueText(stop);
-        // Quiet at once, not when the engine's answer arrives.
+        // Quiet at once, not when the engine's answer arrives. An utterance
+        // still being made while the one before it plays out of the buffer
+        // only loses its own audio: the one playing finishes.
         std::lock_guard<std::mutex> lock(m_Mutex);
         if (_Id.empty() || _Id == m_CurrentId)
         {
             m_bDiscard = true;
-            Silence();
+            if (_Id.empty() || _Id == m_PlayingId)
+            {
+                Silence();
+            }
+        }
+        else if (_Id == m_PlayingId)
+        {
+            Silence(); // the one before it, still playing: the one being made goes on
         }
     }
 
@@ -701,8 +723,10 @@ namespace gitgud::voice
     void SpeakSession::OnTick()
     {
         std::lock_guard<std::mutex> lock(m_Mutex);
-        if (!m_PlayingId.empty() && m_PlayingId == m_CurrentId && m_bCurrentEnded &&
-            (!m_bSpeaker || m_pPlayback->Queued() == 0))
+        // Done once its audio has played: it ended, or the one after it was
+        // stopped before any of its audio came.
+        const bool bdone = m_PlayingId == m_CurrentId ? m_bCurrentEnded : m_bDiscard;
+        if (!m_PlayingId.empty() && bdone && (!m_bSpeaker || m_pPlayback->Queued() == 0))
         {
             Emit(Message("playback").Set("state", "stopped").Set("id", m_PlayingId));
             m_PlayingId.clear();
@@ -743,7 +767,11 @@ namespace gitgud::voice
             {
                 m_bCurrentEnded = true;
                 m_bDiscard = true;
-                Silence();
+                // Not heard yet: the one before it plays on.
+                if (id.empty() || id == m_PlayingId)
+                {
+                    Silence();
+                }
             }
         }
         Emit(_Message);

@@ -32,7 +32,9 @@
 --                             switch to another, until you send to another
 --                             (off; bragi/voice.lua, "Whose work is told")
 --   bragi.updateSeconds       how often Bragi says what its conversations are
---                             doing (3 to 120, "10"; bragiSettings.updateSeconds)
+--                             doing: 0, as it happens (the default), or 3 to
+--                             120 seconds between updates
+--                             (bragiSettings.updateSeconds)
 --   bragi.speechSpeed         how fast Bragi speaks ("0.8" to "1.5", "1.15")
 --   bragi.voice               the voice replies speak with: an id from the
 --                             engine's voices list, picked with Preview and
@@ -280,23 +282,34 @@ local function speedLabel()
     return (string.format("%.2f", speed):gsub("0+$", ""):gsub("%.$", "")) .. "x"
 end
 
--- How often Bragi says what its conversations are doing
--- ("adjustable from 3 seconds to 2 minutes, default 10 seconds"). Finished
--- work and questions are said at once, whatever this is. Set with a slider
--- ("1-second steps up to 10, then 5 seconds"); a value
--- set by voice between the steps is kept as said.
-bragiSettings.UPDATE_SECONDS = { default = 10, min = 3, max = 120,
-    steps = { { upTo = 10, step = 1 }, { upTo = 120, step = 5 } } }
+-- How often Bragi says what its conversations are doing. 0, the default:
+-- as it happens (bragi/voice.lua tells each new thing as it comes, and
+-- rewrites a line not yet said when something newer comes). Else 3
+-- seconds to 2 minutes between updates. Finished work and questions are
+-- said at once, whatever this is. Set with a slider ("1-second steps up
+-- to 10, then 5 seconds"; 1 and 2 count as 3, the shortest interval); a
+-- value set by voice between the steps is kept as said.
+bragiSettings.UPDATE_SECONDS = { default = 0, min = 0, shortest = 3, max = 120,
+    steps = { { upTo = 3, step = 3 }, { upTo = 10, step = 1 }, { upTo = 120, step = 5 } } }
 
---- Seconds between spoken updates: the setting, kept to 3..120.
+--- Seconds between spoken updates: the setting, 0 (as it happens) or
+-- kept to 3..120.
 function bragiSettings.updateSeconds()
     local limits = bragiSettings.UPDATE_SECONDS
     local seconds = tonumber(settings.get("bragi.updateSeconds", "")) or limits.default
-    return math.floor(math.max(limits.min, math.min(limits.max, seconds)) + 0.5)
+    seconds = math.floor(math.max(limits.min, math.min(limits.max, seconds)) + 0.5)
+    if seconds > 0 and seconds < limits.shortest then
+        return limits.shortest
+    end
+    return seconds
 end
 
---- Seconds as the slider shows them: "30 s", whole minutes as "2 min".
+--- Seconds as the slider shows them: "As it happens" for 0, "30 s", whole
+-- minutes as "2 min".
 function bragiSettings.showSeconds(n)
+    if n <= 0 then
+        return "As it happens"
+    end
     if n >= 60 and n % 60 == 0 then
         return math.floor(n / 60) .. " min"
     end
@@ -490,7 +503,8 @@ local SECTIONS = {
                     { kind = "input", title = "Closing phrase", sub = "Pauses never send. Say this phrase, or press Send.",
                       key = "bragi.closingPhrase", default = "over and out" },
                     { kind = "input", title = "Wait when you seem done",
-                      sub = "When you seem finished, Bragi waits this many seconds (2 to 10), then goes ahead.",
+                      sub = "When you seem finished, Bragi waits this many seconds (2 to 10), then goes ahead. "
+                          .. "Not used while the turn-taking model decides.",
                       key = "bragi.endWaitSeconds", default = "3", number = true },
                     { kind = "toggle", title = "Show what was heard",
                       sub = "Under each spoken message: what was heard and what was changed. For troubleshooting.",
@@ -537,8 +551,9 @@ local SECTIONS = {
                       sub = "Say in a few words what the agent is doing, as it goes.",
                       key = "bragi.narrate", default = true },
                     { kind = "slider", title = "Spoken updates every",
-                      sub = "Time between updates on what your conversations are doing. "
-                          .. "Finished work and questions for you are said at once.",
+                      sub = "Time between updates on what your conversations are doing; all the "
+                          .. "way down, each new thing is said as it happens. Finished work and "
+                          .. "questions for you are said at once.",
                       key = "bragi.updateSeconds", min = bragiSettings.UPDATE_SECONDS.min,
                       steps = bragiSettings.UPDATE_SECONDS.steps, read = bragiSettings.updateSeconds,
                       show = bragiSettings.showSeconds },

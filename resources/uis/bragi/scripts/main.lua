@@ -103,6 +103,7 @@ app.use(require("bragi.routines"))
 app.use(require("bragi.import"))
 app.use(require("bragi.settings"))
 app.use(require("bragi.boards"))
+app.use(require("bragi.taskview"))
 app.use(require("bragi.wiki"))
 app.use(require("bragi.welcome"))
 

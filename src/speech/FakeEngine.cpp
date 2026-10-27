@@ -221,6 +221,14 @@ namespace gitgud::speech
                         m_Id.clear();
                     }
                 }
+                else if (type == "decide")
+                {
+                    // No turn-taking model here: the app decides without one.
+                    Send(Json::Object()
+                            .Set("type", "decision")
+                            .Set("id", _Message["id"])
+                            .Set("error", "no turn-taking model"));
+                }
                 else if (type == "lookback")
                 {
                     Send(Json::Object()

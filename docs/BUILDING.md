@@ -193,7 +193,7 @@ cmake --preset release -DGITGUD_SHERPA_DIR="$PWD\build\sherpa\sherpa-onnx-v1.13.
 
 Without it the app builds and runs, and the Bragi interface says voice
 isn't part of the build. The models aren't part of any build: the Bragi
-interface downloads them (about 602 MB) into
+interface downloads them (about 228 MB) into
 `%LOCALAPPDATA%\Gitgud\bragi\voice` when the user says so, from its
 welcome flow or Settings. So do Bragi's voice model (Chatterbox Turbo, for
 replies in Baldr) and the optional GPU pack for NVIDIA GPUs (ONNX
@@ -342,7 +342,14 @@ last two, so every release needs them), the Linux .deb and .rpm, and
   refused) and skip without. The real models' smoke test is hidden:
   `gitgud_tests "[.voice-models]"` with `GITGUD_TEST_VOICE_MODELS` set to a
   folder of `vad\`, `kws\`, `parakeet\`, and `speaker\` as unpacked from
-  the downloads. Chatterbox Turbo's cases (`"[turbo]"`) run without models;
+  the downloads. `"[.voice-decider]"` checks the turn-taking model against
+  its reference: `GITGUD_TEST_VOICE_MODELS` and `GITGUD_TEST_DECIDER` (a
+  folder with `model.int8.onnx`, `vocab.txt`, both in `models\decide`, and
+  the training tools' `expected.json`). `"[.voice-replay]"` says recordings to the engine in
+  each transcribe mode, for comparing what each hears:
+  `GITGUD_TEST_REPLAY_LIST` (a file of 16 kHz mono 16-bit WAV paths, one a
+  line) and `GITGUD_TEST_REPLAY_OUT` (the results, a JSON line each).
+  Chatterbox Turbo's cases (`"[turbo]"`) run without models;
   its real run is hidden too: `gitgud_tests "[.voice-gpu]"` with
   `GITGUD_TEST_TURBO_DIR` (the Turbo download, graphs patched),
   `GITGUD_TEST_TURBO_REF` (a recording) and `GITGUD_TEST_VOICE_MODELS`: on
@@ -399,6 +406,9 @@ last two, so every release needs them), the Linux .deb and .rpm, and
   repeatedly and check that the engine's markers are clear and its log
   says `exit: models released`. `gitgud_tests "[.voice-exit]"` does the
   same with the engine alone, in child processes.
+  `bragi-voice-update.lua` isn't in it either: with older models in a
+  scratch `LOCALAPPDATA`, it checks that the speech model an update pins
+  downloads by itself (for real, about 108 MB).
 - **Perforce**: the `[p4][server]` engine cases and the `p4.lua` /
   `depot-p4.lua` UI scripts need `p4.exe` and `p4d.exe` from Perforce's
   downloads. Point `GITGUD_P4` and `GITGUD_TEST_P4D` at them, or the server

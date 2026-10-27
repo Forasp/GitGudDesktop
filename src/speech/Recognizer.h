@@ -24,6 +24,7 @@
 #include <cstddef>
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -47,11 +48,16 @@ namespace gitgud::speech
     {
         std::string m_VadModel; // silero_vad.onnx
         std::string m_AsrDir;   // encoder/decoder/joiner(.int8).onnx, tokens.txt
-        std::string m_AsrName = "parakeet-tdt-0.6b-v2-int8";
+        std::string m_AsrName = "parakeet-tdt_ctc-110m-transducer-int8";
         std::string m_KwsDir;       // the gigaspeech zipformer's files and bpe.model
         std::string m_SpeakerModel; // TitaNet (empty: no speaker identification)
         std::string m_VoiceprintsDir;
         std::string m_WorkDir; // where the engine writes its ONNX Runtime config
+        // The turn-taking classifier (speech/TextClassifier.h): its graph and
+        // vocab.txt. Optional: without it, `decide` requests get an error.
+        std::string m_DeciderModel;
+        std::string m_DeciderVocab;
+        int m_iDeciderThreads = 1;
 
         int m_iAsrThreads = 4;
         int m_iKwsThreads = 1;
@@ -82,6 +88,24 @@ namespace gitgud::speech
         float m_fPrerollSeconds = 0.2f;
         float m_fMaxUtteranceSeconds = 20.0f;
         float m_fPartialSeconds = 1.0f;
+        // "utterances": a message is its utterances' texts, joined (partials
+        // decode the open utterance). "growing": a message is one recording,
+        // decoded again as it grows, in buffers closed between utterances
+        // (speech/GrowingTranscript.h); the numbers below are that mode's.
+        std::string m_Transcribe = "utterances";
+        float m_fGrowEverySeconds = 1.0f;      // a live pass this often
+        float m_fGrowEveryLongSeconds = 2.5f;  // and this often once the live buffer
+        float m_fGrowLongAfterSeconds = 10.0f; // is longer than this
+        float m_fGrowCostFactor = 1.5f;        // never more often than this x the last pass's time
+        bool m_bGrowHotwords = true;           // passes biased toward the hotwords too
+        float m_fBufferSeconds = 30.0f;
+        float m_fBufferSnapSeconds = 5.0f;
+        float m_fKeepBeforeSeconds = 0.9f;
+        float m_fKeepAfterSeconds = 0.9f;
+        float m_fGapMaxSeconds = 2.5f;
+        float m_fGapKeepSeconds = 0.5f;
+        float m_fFadeSeconds = 0.02f;
+        float m_fFillLevel = 0.0003f;
         float m_fClosingSilenceSeconds = 1.0f;
         std::string m_EndBy = "app";
         float m_fWakeThreshold = 0.25f;
@@ -147,6 +171,8 @@ namespace gitgud::speech
         std::vector<float> m_Samples;
     };
 
+    class TextClassifier;
+
     class Recognizer
     {
       public:
@@ -161,10 +187,7 @@ namespace gitgud::speech
         bool Load(std::string& _Error, bool& _bDamaged);
 
         // After a fault: never call the libraries again, not even to release.
-        void SetPoisoned()
-        {
-            m_bPoisoned = true;
-        }
+        void SetPoisoned();
 
         const EngineConfig& Config() const
         {
@@ -172,8 +195,13 @@ namespace gitgud::speech
         }
 
         // 16 kHz mono float samples to text; `_bOk` false when the call failed.
+        // Audio longer than asrMaxSeconds is decoded in equal pieces.
         std::string Recognize(const float* _pSamples, std::size_t _nCount,
             const std::string& _Hotwords, double* _pMs, bool* _pOk = nullptr);
+        // The same in a single decode, never split (the caller keeps it short:
+        // growing mode cuts its audio at pauses itself).
+        std::string RecognizeWhole(const float* _pSamples, std::size_t _nCount,
+            const std::string& _Hotwords, double* _pMs, bool* _pOk);
 
         bool KwsReady() const
         {
@@ -211,6 +239,18 @@ namespace gitgud::speech
         // A phrase as a hotwords line for this recognizer ("" if it can't).
         std::string HotwordLineFor(const std::string& _Phrase, float _fBoost = 0) const;
 
+        // The turn-taking classifier, or null: none configured, or it didn't
+        // load (DeciderError says why; listening goes on without it).
+        TextClassifier* Decider()
+        {
+            return m_pDecider.get();
+        }
+
+        const std::string& DeciderError() const
+        {
+            return m_DeciderError;
+        }
+
       private:
         std::string DecodeOne(
             const float* _pSamples, std::size_t _nCount, const std::string& _Hotwords, bool& _bOk);
@@ -232,6 +272,8 @@ namespace gitgud::speech
         BpeTokenizer m_KwsBpe;
         std::map<std::string, int> m_KwsTokens;
         std::map<std::string, int> m_AsrTokens;
+        std::unique_ptr<TextClassifier> m_pDecider;
+        std::string m_DeciderError;
     };
 
 } // namespace gitgud::speech

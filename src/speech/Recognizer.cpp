@@ -1,6 +1,7 @@
 #include "speech/Recognizer.h"
 
 #include "speech/SherpaApi.h"
+#include "speech/TextClassifier.h"
 
 #include <algorithm>
 #include <cmath>
@@ -183,6 +184,8 @@ namespace gitgud::speech
             text("asrName", c.m_AsrName) && text("kwsDir", c.m_KwsDir) &&
             text("speakerModel", c.m_SpeakerModel) && text("voiceprintsDir", c.m_VoiceprintsDir) &&
             text("workDir", c.m_WorkDir) && text("endBy", c.m_EndBy) &&
+            text("deciderModel", c.m_DeciderModel) && text("deciderVocab", c.m_DeciderVocab) &&
+            number("deciderThreads", 1, 8, c.m_iDeciderThreads) &&
             text("asrProvider", c.m_AsrProvider) && text("speakerProvider", c.m_SpeakerProvider) &&
             text("wakeWord", c.m_WakeWord) && list("spotterSpellings", c.m_SpotterSpellings) &&
             list("mishearings", c.m_Mishearings) && number("asrThreads", 1, 16, c.m_iAsrThreads) &&
@@ -207,6 +210,20 @@ namespace gitgud::speech
             number("prerollSeconds", 0, 2, c.m_fPrerollSeconds) &&
             number("maxUtteranceSeconds", 2, 60, c.m_fMaxUtteranceSeconds) &&
             number("partialSeconds", 0.2, 10, c.m_fPartialSeconds) &&
+            text("transcribe", c.m_Transcribe) &&
+            number("growEverySeconds", 0.2, 10, c.m_fGrowEverySeconds) &&
+            number("growEveryLongSeconds", 0.2, 30, c.m_fGrowEveryLongSeconds) &&
+            number("growLongAfterSeconds", 0, 120, c.m_fGrowLongAfterSeconds) &&
+            number("growCostFactor", 1, 10, c.m_fGrowCostFactor) &&
+            flag("growHotwords", c.m_bGrowHotwords) &&
+            number("bufferSeconds", 4, 120, c.m_fBufferSeconds) &&
+            number("bufferSnapSeconds", 0, 60, c.m_fBufferSnapSeconds) &&
+            number("keepBeforeSeconds", 0, 5, c.m_fKeepBeforeSeconds) &&
+            number("keepAfterSeconds", 0, 5, c.m_fKeepAfterSeconds) &&
+            number("gapMaxSeconds", 0.1, 60, c.m_fGapMaxSeconds) &&
+            number("gapKeepSeconds", 0, 10, c.m_fGapKeepSeconds) &&
+            number("fadeSeconds", 0, 0.5, c.m_fFadeSeconds) &&
+            number("fillLevel", 0, 0.05, c.m_fFillLevel) &&
             number("closingSilenceSeconds", 0, 10, c.m_fClosingSilenceSeconds) &&
             number("wakeThreshold", 0.01, 0.99, c.m_fWakeThreshold) &&
             number("wakeBoost", 0.1, 10, c.m_fWakeBoost) && flag("textWake", c.m_bTextWake) &&
@@ -226,6 +243,11 @@ namespace gitgud::speech
         if (c.m_EndBy != "app" && c.m_EndBy != "engine")
         {
             _Error = "endBy must be app or engine";
+            return false;
+        }
+        if (c.m_Transcribe != "utterances" && c.m_Transcribe != "growing")
+        {
+            _Error = "transcribe must be utterances or growing";
             return false;
         }
         for (const std::string* pprovider : {&c.m_AsrProvider, &c.m_SpeakerProvider})
@@ -493,8 +515,18 @@ namespace gitgud::speech
     {
     }
 
+    void Recognizer::SetPoisoned()
+    {
+        m_bPoisoned = true;
+        if (m_pDecider)
+        {
+            m_pDecider->SetPoisoned();
+        }
+    }
+
     Recognizer::~Recognizer()
     {
+        m_pDecider.reset();
         if (m_bPoisoned || !SherpaLoaded())
         {
             return; // leaked on purpose: releasing could fault again
@@ -754,6 +786,20 @@ namespace gitgud::speech
             return false;
         }
         DestroyVad(pvad);
+
+        // The turn-taking classifier (optional: listening works without it,
+        // and so does the app, which then decides without it).
+        m_pDecider.reset();
+        m_DeciderError.clear();
+        if (!m_Config.m_DeciderModel.empty())
+        {
+            auto pdecider = std::make_unique<TextClassifier>(m_Config.m_DeciderModel,
+                m_Config.m_DeciderVocab, m_Config.m_iDeciderThreads, m_Call);
+            if (pdecider->Load(m_DeciderError))
+            {
+                m_pDecider = std::move(pdecider);
+            }
+        }
         return true;
     }
 
@@ -863,6 +909,24 @@ namespace gitgud::speech
         if (_pOk)
         {
             *_pOk = ball;
+        }
+        return text;
+    }
+
+    std::string Recognizer::RecognizeWhole(const float* _pSamples, std::size_t _nCount,
+        const std::string& _Hotwords, double* _pMs, bool* _pOk)
+    {
+        const auto t0 = std::chrono::steady_clock::now();
+        bool bok = true;
+        std::string text = DecodeOne(_pSamples, _nCount, _Hotwords, bok);
+        if (_pMs)
+        {
+            *_pMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                        .count();
+        }
+        if (_pOk)
+        {
+            *_pOk = bok;
         }
         return text;
     }

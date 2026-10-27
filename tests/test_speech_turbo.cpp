@@ -600,7 +600,7 @@ TEST_CASE("Turbo speaks Baldr on the GPU or the processor", "[.voice-gpu]")
     Json settings = Json::Object();
     settings.Set("vadModel", (models / "vad" / "silero_vad.onnx").u8string())
         .Set("asrDir",
-            (models / "parakeet" / "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8").u8string())
+            (models / "parakeet" / "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8").u8string())
         .Set("kwsDir",
             (models / "kws" / "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01").u8string())
         .Set("speakerModel", (models / "speaker" / "nemo_en_titanet_large.onnx").u8string())
@@ -775,7 +775,7 @@ namespace
         Json settings = Json::Object();
         settings.Set("vadModel", (models / "vad" / "silero_vad.onnx").u8string())
             .Set("asrDir",
-                (models / "parakeet" / "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8").u8string())
+                (models / "parakeet" / "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8").u8string())
             .Set("kwsDir",
                 (models / "kws" / "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01").u8string())
             .Set("speakerModel", (models / "speaker" / "nemo_en_titanet_large.onnx").u8string())

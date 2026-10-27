@@ -3,8 +3,10 @@
 -- A board is a project in Bragi's store (bragi/server.lua; on this
 -- computer, bragi/store.lua): columns of cards, each card a task. The title button
 -- picks the board (the open repository's boards, yours, and your
--- organisations'); the choice is kept in bragi.board. A card's menu moves
--- it to another column, opens it in the store, or takes it off the board;
+-- organisations'); the choice is kept in bragi.board. A click on a card
+-- opens its task (bragi/taskview.lua), outlined in the accent colour while
+-- it's open; a right click opens its menu, which moves it to another
+-- column, opens it in the store, or takes it off the board;
 -- New task (or a column's + Add) opens an issue and puts it on the board.
 -- "Work on this with Bragi" hands an open issue to the agent
 -- (agent.workOn); cards show its sessions' state. The store's events
@@ -483,7 +485,11 @@ local function drawCard(cname, parent, card, x, y, width)
     gitgud.setProperty(cname, "NormalFillColour", C.panel)
     gitgud.setProperty(cname, "HoverFillColour", C.hover)
     gitgud.setProperty(cname, "PushedFillColour", C.sel)
-    gitgud.setProperty(cname, "TooltipText", "Move, open, or take off the board")
+    gitgud.setProperty(cname, "TooltipText",
+        "Open the task (right-click: work on it with Bragi, move it, or take it off the board)")
+    if require("bragi.taskview").openFor(card) then
+        gitgud.setProperty(cname, "BorderColour", C.accent)
+    end
 
     local key = (board.type == "repository" and card.repo == board.repo) and ("#" .. card.number)
         or ((card.repo or "") .. "#" .. tostring(card.number))
@@ -531,6 +537,9 @@ local function drawCard(cname, parent, card, x, y, width)
     end
 
     gitgud.on(cname .. ".clicked", function()
+        require("bragi.taskview").open(card, board)
+    end)
+    gitgud.on(cname .. ".rightClicked", function()
         cardMenu(card, cname)
     end)
 end
@@ -610,6 +619,11 @@ end
 --- The open board, for scripts and tests.
 function boards.current()
     return board
+end
+
+--- Draw the board again (the task view's outline on its card).
+function boards.repaint()
+    show()
 end
 
 function boards.init()

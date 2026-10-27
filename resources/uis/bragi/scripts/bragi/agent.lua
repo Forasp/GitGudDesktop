@@ -2207,7 +2207,8 @@ local function track(status, summary)
         return
     end
     local server = require("bragi.server")
-    local body = { status = status, summary = summary, branch = require("core.repo").state().branch }
+    local body = { status = status, summary = summary, branch = require("core.repo").state().branch,
+        conversation = session.id or session.resume }
     if task.remoteId then
         server.request("PATCH", "/api/bragi/v0/sessions/" .. task.remoteId, body)
         return
@@ -2245,7 +2246,8 @@ local function report(summary)
         server.request("PATCH", "/api/v1/repos/" .. task.repo .. "/issues/comments/" .. task.commentId, { body = body })
         return
     end
-    server.request("POST", "/api/v1/repos/" .. task.repo .. "/issues/" .. task.number .. "/comments", { body = body },
+    server.request("POST", "/api/v1/repos/" .. task.repo .. "/issues/" .. task.number .. "/comments",
+        { body = body, author = "bragi" },
         function(comment)
             task.commentId = type(comment) == "table" and comment.id or nil
             if task.commentId and task.remoteId then

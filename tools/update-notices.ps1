@@ -101,7 +101,7 @@ The Bragi interface's voice runs these models on your computer. They are
 not part of GitGud Desktop: its welcome flow or Settings downloads them
 from the sherpa-onnx project's releases when you choose to.
 
-Speech recognition: Parakeet TDT 0.6B v2 by NVIDIA, under the Creative
+Speech recognition: Parakeet TDT-CTC 110M by NVIDIA (its transducer), under the Creative
 Commons Attribution 4.0 International license (CC-BY-4.0,
 https://creativecommons.org/licenses/by/4.0/), converted to int8 ONNX by
 the sherpa-onnx project.

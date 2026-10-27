@@ -400,13 +400,14 @@ exit and is never reported as a crash.
 | `voiceRecord(path?)` | save the mic audio as the engine gets it (each frame once it has gone out) to a WAV file at `path` (16 kHz mono 16-bit; its folder is created), until called without a path or listening stops; then `voice.record` (`{state: off, path, seconds}`). `true` or `nil, msg` |
 | `voiceWake()` / `voiceSend(reason?)` / `voiceCancel()` | start a message now (the mic button), end it now (Send; `reason` `button` or `done`, when the app judged it finished), drop it |
 | `voiceLookback(id, tokens?)` | ask for the newest transcript, up to `tokens` (default the engine's `contextTokens`); `voice.lookback` answers with the same `id` |
+| `voiceDecide(request)` | run the turn-taking model (`voiceEngineSetup`'s `deciderModel`) on `{id, first, second, maxLength?, firstMax?}`: the input is `[CLS] first [SEP] second [SEP]`, at most `maxLength` pieces (default 256, kept within 8 to 512), `first` cut to `firstMax` (default 40, kept within 0 to 512, and to fit), `second` keeping its end; each `{pause}` in `second` becomes the silence since the speech ended (seconds, to 0.1). `voice.decision` answers with the same `id`: `{outputs, pause, speaking, tokens, ms, t}` (`outputs`: each of the model's outputs by name, a list of numbers) or `{error}`. `true` or `nil, msg` |
 | `voiceTrain(state)` / `voiceEnroll(state)` | wake word training (`start`, `stop`) and voice enrollment (`start`, `stop`, `clear`) |
 | `voiceSpeak(id, text, options?)` | speak `text` (opens the `speak` channel on first use); `options`: `voice`, `sampleRate`, `speed` (1 is normal pace). Send replies a sentence or paragraph at a time |
 | `voiceSpeakPrepare()` | open the speak channel and the speaker now (Bragi calls it when listening starts), so the first reply waits for neither; `true` or `nil, msg` |
 | `voiceSpeakStop(id?)` | stop that reply, or all of them; playback goes quiet at once |
 | `voiceInfo()` | `{available, listening, speaking, playing}` (`available`: a speech engine is there; `playing`: the reply id being heard, or `""`) |
 | `voiceEngine()` | the engine inside the app: `{installed, configured, loaded, faulted, faultCode?, fault?, gpu, runtimeDir, turbo, turboDevice, gpuError?, test?, lastCrash?}`. `installed`: its libraries are there (nothing loads to say so); `faulted`: it stopped after an internal error; `gpu`: the CUDA provider started (it stays for the run); `runtimeDir`: where the libraries loaded from (`""` until they load); `turbo`: Chatterbox Turbo is set up; `turboDevice`: where it loaded, `"gpu"` or `"cpu"` (`""` while it isn't loaded); `gpuError`: why it isn't on the GPU it was asked to use; `lastCrash` (`{call, log}`): the call it was in when the app ended without warning last time, and the end of its log (`<app data>/bragi/voice-engine.log`) |
-| `voiceEngineSetup(settings)` | the models and how to run them, used from the next time listening starts: `vadModel`, `asrDir`, `kwsDir`, `speakerModel`, `voiceprintsDir`, `workDir`, `files` (`{ {path, size, sha256}, … }`, checked before loading), plus `asrThreads`, `kwsThreads`, `speakerThreads`, `hotwords`, `partialSeconds`, `wakeWord`, `spotterSpellings`, `mishearings`, and the other listening settings. With Chatterbox Turbo: `tts` (`{dir, encoder, embed, lm, decoder, tokenizer, voicesDir, provider, threads, cpuThreads, files}`: its graphs, where made voices go, `"cuda"` or `"cpu"`, and the processor threads on the GPU and without it); with the GPU pack, `gpuDir` (its folder: Turbo moves there the next time it loads, no restart). `true` or `nil, msg` |
+| `voiceEngineSetup(settings)` | the models and how to run them, used from the next time listening starts: `vadModel`, `asrDir`, `kwsDir`, `speakerModel`, `voiceprintsDir`, `workDir`, `deciderModel` and `deciderVocab` (the turn-taking model's graph and `vocab.txt`; optional, `""` for none), `files` (`{ {path, size, sha256}, … }`, checked before loading), plus `asrThreads`, `kwsThreads`, `speakerThreads`, `deciderThreads` (1 to 8), `hotwords`, `partialSeconds`, `wakeWord`, `spotterSpellings`, `mishearings`, and the other listening settings. With Chatterbox Turbo: `tts` (`{dir, encoder, embed, lm, decoder, tokenizer, voicesDir, provider, threads, cpuThreads, files}`: its graphs, where made voices go, `"cuda"` or `"cpu"`, and the processor threads on the GPU and without it); with the GPU pack, `gpuDir` (its folder: Turbo moves there the next time it loads, no restart). `true` or `nil, msg` |
 | `voiceSelfTest(task, wav?)` | load every model and run each once (on generated sound, or on `wav`, 16 kHz mono 16-bit); `<task>.done` carries `{ok, loadMs, decodeMs, text, keywords, speaker, code?, message?}`. `true` or `nil, msg` |
 | `voiceVoices()` | the system's voices for spoken replies: `{ {id, name, language}, … }` or `nil, msg` |
 | `voiceEngineRelease()` | release the models now (before removing them); they load again when listening starts |
@@ -422,7 +423,7 @@ exit and is never reported as a crash.
 The listen functions return `nil, "Voice input is off"` when it is.
 Events carry JSON text. From `listen`: `voice.<type>` for the engine's
 messages (`ready`, `vad`, `wake`, `partial`, `message`, `cancelled`,
-`ambient`, `lookback`, `trainSample`, `trainResult`, `enrollSample`,
+`ambient`, `lookback`, `decision`, `trainSample`, `trainResult`, `enrollSample`,
 `enrollResult`, `error`), plus `voice.mic` (`{state: on|off, device,
 route?}`; `route` on `on`: the mic, the echo reference, and the ducking
 opt-out), `voice.record` (a `voiceRecord` file ended), `voice.level`
@@ -433,6 +434,32 @@ RMS and loudest 20 ms in dBFS, `t` its end in the engine's times) and
 (`{state: started|stopped, id}`) says when a reply is heard; the app tells
 the `listen` channel too, so the engine knows its own voice. Local failures
 are errors with `code` `connect`, `audio`, or `no-ready`.
+
+`ready` says whether the turn-taking model loaded (`decider`, and
+`deciderError` when it was set up but didn't load: listening goes on
+without it).
+
+`partial` carries `speechEnd` (ms) once speech has ended at least once:
+where it last ended, for measuring a pause. With `transcribe = "growing"`
+in `voiceEngineSetup` a message is one recording decoded again as it
+grows, instead of its utterances' texts joined: a partial's `text` is the
+whole message so far and may correct earlier words, `partial` and `pause`
+add `utterances` (the utterances' own texts, decoded one by one), and
+`message` adds `live` (the last partial's text), `utterances`, and
+`finalOk` (`false` when the last decode failed), so the app can fall back
+when a decode of the whole recording heard less. Only speech the engine
+kept (not its own voice, not someone else's) is heard. Its settings, all
+in seconds unless noted: `growEverySeconds`, `growEveryLongSeconds` after
+`growLongAfterSeconds` of live buffer, `growCostFactor` (passes never more
+often than this times a pass's own time), `growHotwords` (passes biased
+toward the hotwords too, as utterances are), `bufferSeconds` and
+`bufferSnapSeconds` (a buffer closes between utterances from
+`bufferSeconds - bufferSnapSeconds` on, and is frozen), `keepBeforeSeconds`
+and `keepAfterSeconds` (audio kept around kept speech; the rest is quiet),
+`gapMaxSeconds` and `gapKeepSeconds` (longer quiet is shortened to this),
+`fadeSeconds`, `fillLevel` (the quiet's noise, as a sample level), and
+`asrMaxSeconds` (the most one decode gets: longer audio is split at
+pauses, and a single stretch of speech longer than that is decoded whole).
 
 ## Local app data
 
@@ -593,7 +620,7 @@ descriptions and schema) can be read or changed:
 | `showHeard` | `true` or `false` | `bragi.showHeard` |
 | `quickAnswers` | `true` or `false` | `bragi.quickAnswers` |
 | `theme` | `light` or `dark` | the UI's theme |
-| `updateSeconds` | 3 to 120 (whole seconds); a value outside is set to the nearer end, not refused | `bragi.updateSeconds` |
+| `updateSeconds` | 0 (as it happens, the default) or 3 to 120 (whole seconds); a value outside is set to the nearer end, and 1 or 2 to 3, not refused | `bragi.updateSeconds` |
 
 The script checks every call (`settingsTool.check`): anything else, or a
 value outside the range or choices, is refused with a message saying

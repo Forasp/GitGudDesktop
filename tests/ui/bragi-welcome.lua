@@ -293,11 +293,13 @@ end)
 step(400, "voice step: the models first", function()
     check("voice step", welcome.step() == "voice")
     check("the models card comes first", textOf(1, 1, "Title") == "Voice models")
-    check("their download size shows", textOf(1, 1, "Sub"):find("about 602 MB to download", 1, true) ~= nil)
-    check("and their size on disk", textOf(1, 1, "Sub"):find("784 MB on disk", 1, true) ~= nil)
+    check("their download size shows", textOf(1, 1, "Sub"):find("about 298 MB to download", 1, true) ~= nil)
+    check("and their size on disk", textOf(1, 1, "Sub"):find("329 MB on disk", 1, true) ~= nil)
     check("each model with its size", textOf(1, 2, "Title") == "Speech detection, 644 KB"
-        and textOf(1, 4, "Title") == "Speech recognition, 482 MB")
+        and textOf(1, 4, "Title") == "Speech recognition, 108 MB")
     check("what it does, naming no product", textOf(1, 4, "Sub") == "Turns what you say into text.")
+    check("the turn-taking model comes with them", textOf(1, 6, "Title") == "Turn-taking model, 70.0 MB"
+        and textOf(1, 6, "Sub") == "Tells when you're done talking.")
     check("Baldr is offered too", textOf(2, 1, "Title") == "Replies in Baldr, Bragi's own voice")
     check("saying plainly it's slow without an NVIDIA GPU", textOf(2, 1, "Sub"):find(
         "runs on the processor and Baldr is slow here", 1, true) ~= nil)
@@ -306,9 +308,9 @@ step(400, "voice step: the models first", function()
     check("no GPU libraries without a GPU", textOf(3, 1, "Title") == "")
     check("no devices before the models", textOf(3, 1, "Choice") == "")
     check("nothing downloaded yet", #downloads == 0)
-    check("Download and Install from a folder", textOf(1, 6, "Action") == "Download"
-        and textOf(1, 7, "Action") == "Choose folder")
-    check("the download names no host", textOf(1, 6, "Sub") == "602 MB, from the models' publishers.")
+    check("Download and Install from a folder", textOf(1, 7, "Action") == "Download"
+        and textOf(1, 8, "Action") == "Choose folder")
+    check("the download names no host", textOf(1, 7, "Sub") == "298 MB, from the models' publishers.")
     check("Bragi's voice: the model is the download, Baldr is made here", textOf(2, 2, "Title")
         == "Download Bragi's voice" and textOf(2, 2, "Sub") == "725 MB. Bragi then makes its Baldr voice on this computer.")
     local all = ""
@@ -323,7 +325,7 @@ step(400, "voice step: the models first", function()
     shot("voice-models")
 end)
 step(300, "after the voice-models shot", function()
-    clickWidget(welcome.widget(1, 6, "Action"))
+    clickWidget(welcome.widget(1, 7, "Action"))
 end)
 step(300, "Download", function()
     check("one download started", #downloads == 1)
@@ -333,7 +335,7 @@ step(300, "Download", function()
     gitgud.emit(downloads[1].task .. ".progress", gitgud.jsonEncode({ phase = "download", done = 300000, total = 643854 }))
 end)
 step(200, "progress", function()
-    check("progress shows", textOf(1, 1, "Sub") == "Downloading speech detection: 300 KB of 644 KB (46%), 1 of 4.")
+    check("progress shows", textOf(1, 1, "Sub") == "Downloading speech detection: 300 KB of 644 KB (46%), 1 of 5.")
     local bars = bragiSettings.progressBars()
     check("with its bar", #bars == 1 and math.abs((bars[1].fraction or 0) - 300000 / 643854) < 1e-6)
     check("Stop shows", textOf(1, 2, "Action") == "Stop")
@@ -344,7 +346,7 @@ step(200, "Stop", function()
     gitgud.emit(downloads[1].task .. ".error", "cancelled")
 end)
 step(300, "stopped", function()
-    check("back to the models card", textOf(1, 1, "Title") == "Voice models" and textOf(1, 6, "Action") == "Download")
+    check("back to the models card", textOf(1, 1, "Title") == "Voice models" and textOf(1, 7, "Action") == "Download")
     check("no second download", #downloads == 1)
     -- An NVIDIA GPU the GPU libraries run on.
     gpu = { present = true, driver = "610.88", cuda = 13030,
@@ -451,6 +453,22 @@ step(300, "after the voice-baldr-gpu shot", function()
         return realMissing(groups)
     end
     app.publish("bragi.voiceAvailable")
+end)
+local before = 0
+step(400, "the models from before the turn-taking model", function()
+    check("it's offered on its own", textOf(1, 2, "Title") == "Turn-taking model, 70.0 MB"
+        and textOf(1, 2, "Sub") == "Tells when you're done talking. Without it, Bragi waits a few seconds once you seem done."
+        and textOf(1, 2, "Action") == "Download")
+    before = #downloads
+    clickWidget(welcome.widget(1, 2, "Action"))
+end)
+step(300, "the turn-taking model downloading", function()
+    local d = downloads[#downloads]
+    check("its first file, from the project, pinned", #downloads == before + 1 and d.url
+        == "https://raw.githubusercontent.com/Forasp/GitGudDesktop/bragi-decide-1/models/decide/model.int8.onnx"
+        and d.size == 69770970 and d.sha256 == "3693c3f215cc69fef01fc5a97a2bcb63b713392c1ab04a26fbd7bd723a4e5349")
+    check("the models card shows it", textOf(1, 1, "Title") == "Installing the turn-taking model")
+    gitgud.emit(d.task .. ".error", "cancelled")
 end)
 step(400, "voice step with the models", function()
     check("the models card says installed", textOf(1, 1, "Title") == "Voice models")

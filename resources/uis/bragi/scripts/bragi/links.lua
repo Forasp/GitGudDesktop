@@ -25,6 +25,8 @@
 --   links.open(link)            open one, as a click does
 --   links.onWiki(fn)            who opens { kind = "wiki" } links (the
 --                               Wiki view: a page link in a wiki page)
+--   links.onTask(fn)            who opens bragi://task/<owner>/<name>/<n>
+--                               links ({ kind = "task" }: the task view)
 --
 -- A span is { first, last, link }: bytes first..last of the markup are the
 -- link's text (gitgud.textRects finds where they're drawn).
@@ -41,6 +43,7 @@ local MAX_WORDS = 8       -- a path with spaces spans at most this many words
 
 local known = {}          -- path -> { kind, at }: what's on disk
 local wikiHandler = nil   -- opens { kind = "wiki" } links
+local taskHandler = nil   -- opens { kind = "task" } links
 local spots = {}          -- spot window -> the link it opens
 
 --- "folder", "file", or nil when nothing is there. Remembered a while.
@@ -89,8 +92,8 @@ local function pathLink(path, folder)
     return nil
 end
 
---- What a link's text or target points to, or nil: a web address, or a
--- path that's there.
+--- What a link's text or target points to, or nil: a web address, a task
+-- (bragi://task/<owner>/<name>/<number>), or a path that's there.
 -- @param s       a Markdown link's target, or a code span's text
 -- @param folder  where relative paths start (nil: no relative paths)
 function links.target(s, folder)
@@ -100,6 +103,9 @@ function links.target(s, folder)
     end
     if s:match("^https?://%S+$") or s:match("^mailto:%S+$") then
         return { kind = "web", target = s }
+    end
+    if s:match("^bragi://task/[^/%s]+/[^/%s]+/%d+$") then
+        return { kind = "task", target = s }
     end
     if s:match("^file:///") then
         s = s:gsub("^file:///", ""):gsub("%%20", " ")
@@ -143,6 +149,12 @@ function links.match(s, i, folder)
         return nil
     end
     local c = s:sub(i, i)
+    if c == "b" then
+        local task = s:match("^bragi://task/[^/%s]+/[^/%s]+/%d+", i)
+        if task then
+            return i + #task - 1, { kind = "task", target = task }
+        end
+    end
     if c == "h" then
         local url = s:match("^https?://[^%s%c<>\"`]+", i)
         if url then
@@ -230,6 +242,13 @@ function links.open(link)
         wikiHandler(link)
         return true
     end
+    if link.kind == "task" then
+        if not taskHandler then
+            return nil, "no task view"
+        end
+        taskHandler(link)
+        return true
+    end
     local target = link.target
     if link.kind ~= "web" and WINDOWS then
         target = target:gsub("/", "\\")
@@ -249,6 +268,11 @@ end
 --- Set who opens wiki links: fn(link).
 function links.onWiki(fn)
     wikiHandler = fn
+end
+
+--- Set who opens task links: fn(link).
+function links.onTask(fn)
+    taskHandler = fn
 end
 
 --- Lay a clickable spot over each line of each link in a static text

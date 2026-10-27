@@ -533,6 +533,7 @@ namespace
             std::atomic<int> m_iRate{0};
             std::atomic<int> m_iFlushes{0};
             std::atomic<bool> m_bStopped{false};
+            std::atomic<std::size_t> m_nQueued{0}; // what Queued() says is still to play
         };
 
         explicit FakePlayback(std::shared_ptr<State> _pState) : m_pState(std::move(_pState))
@@ -568,7 +569,7 @@ namespace
 
         std::size_t Queued() const override
         {
-            return 0; // plays at once
+            return m_pState->m_nQueued; // 0: plays at once
         }
 
       private:
@@ -1369,6 +1370,119 @@ TEST_CASE("SpeakSession: text up, speech down into the speaker", "[voice]")
     CHECK(pspeaker->m_bStopped);
     REQUIRE(WaitFor([&]() { return server.ClientCloseCode() == 1000; }));
     CHECK(events.OfType("closed").size() == 1);
+}
+
+// A reply stopped while it's still being made, as the one before it plays
+// out of the speaker's buffer (spoken updates as they happen drop a line not
+// yet heard): only its own audio goes, and the one before it finishes.
+TEST_CASE("SpeakSession: stopping the next reply leaves the one playing", "[voice]")
+{
+    FakeVoiceEngine server;
+    server.SetOnMessage(
+        [](FakeVoiceEngine& _Server, const Received& _Message)
+        {
+            const Json message = Json::Parse(_Message.m_Data).value_or(Json());
+            const std::string& type = message["type"].AsString();
+            const std::string& id = message["id"].AsString();
+            if (type == "say")
+            {
+                _Server.SendJson(
+                    Json::Object().Set("type", "start").Set("id", id).Set("sampleRate", 24000));
+                if (id == "r1")
+                {
+                    const std::vector<int16_t> tone(480, 900);
+                    _Server.SendBinary(gitgud::voice::ToBytes(tone.data(), tone.size()));
+                    _Server.SendJson(Json::Object().Set("type", "end").Set("id", id));
+                }
+                // r2: still being made, no audio yet.
+            }
+            else if (type == "stop")
+            {
+                _Server.SendJson(Json::Object().Set("type", "stopped").Set("id", id));
+            }
+        });
+    auto pclient = server.Links();
+    auto pspeaker = std::make_shared<FakePlayback::State>();
+    pspeaker->m_nQueued = 480; // r1 still in the buffer
+    Events events;
+    gitgud::voice::SpeakSession session(
+        pclient, events.Sink(), std::make_unique<FakePlayback>(pspeaker));
+    session.Say("r1", "Reading the parser.", "", 24000);
+    REQUIRE(WaitFor([&]() { return events.Has("end"); }));
+    CHECK(session.PlayingId() == "r1");
+    session.Say("r2", "Now testing it.", "", 24000);
+    REQUIRE(WaitFor([&]() { return events.OfType("start").size() == 2; }));
+
+    session.StopSpeech("r2");
+    REQUIRE(WaitFor([&]() { return events.Has("stopped"); }));
+    CHECK(server.OfType("stop").at(0)["id"].AsString() == "r2");
+    CHECK(pspeaker->m_iFlushes == 0);
+    CHECK(session.PlayingId() == "r1");
+    CHECK(events.OfType("playback").size() == 1); // r1 started, still playing
+
+    // r1 plays out: reported done, nothing of r2 ever heard.
+    pspeaker->m_nQueued = 0;
+    REQUIRE(WaitFor([&]() { return events.OfType("playback").size() == 2; }));
+    const Json done = events.OfType("playback").at(1);
+    CHECK(done["state"].AsString() == "stopped");
+    CHECK(done["id"].AsString() == "r1");
+    CHECK(pspeaker->m_iFlushes == 0);
+    CHECK(session.PlayingId().empty());
+}
+
+// The other way round: the reply still playing out of the buffer is stopped
+// while the next is being made. It goes quiet at once; the next one plays.
+TEST_CASE("SpeakSession: stopping the reply playing leaves the next one", "[voice]")
+{
+    FakeVoiceEngine server;
+    server.SetOnMessage(
+        [](FakeVoiceEngine& _Server, const Received& _Message)
+        {
+            const Json message = Json::Parse(_Message.m_Data).value_or(Json());
+            const std::string& type = message["type"].AsString();
+            const std::string& id = message["id"].AsString();
+            const std::vector<int16_t> tone(480, 900);
+            if (type == "say")
+            {
+                _Server.SendJson(
+                    Json::Object().Set("type", "start").Set("id", id).Set("sampleRate", 24000));
+                if (id == "r1")
+                {
+                    _Server.SendBinary(gitgud::voice::ToBytes(tone.data(), tone.size()));
+                    _Server.SendJson(Json::Object().Set("type", "end").Set("id", id));
+                }
+            }
+            else if (type == "stop")
+            {
+                // The engine is past r1; r2's audio comes after.
+                _Server.SendJson(Json::Object().Set("type", "stopped").Set("id", id));
+                _Server.SendBinary(gitgud::voice::ToBytes(tone.data(), tone.size()));
+                _Server.SendJson(Json::Object().Set("type", "end").Set("id", "r2"));
+            }
+        });
+    auto pclient = server.Links();
+    auto pspeaker = std::make_shared<FakePlayback::State>();
+    pspeaker->m_nQueued = 480; // r1 still in the buffer
+    Events events;
+    gitgud::voice::SpeakSession session(
+        pclient, events.Sink(), std::make_unique<FakePlayback>(pspeaker));
+    session.Say("r1", "Reading the parser.", "", 24000);
+    REQUIRE(WaitFor([&]() { return events.Has("end"); }));
+    session.Say("r2", "Now testing it.", "", 24000);
+    REQUIRE(WaitFor([&]() { return events.OfType("start").size() == 2; }));
+
+    session.StopSpeech("r1");
+    CHECK(pspeaker->m_iFlushes == 1);
+    REQUIRE(events.OfType("playback").size() == 2);
+    CHECK(events.OfType("playback").at(1)["state"].AsString() == "stopped");
+    CHECK(events.OfType("playback").at(1)["id"].AsString() == "r1");
+
+    // r2 is heard.
+    REQUIRE(WaitFor([&]() { return events.OfType("playback").size() == 3; }));
+    const Json started = events.OfType("playback").at(2);
+    CHECK(started["state"].AsString() == "started");
+    CHECK(started["id"].AsString() == "r2");
+    CHECK(session.PlayingId() == "r2");
 }
 
 TEST_CASE("Voice bindings: scripts listen and speak; events reach the bus", "[voice][lua]")

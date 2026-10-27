@@ -177,6 +177,9 @@ namespace gitgud::voice
         void Playback(const std::string& _State, const std::string& _Id, const std::string& _Text = {});
         // `_iTokens` < 0 leaves the engine's default (contextTokens).
         void Lookback(const std::string& _Id, int _iTokens);
+        // `decide` with `_Fields` (id, first, second, maxLength, firstMax):
+        // the turn-taking model's `decision` answers.
+        void Decide(const app::Json& _Fields);
         void Train(const std::string& _State);
         void Enroll(const std::string& _State);
 

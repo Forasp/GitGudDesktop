@@ -21,6 +21,12 @@
 //                                     end it now ("button" or "done"), drop it
 //   gitgud.voiceLookback(id, tokens?)
 //                                  -> true | nil, msg; "voice.lookback" answers
+//   gitgud.voiceDecide(request)    -> true | nil, msg: the turn-taking model
+//                                     on {id, first, second, maxLength?,
+//                                     firstMax?} ("{pause}" in second: the
+//                                     silence so far); "voice.decision" answers
+//                                     ({id, outputs, pause, speaking, tokens,
+//                                     ms, t} or {id, error})
 //   gitgud.voiceRecord(path?)      -> true | nil, msg. Saves the mic audio
 //                                     as the engine gets it to a WAV file at
 //                                     path (16 kHz mono 16-bit) until called
@@ -89,7 +95,7 @@
 //                                  reported again this run
 //
 // Events carry JSON text. The listen channel's are "voice.<type>" (ready, vad,
-// wake, partial, message, cancelled, ambient, lookback, trainSample,
+// wake, partial, message, cancelled, ambient, lookback, decision, trainSample,
 // trainResult, enrollSample, enrollResult, error) plus "voice.mic" ({state:
 // on|off, device, route?}), "voice.level" ({t, rms, max}: each second of the
 // mic, in dBFS), "voice.drop" ({t, until, count, queued, sendingMs}: mic audio
@@ -413,6 +419,28 @@ namespace gitgud::lua::bindings
                 return NotListening(_pL);
             }
             plisten->Lookback(id, itokens);
+            return Ok(_pL);
+        }
+
+        int LVoiceDecide(lua_State* _pL)
+        {
+            luaL_checktype(_pL, 1, LUA_TTABLE);
+            Json fields;
+            std::string error;
+            if (!OptionalJson(_pL, 1, fields, error))
+            {
+                return FailWith(_pL, error);
+            }
+            if (!fields["id"].IsString() || !fields["second"].IsString())
+            {
+                return FailWith(_pL, "a decide request needs id and second");
+            }
+            auto plisten = Listening();
+            if (!plisten)
+            {
+                return NotListening(_pL);
+            }
+            plisten->Decide(fields);
             return Ok(_pL);
         }
 
@@ -977,6 +1005,7 @@ namespace gitgud::lua::bindings
         _Out.push_back({"voiceSend", LVoiceSend});
         _Out.push_back({"voiceCancel", LListenCommand<&ListenSession::Cancel>});
         _Out.push_back({"voiceLookback", LVoiceLookback});
+        _Out.push_back({"voiceDecide", LVoiceDecide});
         _Out.push_back({"voiceTrain", LVoiceTrain});
         _Out.push_back({"voiceEnroll", LVoiceEnroll});
         _Out.push_back({"voiceSpeak", LVoiceSpeak});

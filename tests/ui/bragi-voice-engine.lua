@@ -9,7 +9,11 @@
 -- Then
 -- the engine faulting on hello: voice stops with the restart message. And
 -- the app having closed in the engine last time: voice stays off with the
--- reason until Settings turns it back on.
+-- reason until Settings turns it back on. Last, the mic pressed before the
+-- models are in, then an install played through (the models' state stood
+-- in for): the mic's note follows it (at most twice a second, the last
+-- state always), says why it failed, and once they're in says so and is
+-- left as it is.
 --
 -- Run it like bragi-voice.lua (GITGUD_UI=bragi, scratch APPDATA and
 -- LOCALAPPDATA, a repository from make-testrepo.ps1, GITGUD_SCRIPT pointing
@@ -63,7 +67,7 @@ step(1500, "no models yet", function()
         -- This build has the engine: without models, voice says what's missing.
         check("voice needs its models", not voice.available())
         check("the mic says how big they are",
-            voice.unavailableText():find("^Voice needs its models first: about 602 MB") ~= nil)
+            voice.unavailableText():find("^Voice needs its models first: about 228 MB") ~= nil)
     else
         check("no engine: voice isn't in this build", voice.unavailableText() == voice.UNAVAILABLE)
     end
@@ -326,6 +330,91 @@ step(800, "listening after all", function()
     check("listening", voice.state() == "listening")
     voice.stop()
     gitgud.voiceTestEngine(nil)
+end)
+
+-- The install, played here: the models' state and what's asked of it.
+local played = { phase = "idle" }
+local realModels = {}
+local realAvailable = voice.backend.available
+local function play(s)
+    played = s
+    app.publish("bragi.voiceModels", s)
+end
+local function noteText()
+    local note = last("note")
+    return note and note.text or ""
+end
+local INSTALLING = "Installing the speech models. "
+step(300, "the mic pressed before the models are in", function()
+    for _, name in ipairs({ "engineInstalled", "engine", "state", "installing", "updating", "installed", "update",
+        "progressText" }) do
+        realModels[name] = voicemodels[name]
+    end
+    local function busy()
+        return played.phase ~= "idle" and played.phase ~= "done" and played.phase ~= "failed"
+    end
+    voicemodels.engineInstalled = function()
+        return true
+    end
+    voicemodels.engine = function()
+        return { installed = true }
+    end
+    voicemodels.state = function()
+        return played
+    end
+    voicemodels.installing = function()
+        return busy() and played.group == "listen"
+    end
+    voicemodels.updating = function()
+        return false
+    end
+    voicemodels.installed = function()
+        return played.phase == "done"
+    end
+    voicemodels.update = function()
+        return false
+    end
+    voicemodels.progressText = function()
+        return played.line or ""
+    end
+    voice.backend.available = function()
+        return played.phase == "done"
+    end
+    voice.toggle()
+    check("voice stays off", voice.state() == "off")
+    check("the note says what's missing", noteText():find("^Voice needs its models first: about ") ~= nil)
+end)
+step(700, "installed from Settings", function()
+    play({ phase = "download", group = "listen", line = "Downloading 10%." })
+    check("the note follows", noteText() == INSTALLING .. "Downloading 10%.")
+    check("as a first install, not an update", noteText():find("Updating", 1, true) == nil)
+    play({ phase = "download", group = "listen", line = "Downloading 20%." })
+    check("not twice in half a second", noteText() == INSTALLING .. "Downloading 10%.")
+end)
+step(700, "the last state follows", function()
+    check("then the newer one", noteText() == INSTALLING .. "Downloading 20%.")
+    play({ phase = "download", group = "listen", line = "Downloading 90%." })
+    play({ phase = "failed", group = "listen", error = "the network went away" })
+end)
+step(700, "it failed", function()
+    check("the failure isn't lost", noteText()
+        == "The speech models didn't install: the network went away. Settings, Appearance and voice, Voice models.")
+    check("and doesn't say voice turns on", noteText():find("turns on", 1, true) == nil)
+    play({ phase = "download", group = "listen", line = "Downloading 50%." })
+    play({ phase = "check", group = "listen", line = "Loading every model once to check them." })
+    play({ phase = "done", group = "listen" })
+end)
+step(700, "they're in", function()
+    check("the note says so", noteText() == "The speech models are in. Press the mic to talk.")
+    check("voice is still off", voice.state() == "off")
+    play(played) -- a voice being made publishes too
+end)
+step(700, "left as it is", function()
+    check("the note stays", noteText() == "The speech models are in. Press the mic to talk.")
+    for name, fn in pairs(realModels) do
+        voicemodels[name] = fn
+    end
+    voice.backend.available = realAvailable
 end)
 
 step(500, "done", function()

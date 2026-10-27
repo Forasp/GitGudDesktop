@@ -5,11 +5,13 @@
 -- The engine (gitgud.voiceEngine, C++) comes with the app; nothing else
 -- does. Everything here is fetched only from the Bragi interface (the
 -- welcome flow's voice step, or Settings), with its size shown first and
--- nothing downloaded until the user says so. It goes to the local app data
+-- nothing downloaded until the user says so; a model the user installed
+-- that an app update replaced comes in again by itself (voice.lua starts
+-- it a few seconds after start). It goes to the local app data
 -- folder (gitgud.localDataPath("bragi/voice"): %LOCALAPPDATA%\Gitgud\bragi\voice
 -- on Windows), each file checked against the size and SHA-256 pinned below.
 --
--- Three groups of packages:
+-- Four groups of packages:
 --   listen  the listening models (speech detection, the wake word spotter,
 --           speech recognition, speaker recognition): voice needs them
 --   turbo   Baldr's speech model, offered on every computer with the
@@ -17,6 +19,11 @@
 --           Baldr, Bragi's own voice, or a voice made from a recording. It
 --           runs on the processor (slow: the welcome flow says so) unless
 --           the GPU libraries are in
+--   decide  the turn-taking model: when you're done talking (voice.lua). Bragi's
+--           own, fine-tuned from MiniLM, from the project's repository
+--           (models/decide). It comes with the listening models, and on its
+--           own for a computer that has them already. Without it, a Haiku
+--           helper judges when you're done, as before
 --   gpu     the GPU libraries, offered only with an NVIDIA GPU whose driver
 --           runs CUDA 13: ONNX Runtime's CUDA provider (from sherpa-onnx's
 --           CUDA build, the same ONNX Runtime the app ships) and NVIDIA's
@@ -31,7 +38,8 @@
 -- for faster replies). Making your own voice is optional (Settings).
 -- Without the model, replies use the voices Windows has.
 --
---   bragi/voice/models/<package>/   the listening models, unpacked
+--   bragi/voice/models/<package>/   the listening models, unpacked (and
+--                                   the turn-taking model, in decide/)
 --   bragi/voice/gpu/                the GPU libraries, together
 --   bragi/voice/turbo/              Chatterbox Turbo's graphs and tokenizer
 --   bragi/voice/voices/             voices made from recordings (<name>.voice,
@@ -65,7 +73,10 @@
 -- voicemodels.gpu(), voicemodels.gpuSuitable(), voicemodels.turboReady(), voicemodels.turboOnGpu(),
 -- voicemodels.gpuError(), voicemodels.configure(), voicemodels.state(),
 -- voicemodels.install(groups), voicemodels.installFrom(folder, groups),
+-- voicemodels.outdated(groups), voicemodels.update(groups), voicemodels.updating(groups),
+-- voicemodels.installing(groups),
 -- voicemodels.cancel(), voicemodels.check(), voicemodels.remove(group),
+-- voicemodels.DECIDER, voicemodels.deciderReady(),
 -- voicemodels.BALDR, voicemodels.ensureBaldr(), voicemodels.voices(),
 -- voicemodels.makeVoice(wav, label, onDone, opts),
 -- voicemodels.removeVoice(name), voicemodels.downloadBytes(list),
@@ -92,6 +103,8 @@ local RELEASE = "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
 local HUGGING_FACE = "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/"
     .. "d21799bd0354adb85e348b8a0442a8405110a2cf/"
 local PYPI = "https://files.pythonhosted.org/packages/"
+-- The project's own models, at a tag that stays put (models/ isn't shipped).
+local GITGUD = "https://raw.githubusercontent.com/Forasp/GitGudDesktop/bragi-decide-1/models/"
 local CUDA_ARCHIVE = "sherpa-onnx-v1.13.8-cuda-13.x-cudnn-9.x-onnxruntime1.28.2-win-x64-cuda"
 
 -- One file picked out of an archive or wheel into the package's folder.
@@ -152,22 +165,22 @@ voicemodels.PACKAGES = {
             sha256 = "c8a2a0129c4ab8e463164c142f82d25649661b122c8cd0b7aab5c9e80b90ad24" },
       } },
     { id = "asr", group = "listen", title = "Speech recognition", about = "Turns what you say into text.",
-      model = "Parakeet TDT 0.6B v2 (int8)",
+      model = "Parakeet TDT-CTC 110M, transducer (int8)",
       credit = "NVIDIA", licence = "CC-BY-4.0",
-      url = RELEASE .. "asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2",
-      archive = "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2",
-      dir = "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8",
-      size = 482468385, sha256 = "157c157bc51155e03e37d2466522a3a737dd9c72bb25f36eb18912964161e1ad",
-      unpacked = 661400000,
+      url = RELEASE .. "asr-models/sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8.tar.bz2",
+      archive = "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8.tar.bz2",
+      dir = "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8",
+      size = 108035095, sha256 = "f628312e9fdf8686374cb01a69425c41732529d540860311f16f37cbc32cfe9b",
+      unpacked = 136760193,
       files = {
-          { path = "encoder.int8.onnx", size = 652184296,
-            sha256 = "a32b12d17bbbc309d0686fbbcc2987b5e9b8333a7da83fa6b089f0a2acd651ab" },
-          { path = "decoder.int8.onnx", size = 7257753,
-            sha256 = "b6bb64963457237b900e496ee9994b59294526439fbcc1fecf705b31a15c6b4e" },
-          { path = "joiner.int8.onnx", size = 1739080,
-            sha256 = "7946164367946e7f9f29a122407c3252b680dbae9a51343eb2488d057c3c43d2" },
-          { path = "tokens.txt", size = 9384,
-            sha256 = "ec182b70dd42113aff6c5372c75cac58c952443eb22322f57bbd7f53977d497d" },
+          { path = "encoder.int8.onnx", size = 131113202,
+            sha256 = "0f35509ddeb9b39002fb077d979a9fe74f06eb0bc4dd5c34f512f82e5111d657" },
+          { path = "decoder.int8.onnx", size = 3955863,
+            sha256 = "f7c331c5504c2e593c76ed22b728e3f554af6c4a383dde862e719ced08b1da19" },
+          { path = "joiner.int8.onnx", size = 1411403,
+            sha256 = "bf7dff69e9f2cdbe9943d70da358f38b361c115ba0105bae7e908e0d6ec782f6" },
+          { path = "tokens.txt", size = 9953,
+            sha256 = "450e56bd2f036fe5b6aa821865838cc5aa9d8b0106134ce9a9ba0664abe6cd10" },
       } },
     { id = "speaker", group = "listen", title = "Speaker recognition", about = "Tells your voice from others'.",
       model = "TitaNet-Large",
@@ -177,6 +190,26 @@ voicemodels.PACKAGES = {
       files = {
           { path = "nemo_en_titanet_large.onnx", size = 101405493,
             sha256 = "d51abcf31717ef28162f26acb9d44dd4127c3d44c9b8624f699f3425daca8e77" },
+      } },
+
+    -- The turn-taking model: a text classifier the engine runs on the
+    -- message so far (voice.lua; its input and outputs: voicemodels.DECIDER).
+    { id = "decide", group = "decide", title = "Turn-taking model", phrase = "the turn-taking model",
+      about = "Tells when you're done talking.",
+      model = "Bragi's turn-taking model (MiniLM-L12-H384, fine-tuned, int8)",
+      credit = "Microsoft (MiniLM) and the GitGud project", licence = "MIT",
+      dest = "models/decide", size = 70002478, unpacked = 70002478,
+      downloads = {
+          { url = GITGUD .. "decide/model.int8.onnx", file = "model.int8.onnx", size = 69770970,
+            sha256 = "3693c3f215cc69fef01fc5a97a2bcb63b713392c1ab04a26fbd7bd723a4e5349" },
+          { url = GITGUD .. "decide/vocab.txt", file = "vocab.txt", size = 231508,
+            sha256 = "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3" },
+      },
+      files = {
+          { path = "model.int8.onnx", size = 69770970,
+            sha256 = "3693c3f215cc69fef01fc5a97a2bcb63b713392c1ab04a26fbd7bd723a4e5349" },
+          { path = "vocab.txt", size = 231508,
+            sha256 = "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3" },
       } },
 
     -- The GPU libraries.
@@ -340,20 +373,65 @@ local LICENCE_NAMES = {
 -- toward the wake word and the vocabulary; the spotter and detection on 1;
 -- partial transcripts at most once a second; ONNX Runtime's threads don't
 -- spin between calls. And what the wake word "Bragi" gets heard as.
+--
+-- A message is one recording, decoded again as it grows ("growing"): a pass
+-- every second, every 2.5 once the live buffer passes 10 s, never more often
+-- than 1.5 times a pass's own time. Buffers close at 30 s (from 25 s on,
+-- between utterances) and are frozen; one decode takes at most 30 s.
+-- Real audio is kept 0.9 s around accepted speech, so a pause cut never
+-- reaches a word; quiet longer than 2.5 s is shortened to 0.5 s. Passes are
+-- biased toward the hotwords as utterances are (the vocabulary). A pass over
+-- noisy audio sometimes hears less than the utterances did (9 of 111
+-- recordings; 5 with greedy decoding and no hotwords at all); voice.lua then
+-- takes theirs.
 voicemodels.ENGINE = {
-    asrName = "parakeet-tdt-0.6b-v2-int8",
+    asrName = "parakeet-tdt_ctc-110m-transducer-int8",
     asrThreads = 4,
     kwsThreads = 1,
     speakerThreads = 2,
     hotwords = true,
     hotwordsScore = 1.5,
+    asrMaxSeconds = 30,
     partialSeconds = 1.0,
+    transcribe = "growing",
+    growEverySeconds = 1.0,
+    growEveryLongSeconds = 2.5,
+    growLongAfterSeconds = 10,
+    growCostFactor = 1.5,
+    growHotwords = true,
+    bufferSeconds = 30,
+    bufferSnapSeconds = 5,
+    keepBeforeSeconds = 0.9,
+    keepAfterSeconds = 0.9,
+    gapMaxSeconds = 2.5,
+    gapKeepSeconds = 0.5,
+    fadeSeconds = 0.02,
+    fillLevel = 0.0003,
     spinning = false,
     endBy = "app",
     wakeWord = "Bragi",
     spotterSpellings = { "Braggy", "Broggy" },
     mishearings = { "Braggy", "Braggie", "Broggy", "Braghi", "Brogi", "Bragy", "Bruggie", "Brogy", "Baragi",
         "Raghi", "Raggy", "Roggy", "Rogi", "Rogy", "Ruggy" },
+}
+
+-- The turn-taking model's contract, as it was trained: the input is a
+-- pair, [CLS] project [SEP] body [SEP], at most maxLength pieces, the
+-- project line cut to firstMax and the body keeping its end. The project
+-- line is "<name>: <what it is>"; the body is "asked: <Bragi's last words,
+-- askedWords at most> | message: <the message so far> | pause: <seconds,
+-- to 0.1> s" (asked only when there were some). Its outputs are
+-- probabilities, in the order of the labels here. Trained so that nothing
+-- is more than half complete under half a second of pause.
+voicemodels.DECIDER = {
+    maxLength = 256,
+    firstMax = 40,
+    askedWords = 40,
+    outputs = {
+        p_state = { "complete", "mid_thought", "holding", "still_going" },
+        p_who = { "bragi", "someone_else", "nobody" },
+        p_project = { "yes", "partly", "no" },
+    },
 }
 
 -- Chatterbox Turbo's graphs, as the engine loads them: all q4 with
@@ -412,6 +490,7 @@ local rateFrom = nil
 local wired = {}
 local pending = {}
 local cancelled = false
+local refreshing = false -- the install going (or last) brings back what an app update replaced
 local making = nil -- { label } while a voice is being made, { error } after a failure
 
 local function publish()
@@ -581,10 +660,33 @@ function voicemodels.missing(groups)
     return list
 end
 
+--- The missing packages of `groups` the user installed before: an app
+-- update pinned new files for them (a newer model). Default: the listening
+-- models.
+function voicemodels.outdated(groups)
+    local s = readState()
+    local list = {}
+    for _, p in ipairs(voicemodels.missing(groups)) do
+        if s.packages[p.id] then
+            list[#list + 1] = p
+        end
+    end
+    return list
+end
+
 --- Every package of `groups` is installed (the stand-in engine for tests
 -- needs none). Default: the listening models.
 function voicemodels.installed(groups)
     return #voicemodels.missing(groups) == 0
+end
+
+--- The turn-taking model is installed (the engine loads it with the
+-- listening models; voice.lua asks it when you're done).
+function voicemodels.deciderReady()
+    if voicemodels.engine().test then
+        return false
+    end
+    return voicemodels.installed("decide")
 end
 
 --- Replies can be spoken with Turbo (Baldr): its model is in (on the GPU
@@ -670,6 +772,15 @@ function voicemodels.configure()
     settings.voiceprintsDir = gitgud.localDataPath(ROOT .. "/voiceprints")
     settings.workDir = gitgud.localDataPath(ROOT .. "/work")
     settings.files = engineFiles(voicemodels.packages("listen"))
+    settings.deciderModel = ""
+    settings.deciderVocab = ""
+    if voicemodels.deciderReady() then
+        settings.deciderModel = path(byId.decide, "model.int8.onnx")
+        settings.deciderVocab = path(byId.decide, "vocab.txt")
+        for _, f in ipairs(engineFiles(voicemodels.packages("decide"))) do
+            settings.files[#settings.files + 1] = f
+        end
+    end
     local gpu = voicemodels.installed("gpu")
     if gpu then
         settings.gpuDir = gitgud.localDataPath(ROOT .. "/gpu")
@@ -697,14 +808,17 @@ end
 -- Installing
 
 --- { phase = idle|download|verify|unpack|copy|patch|check|done|failed,
--- group, package, done, total, left, index, count, error, note }: done and
--- total are bytes (downloaded, hashed, read by the unpacker, copied,
--- patched); left is the milliseconds to go, once there's a rate.
+-- group, package, done, total, left, index, count, error, note, update }:
+-- done and total are bytes (downloaded, hashed, read by the unpacker,
+-- copied, patched); left is the milliseconds to go, once there's a rate;
+-- update: the install brings back what an app update replaced
+-- (voicemodels.update), not models the user hadn't had.
 function voicemodels.state()
     return state
 end
 
 local function set(fields)
+    fields.update = fields.group ~= nil and refreshing or nil
     state = fields
     publish()
 end
@@ -828,6 +942,13 @@ local function packDone()
     voicemodels.ensureBaldr()
 end
 
+--- After the turn-taking model: the engine loads it with the listening
+-- models, the next time listening starts.
+local function deciderDone()
+    voicemodels.configure()
+    set({ phase = "done", group = state.group, note = "Installed. Bragi uses it the next time listening starts." })
+end
+
 -- Put an unpacked package in place: staging/<id>/<dir> -> models/<id>.
 local function placeUnpacked(p, from)
     gitgud.localDataRemove(packageDir(p))
@@ -879,7 +1000,7 @@ local function progressFor(p, index, count)
             return
         end
         state = { phase = phase, group = state.group, package = p, done = done, total = total, left = left,
-            index = index, count = count }
+            index = index, count = count, update = state.update }
         publish()
     end
 end
@@ -1065,25 +1186,34 @@ local function busy()
     return state.phase ~= "idle" and state.phase ~= "done" and state.phase ~= "failed"
 end
 
--- The finish for a set of groups: the listening models' self test, or the
--- pack's note.
-local function finisher(groups)
-    return groupSet(groups).listen and selfTest or packDone
-end
-
--- Which card shows an install of `groups`.
+-- Which install `groups` is (the turn-taking model on its own, "decide",
+-- shows in the listening models' card).
 local function installGroup(groups)
     local set = groupSet(groups)
-    return set.listen and "listen" or (set.gpu and "gpu" or "turbo")
+    if set.listen then
+        return "listen"
+    elseif set.gpu then
+        return "gpu"
+    end
+    return (set.decide and not set.turbo) and "decide" or "turbo"
 end
 
---- Download what's missing of `groups` (default "listen"; Baldr's model is
--- "turbo", the GPU libraries with it { "gpu", "turbo" }), the user having
--- said yes, then check it.
-function voicemodels.install(groups)
+-- The finish for a set of groups: the listening models' self test, the
+-- turn-taking model's note, or the pack's.
+local function finisher(groups)
+    if groupSet(groups).listen then
+        return selfTest
+    end
+    return installGroup(groups) == "decide" and deciderDone or packDone
+end
+
+-- Download what's missing of `groups`, then check it. `update`: it brings
+-- back what an app update replaced (voicemodels.update).
+local function fetchMissing(groups, update)
     if busy() then
         return
     end
+    refreshing = update == true
     local list = voicemodels.missing(groups)
     local group = installGroup(groups)
     if #list == 0 then
@@ -1091,6 +1221,39 @@ function voicemodels.install(groups)
         return
     end
     each(list, group, fetchOne, finisher(groups))
+end
+
+--- Download what's missing of `groups` (default "listen"; Baldr's model is
+-- "turbo", the GPU libraries with it { "gpu", "turbo" }), the user having
+-- said yes, then check it.
+function voicemodels.install(groups)
+    fetchMissing(groups, false)
+end
+
+--- Bring back what an app update replaced (default the listening models):
+-- only when every missing package was installed before, so nothing comes
+-- in that the user hasn't said yes to. True when it started, or is going.
+function voicemodels.update(groups)
+    if busy() then
+        return state.group == installGroup(groups)
+    end
+    local outdated = voicemodels.outdated(groups)
+    if #outdated == 0 or #outdated < #voicemodels.missing(groups) then
+        return false
+    end
+    fetchMissing(groups, true)
+    return true
+end
+
+--- An update of `groups` (default the listening models) is going.
+function voicemodels.updating(groups)
+    return busy() and state.update == true and state.group == installGroup(groups)
+end
+
+--- An install of `groups` (default the listening models) is going: a
+-- first one, an update, or a check.
+function voicemodels.installing(groups)
+    return busy() and state.group == installGroup(groups)
 end
 
 local function joinPath(folder, ...)
@@ -1194,6 +1357,7 @@ function voicemodels.installFrom(folder, groups)
     if busy() or type(folder) ~= "string" or folder == "" then
         return
     end
+    refreshing = false
     local found, list = {}, {}
     for _, p in ipairs(voicemodels.missing(groups)) do
         local where = findIn(folder, p)
@@ -1282,12 +1446,13 @@ function voicemodels.check()
     if busy() then
         return
     end
+    refreshing = false
     selfTest()
 end
 
 --- Remove a group (default "listen": the listening models, the engine's
--- files and downloads in progress too; "turbo": Baldr's model; "gpu": the
--- GPU libraries).
+-- files and downloads in progress too, and the turn-taking model, in the
+-- same folder; "turbo": Baldr's model; "gpu": the GPU libraries).
 function voicemodels.remove(group)
     if busy() then
         return
@@ -1300,7 +1465,7 @@ function voicemodels.remove(group)
         gitgud.localDataRemove(STAGING)
         gitgud.localDataRemove(DOWNLOADS)
         gitgud.localDataRemove(ROOT .. "/work")
-        for _, p in ipairs(voicemodels.packages("listen")) do
+        for _, p in ipairs(voicemodels.packages({ "listen", "decide" })) do
             s.packages[p.id] = nil
         end
     else
@@ -1489,19 +1654,22 @@ local function progressRows(rows, s)
     end
 end
 
+-- The listening models with the turn-taking model, which comes with them.
+local WITH_DECIDE = { "listen", "decide" }
+
 local function listenCard(opts)
     local s = state
     local rows = {}
-    local working = busy() and s.group == "listen"
-    local missing = voicemodels.missing()
+    local working = busy() and (s.group == "listen" or s.group == "decide")
     local card = { heading = "Voice models", rows = rows }
     if working then
         progressRows(rows, s)
-        rows[1].title = "Installing the voice models"
+        rows[1].title = s.group == "decide" and "Installing the turn-taking model" or "Installing the voice models"
         card.progress = true
-    elseif #missing > 0 then
+    elseif #voicemodels.missing() > 0 then
+        local missing = voicemodels.missing(WITH_DECIDE)
         local where = gitgud.localDataPath(ROOT)
-        local partly = #missing < #voicemodels.packages("listen")
+        local partly = #missing < #voicemodels.packages(WITH_DECIDE)
         rows[#rows + 1] = { kind = "info", title = partly and "Some voice models are missing" or "Voice models",
             sub = "Bragi hears you with speech models that run on this computer: nothing you say leaves it. "
                 .. "They're about " .. voicemodels.size(voicemodels.downloadBytes(missing)) .. " to download and "
@@ -1517,10 +1685,10 @@ local function listenCard(opts)
             sub = voicemodels.size(voicemodels.downloadBytes(missing)) .. ", from the models' publishers.",
             button = s.phase == "failed" and s.group == "listen" and "Try again" or "Download", primary = true,
             run = function()
-                voicemodels.install("listen")
+                voicemodels.install(WITH_DECIDE)
             end }
         rows[#rows + 1] = { kind = "action", title = "Install from a folder",
-            sub = "The same files, downloaded already.", button = "Choose folder", run = pickFolder("listen") }
+            sub = "The same files, downloaded already.", button = "Choose folder", run = pickFolder(WITH_DECIDE) }
     else
         local sub = (s.phase == "done" and s.group == "listen") and "Installed and checked: every model loaded and ran."
             or "Installed in " .. gitgud.localDataPath(MODELS) .. "."
@@ -1528,16 +1696,30 @@ local function listenCard(opts)
             sub = "The check didn't pass: " .. tostring(s.error) .. "."
         end
         rows[#rows + 1] = { kind = "info", title = "Voice models", sub = sub }
+        -- Listening models from before the turn-taking model came with them.
+        local decide = voicemodels.missing("decide")
+        if #decide > 0 then
+            local failed = s.phase == "failed" and s.group == "decide"
+            rows[#rows + 1] = { kind = "action", title = "Turn-taking model, " .. voicemodels.size(decide[1].size),
+                sub = failed and "The last try didn't finish: " .. tostring(s.error) .. "."
+                    or decide[1].about .. " Without it, Bragi waits a few seconds once you seem done.",
+                button = failed and "Try again" or "Download", run = function()
+                    voicemodels.install("decide")
+                end }
+        elseif s.phase == "done" and s.group == "decide" then
+            rows[#rows + 1] = { kind = "info", title = "Turn-taking model", sub = s.note }
+        end
         if opts.settings then
             rows[#rows + 1] = { kind = "action", title = "Check them",
                 sub = "Load and run every model once.", button = "Check", run = voicemodels.check }
             rows[#rows + 1] = { kind = "action", title = "Repair",
                 sub = "Remove them and download them again.", button = "Repair", run = function()
                     voicemodels.remove("listen")
-                    voicemodels.install("listen")
+                    voicemodels.install(WITH_DECIDE)
                 end }
+            local installed = voicemodels.packages(#decide == 0 and WITH_DECIDE or "listen")
             rows[#rows + 1] = { kind = "action", title = "Remove them",
-                sub = "Frees " .. voicemodels.size(voicemodels.diskBytes()) .. ". Voice is off without them.",
+                sub = "Frees " .. voicemodels.size(voicemodels.diskBytes(installed)) .. ". Voice is off without them.",
                 button = "Remove", run = function()
                     voicemodels.remove("listen")
                 end }
@@ -1790,15 +1972,16 @@ end
 -- ---------------------------------------------------------------------
 -- Words
 
---- The credits: the listening models, and Baldr's and the GPU libraries'
--- when they're in.
+--- The credits: the listening models, and the turn-taking model's, Baldr's,
+-- and the GPU libraries' when they're in.
 -- { { title, line, link }, ... }.
 function voicemodels.credits()
     local out = {}
     local turbo = voicemodels.installed("turbo")
     local gpu = voicemodels.installed("gpu")
+    local decide = voicemodels.installed("decide")
     for _, p in ipairs(voicemodels.PACKAGES) do
-        if p.group == "listen" or (turbo and p.group == "turbo") then
+        if p.group == "listen" or (turbo and p.group == "turbo") or (decide and p.group == "decide") then
             out[#out + 1] = {
                 title = p.title,
                 line = p.model .. ", by " .. p.credit .. ", under the " .. p.licence .. " license ("

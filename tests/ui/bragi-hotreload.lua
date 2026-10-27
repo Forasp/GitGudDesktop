@@ -4,7 +4,8 @@
 -- The harness runs this script again after every reload (like main.lua),
 -- so it goes in phases, carried across with gitgud.keepForReload:
 --
---   1  voice listening (a stub backend), Bragi (the master conversation)
+--   1  voice listening (a stub backend, with the turn-taking model), Bragi
+--      (the master conversation)
 --      answered once, a turn that never ends ("wait") in a conversation of
 --      another project, a turn running ("work") in one conversation and a
 --      permission card waiting ("tool") in another; then a reload asked
@@ -12,10 +13,12 @@
 --   2  the same session processes, every conversation back (Bragi still
 --      Bragi, the other project's still in its folder), the card
 --      answerable, the turn finishing where it was, a new message reaching
---      the same session, voice still listening, its helpers the same
---      processes; then two resource files rewritten half a second apart
+--      the same session, voice still listening with the model (`ready`
+--      isn't sent again), its helpers the same processes; then a message
+--      being heard, and two resource files rewritten half a second apart
 --   3  one reload for both (the watcher waits for the files to settle),
---      the sessions still the same
+--      the sessions still the same, the message still being heard and the
+--      model asked about it again
 --
 -- Run it like bragi-agent.lua (GITGUD_UI=bragi, scratch APPDATA and
 -- LOCALAPPDATA, a repository from make-testrepo.ps1, GITGUD_SCRIPT,
@@ -56,6 +59,8 @@ end
 local listening = state.listening == true
 -- Whether a speech engine is there (none is built in yet).
 local engineOn = true
+-- The turn-taking model's requests since this run of the script.
+local decided = {}
 voice.backend = {
     available = function()
         return engineOn
@@ -71,6 +76,10 @@ voice.backend = {
         return true
     end,
     lookback = function()
+        return true
+    end,
+    decide = function(request)
+        decided[#decided + 1] = request
         return true
     end,
     speak = function()
@@ -188,7 +197,7 @@ if state.phase == 1 then
         shell.show("agent")
         if voice.state() == "off" then
             voice.toggle()
-            gitgud.emit("voice.ready", "{}")
+            gitgud.emit("voice.ready", gitgud.jsonEncode({ decider = true }))
         end
     end)
     step(500, "Bragi", function()
@@ -267,6 +276,7 @@ elseif state.phase == 2 then
         local card = tool and lastOf(tool, "permission")
         check("the permission card is back, waiting", card ~= nil and card.answer == nil and card.requestId ~= nil)
         check("voice still listens", voice.state() == "listening")
+        check("with the turn-taking model", voice.guard.decider == true)
         local same = true
         for name, p in pairs(state.helpers) do
             same = same and pid(name) == p
@@ -300,6 +310,11 @@ elseif state.phase == 2 then
         state.phase = 3
         state.reloads = 0
         keepState()
+        -- A message being heard across the reload (the model is asked about
+        -- it before, and must be again after).
+        gitgud.emit("voice.wake", gitgud.jsonEncode({ id = "hr1", t = 0 }))
+        gitgud.emit("voice.partial", gitgud.jsonEncode({ id = "hr1", text = "Is the build done", t = 500 }))
+        gitgud.emit("voice.vad", gitgud.jsonEncode({ speaking = false, t = 600 }))
         check("a layout rewritten", touch("layouts/bragi/chrome.xml"))
     end)
     step(500, "and a script", function()
@@ -315,7 +330,16 @@ elseif state.phase == 3 then
     step(300, "after the file reload", function()
         check("the sessions are still the same", pid(state.work) == state.workPid and pid(state.tool) == state.toolPid)
         check("both conversations came back again", tabOf(state.work) ~= nil and tabOf(state.tool) ~= nil)
-        check("voice still listens", voice.state() == "listening")
+        check("voice still hears the message", voice.state() == "hearing")
+        check("with the turn-taking model", voice.guard.decider == true)
+    end)
+    step(1500, "the model is asked about it again", function()
+        local last = decided[#decided]
+        check("asked after the reload", last ~= nil and tostring(last.second):find("Is the build done", 1, true) ~= nil)
+        gitgud.emit("voice.cancelled", gitgud.jsonEncode({ id = "hr1" }))
+    end)
+    step(300, "the message dropped", function()
+        check("voice listens again", voice.state() == "listening")
     end)
     step(4000, "one reload for both files", function()
         check("one reload, not one per file", state.reloads == 1)

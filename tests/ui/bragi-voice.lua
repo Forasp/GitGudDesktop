@@ -1063,7 +1063,18 @@ step(200, "more speech cancels the wait", function()
     emit("pause", { id = "m5", text = "check the build again", t = 43 })
 end)
 
-step(3500, "the wait ran out", function()
+-- A message decoded again as it grows corrects words in a pause: that
+-- isn't more speech.
+step(1500, "the wait starts again", function()
+    check("the done wait shows again", status():find("Sounds done", 1, true) ~= nil)
+    emit("partial", { id = "m5", text = "Check the build again.", t = 43.2, speechEnd = 43000 })
+end)
+
+step(200, "a corrected decode keeps the wait", function()
+    check("the wait goes on through a correction", status():find("Sounds done", 1, true) ~= nil)
+end)
+
+step(2500, "the wait ran out", function()
     local sends = called("send")
     check("ended with reason done", #sends == 2 and sends[2].reason == "done")
     check("only after the wait", #sends == 2)
@@ -1674,48 +1685,48 @@ step(200, "the follow-up time typed", function()
     check("kept to 30", voice.followUpSeconds() == 30)
     settings.set("bragi.followUpSeconds", "")
     -- How often Bragi speaks its updates, under narration
-    -- (3 seconds to 2 minutes, 10 by default), on a slider: 1-second stops
-    -- up to 10, then 5 seconds. This run's own interval (3, set at the top)
-    -- shows.
+    -- (as it happens by default, or 3 seconds to 2 minutes), on a slider:
+    -- 0, then 1-second stops from 3 to 10, then 5 seconds. This run's own
+    -- interval (3, set at the top) shows.
     local s = require("bragi.settings")
     check("a spoken updates row", gitgud.getText(s.widget(4, 6, "Title")) == "Spoken updates every"
         and gitgud.getText(s.widget(4, 6, "Value")) == "3 s" and s.updateSeconds() == 3)
     check("it says what it's for", (gitgud.getText(s.widget(4, 6, "Sub")) or ""):find("Time between updates", 1, true)
         ~= nil)
     local stops = s.sliderValues(s.UPDATE_SECONDS)
-    check("its stops: 3 to 10 by 1, then by 5 to 120 (" .. table.concat(stops, " ") .. ")", #stops == 30
-        and stops[1] == 3 and stops[8] == 10 and stops[9] == 15 and stops[30] == 120)
-    check("the thumb at the start", thumbAt(s) == 0)
+    check("its stops: 0, 3 to 10 by 1, then by 5 to 120 (" .. table.concat(stops, " ") .. ")", #stops == 31
+        and stops[1] == 0 and stops[2] == 3 and stops[9] == 10 and stops[10] == 15 and stops[31] == 120)
+    check("the thumb at 3", thumbAt(s) == 1)
     -- Pressing on the track moves the thumb there (arrives on the next drain).
-    gitgud.emit(s.widget(4, 6, "Slider") .. ".dragStarted", updatesStop(s, 2))
+    gitgud.emit(s.widget(4, 6, "Slider") .. ".dragStarted", updatesStop(s, 3))
 end)
 
 step(200, "pressed on the second stop", function()
     local s = require("bragi.settings")
     check("4 s, saved", settings.get("bragi.updateSeconds", "") == "4" and s.updateSeconds() == 4
         and gitgud.getText(s.widget(4, 6, "Value")) == "4 s")
-    check("the thumb moved one stop", thumbAt(s) == 1)
-    gitgud.emit(s.widget(4, 6, "Slider") .. ".dragging", updatesStop(s, 8))
+    check("the thumb moved one stop", thumbAt(s) == 2)
+    gitgud.emit(s.widget(4, 6, "Slider") .. ".dragging", updatesStop(s, 9))
 end)
 
 step(200, "dragged to 10", function()
     local s = require("bragi.settings")
     check("10 s", settings.get("bragi.updateSeconds", "") == "10" and gitgud.getText(s.widget(4, 6, "Value")) == "10 s")
-    gitgud.emit(s.widget(4, 6, "Slider") .. ".dragging", updatesStop(s, 9))
+    gitgud.emit(s.widget(4, 6, "Slider") .. ".dragging", updatesStop(s, 10))
 end)
 
 step(200, "one stop past 10", function()
     local s = require("bragi.settings")
     check("15 s: 5-second steps from 10", settings.get("bragi.updateSeconds", "") == "15"
-        and gitgud.getText(s.widget(4, 6, "Value")) == "15 s" and thumbAt(s) == 8)
+        and gitgud.getText(s.widget(4, 6, "Value")) == "15 s" and thumbAt(s) == 9)
     local x, y = gitgud.getRect(s.widget(4, 6, "Slider"))
     gitgud.emit(s.widget(4, 6, "Slider") .. ".dragging", math.floor(x - 60) .. "," .. math.floor(y + 20))
 end)
 
 step(200, "dragged past the start", function()
     local s = require("bragi.settings")
-    check("3 s, the shortest", settings.get("bragi.updateSeconds", "") == "3" and s.updateSeconds() == 3
-        and thumbAt(s) == 0)
+    check("0: as it happens", settings.get("bragi.updateSeconds", "") == "0" and s.updateSeconds() == 0
+        and thumbAt(s) == 0 and gitgud.getText(s.widget(4, 6, "Value")) == "As it happens")
     local x, y, w = gitgud.getRect(s.widget(4, 6, "Slider"))
     gitgud.emit(s.widget(4, 6, "Slider") .. ".dragging", math.floor(x + w + 60) .. "," .. math.floor(y + 20))
 end)
@@ -1724,16 +1735,16 @@ step(200, "dragged past the end", function()
     local s = require("bragi.settings")
     check("120, the longest", settings.get("bragi.updateSeconds", "") == "120" and s.updateSeconds() == 120)
     check("shown as 2 min", gitgud.getText(s.widget(4, 6, "Value")) == "2 min")
-    check("the thumb at the end", thumbAt(s) == 29)
+    check("the thumb at the end", thumbAt(s) == 30)
     gitgud.emit(s.widget(4, 6, "Slider") .. ".dragEnded", "0,0")
     -- Set elsewhere (by voice) between two stops: kept as said, the thumb
     -- at the nearest stop.
     settings.set("bragi.updateSeconds", "33")
     s.rebuild("appearance")
     check("33 shows as 33 s", gitgud.getText(s.widget(4, 6, "Value")) == "33 s" and s.updateSeconds() == 33)
-    check("its thumb at 35, the nearest stop", thumbAt(s) == 12)
+    check("its thumb at 35, the nearest stop", thumbAt(s) == 13)
     settings.set("bragi.updateSeconds", "abc")
-    check("not a number is the default", s.updateSeconds() == 10)
+    check("not a number is the default, as it happens", s.updateSeconds() == 0)
     settings.set("bragi.updateSeconds", 3) -- this run's, for the updates further on
     s.rebuild("appearance")
     check("back to 3", gitgud.getText(s.widget(4, 6, "Value")) == "3 s")
@@ -2999,7 +3010,8 @@ step(500, "filler, its echo, and someone else are ignored", function()
     check("someone else ignored", followUpLines({ '"ignored":"not you"' }) == 1)
     check("nothing sent", last("user").text == "should I go ahead?")
     usersBefore = count("user")
-    emit("ambient", { text = "Yes, go ahead with it.", t0 = 457, t1 = 458, speaker = "user" })
+    -- Not scored ("unknown", too short to tell): theirs, as for a card.
+    emit("ambient", { text = "Yes, go ahead with it.", t0 = 457, t1 = 458, speaker = "unknown" })
 end)
 
 step(2500, "the answer is the next message, without the wake word", function()
@@ -3054,6 +3066,13 @@ end)
 step(2500, "asked once more", function()
     check("its summary was said", spoken("Summary: ") ~= nil
         and spoken("Summary: ").text == "Summary: You said: shall I push it?")
+    -- A wake while it plays, dropped (its own voice): the window it will
+    -- open isn't lost.
+    emit("wake", { id = "w5", t = 471.5, t0 = 471.5 })
+    emit("cancelled", { id = "w5" })
+end)
+
+step(200, "it finishes playing", function()
     spoken("Summary: ", true)
 end)
 
@@ -3384,6 +3403,50 @@ step(2500, "Enter sent what was typed", function()
     local mine = last("user")
     check("the box's text was sent", mine ~= nil and (mine.text or ""):find("fixed by hand", 1, true) ~= nil)
     emit("cancelled", { id = "t2" })
+    -- A growing message whose last decode lost words: the live text goes.
+    emit("wake", { id = "g1", t = 220, t0 = 220 })
+    emit("message", { id = "g1", text = "fix the", live = "fix the parser tests now", finalOk = true,
+        endedBy = "button", t0 = 220, t1 = 223 })
+end)
+
+step(2500, "the live text stood in for a short final", function()
+    check("the fallback is logged", logged('"final":"fix the"'))
+    local mine = last("user")
+    check("the live text was sent", mine ~= nil and mine.text == "fix the parser tests now")
+    -- A last decode that failed: the live text goes too.
+    emit("wake", { id = "g2", t = 230, t0 = 230 })
+    emit("message", { id = "g2", text = "", live = "and run them twice", finalOk = false,
+        endedBy = "button", t0 = 230, t1 = 232 })
+end)
+
+step(2500, "the live text stood in for a failed final", function()
+    local mine = last("user")
+    check("the live text was sent after a failed decode", mine ~= nil and mine.text == "and run them twice")
+    -- A good last decode is taken as it is.
+    emit("wake", { id = "g3", t = 240, t0 = 240 })
+    emit("message", { id = "g3", text = "Fix the froggy tests.", live = "fix the doggy tests", finalOk = true,
+        endedBy = "button", t0 = 240, t1 = 242 })
+end)
+
+step(2500, "a good final is taken", function()
+    local mine = last("user")
+    check("the last decode was sent", mine ~= nil and mine.text == "Fix the froggy tests.")
+    -- Passes over the whole recording that heard less than its utterances
+    -- did: the utterances' texts show, and go.
+    emit("wake", { id = "g4", t = 250, t0 = 250 })
+    emit("partial", { id = "g4", text = "", utterances = "run the parser tests twice", t = 251 })
+end)
+
+step(200, "the utterances show when a pass heard less", function()
+    check("the utterances' text is shown", prompt() == "run the parser tests twice")
+    emit("message", { id = "g4", text = "", live = "", utterances = "run the parser tests twice", finalOk = true,
+        endedBy = "button", t0 = 250, t1 = 252 })
+end)
+
+step(2500, "the utterances stood in for an empty final", function()
+    check("the fallback names the utterances", logged('"took":"utterances"'))
+    local mine = last("user")
+    check("the utterances' text was sent", mine ~= nil and mine.text == "run the parser tests twice")
 end)
 
 step(500, "done", function()

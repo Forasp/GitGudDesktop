@@ -164,6 +164,33 @@ function text.ago(timestamp)
     return os.date("%Y-%m-%d", timestamp)
 end
 
+--- Seconds since the epoch of an ISO-8601 time ("2026-10-18T19:00:00Z", or
+-- with an offset), or nil. Counted from the date itself: os.time reads its
+-- fields as local time, and a UTC offset taken from it is an hour out during
+-- daylight saving.
+function text.isoTime(s)
+    local y, mo, d, h, mi, sec, rest = tostring(s or ""):match("^(%d+)%-(%d+)%-(%d+)T(%d+):(%d+):(%d+)(.*)$")
+    if not y then
+        return nil
+    end
+    y, mo, d = tonumber(y), tonumber(mo), tonumber(d)
+    -- Days since 1970-01-01 (the civil calendar, March-based years).
+    if mo <= 2 then
+        y = y - 1
+    end
+    local era = math.floor(y / 400)
+    local yoe = y - era * 400
+    local doy = math.floor((153 * ((mo + 9) % 12) + 2) / 5) + d - 1
+    local doe = yoe * 365 + math.floor(yoe / 4) - math.floor(yoe / 100) + doy
+    local t = (era * 146097 + doe - 719468) * 86400 + tonumber(h) * 3600 + tonumber(mi) * 60 + tonumber(sec)
+    local sign, oh, om = rest:match("([%+%-])(%d%d):?(%d%d)$")
+    if sign then
+        local offset = tonumber(oh) * 3600 + tonumber(om) * 60
+        t = sign == "+" and t - offset or t + offset
+    end
+    return t
+end
+
 --- Split a commit message into its summary line and the body after it.
 -- @param message  full commit message
 -- @return summary, body (body has no leading blank lines)

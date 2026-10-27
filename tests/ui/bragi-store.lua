@@ -33,9 +33,9 @@ local wiki = require("bragi.wiki")
 local function shot(name)
     gitgud.screenshot(OUT .. "/store-" .. name .. ".png")
 end
-local function clickWidget(name)
+local function clickWidget(name, button)
     local x, y, w, h = gitgud.getRect(name)
-    gitgud.simulateClick(x + w / 2, y + h / 2, "left")
+    gitgud.simulateClick(x + w / 2, y + h / 2, button or "left")
 end
 local function visible(name)
     return gitgud.getProperty(name, "Visible") == "true"
@@ -504,11 +504,11 @@ step(200, "a card's menu", function()
             break
         end
     end
-    clickWidget(name)
+    clickWidget(name, "right")
 end)
 
 step(300, "menu open", function()
-    check("clicking a card opens its menu", visible("MenuPanel"))
+    check("right-clicking a card opens its menu", visible("MenuPanel"))
     shot("03-card-menu")
     gitgud.emit("key", "escape")
 end)
