@@ -11,10 +11,12 @@
 -- takes what's new (updates.take) and the narrator makes one line of it.
 --
 -- A step is { kind = "thinking", text }, { kind = "tool", name, summary,
--- description, starting, plan }, or { kind = "reply", text }: a small piece of
+-- description, starting, plan }, { kind = "reply", text }: a small piece of
 -- news that waits for the next update instead of cutting in
 -- (a background task's report, "bragi-wiki passed", from
--- bragi/master.lua). Streamed pieces of one thinking block are one
+-- bragi/master.lua), or { kind = "permission", tool, summary, answer }: how a
+-- permission asked aloud was answered (allowed, refused, waiting), or a
+-- question (answered, with `choice`). Streamed pieces of one thinking block are one
 -- step (its latest MAX_CHARS kept); a tool that just started is replaced
 -- by the same tool with its input. A plan tool's `plan` is what it changed
 -- in the conversation's plan (bragi/plan.lua's plan.news). Each
@@ -50,7 +52,7 @@ end
 
 --- A step of a managed conversation.
 function updates.add(tab, step)
-    if step.kind ~= "tool" and step.kind ~= "thinking" and step.kind ~= "reply" then
+    if step.kind ~= "tool" and step.kind ~= "thinking" and step.kind ~= "reply" and step.kind ~= "permission" then
         return
     end
     local p = pending[tab]
@@ -64,6 +66,11 @@ function updates.add(tab, step)
     local prev = steps[#steps]
     if step.kind == "reply" then
         steps[#steps + 1] = { kind = "reply", text = tostring(step.text or "") }
+    elseif step.kind == "permission" then
+        -- How a permission asked aloud was answered: allowed, refused, or
+        -- waiting (left on screen).
+        steps[#steps + 1] = { kind = "permission", tool = step.tool, summary = step.summary, answer = step.answer,
+            choice = step.choice }
     elseif step.kind == "thinking" then
         if prev and prev.kind == "thinking" then
             prev.text = (prev.text .. tostring(step.text or "")):sub(-updates.MAX_CHARS)
@@ -115,7 +122,7 @@ function updates.worth()
     local chars = 0
     for _, tab in ipairs(order) do
         for _, step in ipairs(pending[tab].steps) do
-            if step.kind == "tool" or step.kind == "reply" then
+            if step.kind == "tool" or step.kind == "reply" or step.kind == "permission" then
                 return true
             end
             chars = chars + #(step.text or "")

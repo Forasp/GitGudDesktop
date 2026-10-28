@@ -9,9 +9,10 @@
 // How a message starts and ends: the wake word (spotted, or in the
 // transcript) or the app's `wake` starts one. With endBy "app" the app ends
 // it (`send`), or the closing phrase does; with endBy "engine" a pause after
-// a remark ends it too. Speech that overlaps the app's own playback can only
-// wake through the spotter (the transcript may be the app's echo). With a
-// voiceprint, speech that isn't the user's is gated out.
+// a remark ends it too. Speech counts the same whoever says it, and while a
+// reply plays too: the echo canceller keeps the reply out of the microphone.
+// With a voiceprint, what's heard is tagged with who it sounds like (the
+// message's `speaker`), never dropped for it.
 //
 // With transcribe "growing" the message's text comes from one recording
 // decoded again as it grows (speech/GrowingTranscript.h) instead of its
@@ -115,16 +116,10 @@ namespace gitgud::speech
         bool SpeechBefore(long long _iS0) const;
         // "user" or "other" for most of the message's scored speech, "" when none is.
         const char* MessageSpeaker() const;
-        // Most of `_Heard`'s words (two or more) are `_Spoken`'s.
-        static bool EchoOf(const std::string& _Heard, const std::string& _Spoken);
-        bool OverlapsPlayback(long long _iS0, long long _iS1) const;
         std::string FixText(const std::string& _Text) const;
         float ScoreSpeaker(const float* _pSamples, std::size_t _nCount, double* _pMs);
         void TagSpeaker(Segment& _Segment, float _fScore, double _fSeconds, double _fMs);
-        bool GateActive() const;
-        void CheckGate();
-        void SendVad(bool _bSpeaking, long long _iT, bool _bGated);
-        void RestoreDeadlines();
+        void SendVad(bool _bSpeaking, long long _iT);
         static app::Json SegmentJson(const Segment& _Segment);
         std::vector<float> RingSlice(long long _iFrom, long long _iTo) const;
         // Growing mode: is it on, its settings, and a decode for it that adds
@@ -174,14 +169,6 @@ namespace gitgud::speech
         bool m_bVoiced = false;
         bool m_bSpeaking = false;
         long long m_iSpeechStart = 0;
-        bool m_bGated = false;
-        int m_iGateLowRun = 0;
-        int m_iGateChecks = 0;
-        int m_iGateLows = 0;
-        long long m_iLastGateCheck = 0;
-        std::string m_SavedMsgId;
-        long long m_iSavedPause = -1;
-        long long m_iSavedClosing = -1;
         long long m_iLastPartial = 0;
         long long m_iPartialCost = 0;
         long long m_iSendCut = -1;
@@ -190,13 +177,6 @@ namespace gitgud::speech
         long long m_iLastS1 = -1;
         std::string m_LastText;
 
-        bool m_bPlaying = false;
-        long long m_iPlayStart = 0;
-        // What the replies playing now and just before say (playback's
-        // `text`): its own voice heard back is dropped (OnUtterance).
-        std::string m_PlayText;
-        std::string m_LastPlayText;
-        std::deque<std::pair<long long, long long>> m_Playback;
 
         std::deque<Segment> m_Lookback;
         Message m_Msg;

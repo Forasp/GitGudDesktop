@@ -1485,6 +1485,75 @@ TEST_CASE("SpeakSession: stopping the reply playing leaves the next one", "[voic
     CHECK(session.PlayingId() == "r2");
 }
 
+// Speech made faster than it plays: the next line's audio waits until the
+// one playing runs out, so it's reported started only when it's heard, and
+// a line dropped while it waits is never heard at all.
+TEST_CASE("SpeakSession: the next line waits until the one playing runs out", "[voice]")
+{
+    FakeVoiceEngine server;
+    server.SetOnMessage(
+        [](FakeVoiceEngine& _Server, const Received& _Message)
+        {
+            const Json message = Json::Parse(_Message.m_Data).value_or(Json());
+            const std::string& type = message["type"].AsString();
+            const std::string& id = message["id"].AsString();
+            if (type == "say")
+            {
+                _Server.SendJson(
+                    Json::Object().Set("type", "start").Set("id", id).Set("sampleRate", 24000));
+                const std::vector<int16_t> tone(480, id == "r1" ? 100 : id == "r2" ? 200 : 300);
+                _Server.SendBinary(gitgud::voice::ToBytes(tone.data(), tone.size()));
+                _Server.SendJson(Json::Object().Set("type", "end").Set("id", id));
+            }
+            else if (type == "stop")
+            {
+                _Server.SendJson(Json::Object().Set("type", "stopped").Set("id", id));
+            }
+        });
+    auto pclient = server.Links();
+    auto pspeaker = std::make_shared<FakePlayback::State>();
+    pspeaker->m_nQueued = 24000; // a second of r1 still to play
+    Events events;
+    gitgud::voice::SpeakSession session(
+        pclient, events.Sink(), std::make_unique<FakePlayback>(pspeaker));
+    const auto played = [&]()
+    {
+        std::lock_guard<std::mutex> lock(pspeaker->m_Mutex);
+        return pspeaker->m_Played;
+    };
+    session.Say("r1", "Reading the parser.", "", 24000);
+    session.Say("r2", "Now testing it.", "", 24000);
+    session.Say("r3", "The tests pass.", "", 24000);
+    REQUIRE(WaitFor([&]() { return events.OfType("end").size() == 3; }));
+
+    // All three made; only r1 is in the speaker.
+    CHECK(session.PlayingId() == "r1");
+    CHECK(events.OfType("playback").size() == 1);
+    CHECK(played().size() == 480);
+
+    // r2 dropped while it waits: nothing of it ever plays, and r1 isn't cut.
+    session.StopSpeech("r2");
+    REQUIRE(WaitFor([&]() { return !server.OfType("stop").empty(); }));
+    CHECK(pspeaker->m_iFlushes == 0);
+    CHECK(session.PlayingId() == "r1");
+
+    // r1 runs out: r3 goes in, reported started as it does.
+    pspeaker->m_nQueued = 0;
+    REQUIRE(WaitFor([&]() { return events.OfType("playback").size() == 4; }));
+    const std::vector<Json> playback = events.OfType("playback");
+    CHECK(playback[1]["state"].AsString() == "stopped");
+    CHECK(playback[1]["id"].AsString() == "r1");
+    CHECK(playback[2]["state"].AsString() == "started");
+    CHECK(playback[2]["id"].AsString() == "r3");
+    CHECK(playback[2]["text"].AsString() == "The tests pass.");
+    CHECK(playback[3]["state"].AsString() == "stopped");
+    CHECK(playback[3]["id"].AsString() == "r3");
+    const std::vector<int16_t> all = played();
+    CHECK(all.size() == 960);
+    CHECK(std::count(all.begin(), all.end(), int16_t{200}) == 0);
+    CHECK(std::count(all.begin(), all.end(), int16_t{300}) == 480);
+}
+
 TEST_CASE("Voice bindings: scripts listen and speak; events reach the bus", "[voice][lua]")
 {
     FakeVoiceEngine listenEngine;

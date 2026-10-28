@@ -1271,6 +1271,7 @@ function bragiSettings.init()
             bragiSettings.rebuild("appearance")
         end,
         micSub = "Voice listens with it. A new pick applies at once.",
+        echo = true,
     })
     for i, s in ipairs(SECTIONS) do
         local name = "SettingsNav_" .. s.id

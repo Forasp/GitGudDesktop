@@ -11,8 +11,7 @@
 //
 // What the recognizer hears is the message's audio kept only near speech the
 // listener accepted (keepBefore / keepAfter around each accepted utterance,
-// never into a rejected one: the app's own voice, another speaker, gated
-// audio). Everything else becomes quiet fill, and fill longer than gapMax is
+// never into one it rejected). Everything else becomes quiet fill, and fill longer than gapMax is
 // shortened to gapKeep, with short fades where real audio meets fill. Speech
 // itself and its margins are never cut. Speech the listener hasn't judged yet
 // (the utterance still being spoken) is heard by live passes only, and never

@@ -75,11 +75,6 @@ namespace gitgud::speech
         float m_fSpeakerMinSeconds = 0.8f;
         float m_fSpeakerUnsureBelow = 0.3f;
         float m_fSpeakerUnsureSeconds = 2.0f;
-        bool m_bSpeakerGate = true;
-        float m_fSpeakerGateBelow = 0.3f;
-        float m_fSpeakerGateWindowSeconds = 1.0f;
-        float m_fSpeakerGateEverySeconds = 0.5f;
-        int m_iSpeakerGateWindows = 2;
         float m_fEnrollMinSeconds = 10.0f;
 
         float m_fVadThreshold = 0.5f;
@@ -122,7 +117,6 @@ namespace gitgud::speech
         int m_iContextTokens = 1000;
         int m_iMessageContextTokens = 0;
         int m_iLookbackTokens = 5000;
-        float m_fPlaybackTailSeconds = 0.5f;
 
         // The fields `_Json` has, over the defaults; numbers out of range are
         // kept to it. False with `_Error` for a field of the wrong type.

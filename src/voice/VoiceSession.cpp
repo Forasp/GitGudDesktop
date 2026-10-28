@@ -663,21 +663,18 @@ namespace gitgud::voice
             stop.Set("id", _Id);
         }
         QueueText(stop);
-        // Quiet at once, not when the engine's answer arrives. An utterance
-        // still being made while the one before it plays out of the buffer
-        // only loses its own audio: the one playing finishes.
+        // Quiet at once, not when the engine's answer arrives. A line not
+        // heard yet (being made, or waiting for the one playing) only loses
+        // its own audio: the one playing finishes.
         std::lock_guard<std::mutex> lock(m_Mutex);
         if (_Id.empty() || _Id == m_CurrentId)
         {
             m_bDiscard = true;
-            if (_Id.empty() || _Id == m_PlayingId)
-            {
-                Silence();
-            }
         }
-        else if (_Id == m_PlayingId)
+        DropWaiting(_Id);
+        if (_Id.empty() || _Id == m_PlayingId)
         {
-            Silence(); // the one before it, still playing: the one being made goes on
+            Silence();
         }
     }
 
@@ -685,6 +682,44 @@ namespace gitgud::voice
     {
         std::lock_guard<std::mutex> lock(m_Mutex);
         return m_PlayingId;
+    }
+
+    std::size_t SpeakSession::HandOverSamples() const
+    {
+        return static_cast<std::size_t>(m_pPlayback->SampleRate()) * kHandOverMs / 1000;
+    }
+
+    void SpeakSession::DropWaiting(const std::string& _Id)
+    {
+        for (auto it = m_Waiting.begin(); it != m_Waiting.end();)
+        {
+            it = _Id.empty() || it->m_Id == _Id ? m_Waiting.erase(it) : std::next(it);
+        }
+    }
+
+    void SpeakSession::HandOver()
+    {
+        while (!m_Waiting.empty() &&
+               (m_PlayingId.empty() || !m_bSpeaker || m_pPlayback->Queued() <= HandOverSamples()))
+        {
+            if (!m_PlayingId.empty())
+            {
+                Emit(Message("playback").Set("state", "stopped").Set("id", m_PlayingId));
+            }
+            Waiting next = std::move(m_Waiting.front());
+            m_Waiting.pop_front();
+            m_PlayingId = next.m_Id;
+            Json started = Message("playback").Set("state", "started").Set("id", m_PlayingId);
+            if (const auto it = m_SayTexts.find(m_PlayingId); it != m_SayTexts.end())
+            {
+                started.Set("text", it->second);
+            }
+            Emit(started);
+            if (m_bSpeaker)
+            {
+                m_pPlayback->Enqueue(next.m_Samples.data(), next.m_Samples.size());
+            }
+        }
     }
 
     void SpeakSession::Silence()
@@ -723,10 +758,12 @@ namespace gitgud::voice
     void SpeakSession::OnTick()
     {
         std::lock_guard<std::mutex> lock(m_Mutex);
-        // Done once its audio has played: it ended, or the one after it was
-        // stopped before any of its audio came.
-        const bool bdone = m_PlayingId == m_CurrentId ? m_bCurrentEnded : m_bDiscard;
-        if (!m_PlayingId.empty() && bdone && (!m_bSpeaker || m_pPlayback->Queued() == 0))
+        HandOver();
+        // Done once its audio has played: it ended (or one after it started,
+        // so all of its audio is in the speaker) and the speaker ran out.
+        const bool bdone = m_PlayingId != m_CurrentId || m_bCurrentEnded;
+        if (!m_PlayingId.empty() && m_Waiting.empty() && bdone &&
+            (!m_bSpeaker || m_pPlayback->Queued() == 0))
         {
             Emit(Message("playback").Set("state", "stopped").Set("id", m_PlayingId));
             m_PlayingId.clear();
@@ -736,6 +773,7 @@ namespace gitgud::voice
     void SpeakSession::OnEnd()
     {
         std::lock_guard<std::mutex> lock(m_Mutex);
+        m_Waiting.clear();
         Silence();
         if (m_bSpeaker)
         {
@@ -767,6 +805,7 @@ namespace gitgud::voice
             {
                 m_bCurrentEnded = true;
                 m_bDiscard = true;
+                DropWaiting(id);
                 // Not heard yet: the one before it plays on.
                 if (id.empty() || id == m_PlayingId)
                 {
@@ -784,28 +823,30 @@ namespace gitgud::voice
         {
             return;
         }
-        if (m_PlayingId != m_CurrentId)
+        std::vector<int16_t> converted;
+        if (m_bSpeaker)
         {
-            if (!m_PlayingId.empty())
-            {
-                Emit(Message("playback").Set("state", "stopped").Set("id", m_PlayingId));
-            }
-            m_PlayingId = m_CurrentId;
-            Json started = Message("playback").Set("state", "started").Set("id", m_PlayingId);
-            if (const auto it = m_SayTexts.find(m_PlayingId); it != m_SayTexts.end())
-            {
-                started.Set("text", it->second);
-            }
-            Emit(started);
+            const std::vector<int16_t> samples = FromBytes(_Data);
+            m_Resampler.Process(samples.data(), samples.size(), converted);
         }
-        if (!m_bSpeaker)
+        if (m_PlayingId == m_CurrentId)
         {
+            if (m_bSpeaker)
+            {
+                m_pPlayback->Enqueue(converted.data(), converted.size());
+            }
             return;
         }
-        const std::vector<int16_t> samples = FromBytes(_Data);
-        std::vector<int16_t> converted;
-        m_Resampler.Process(samples.data(), samples.size(), converted);
-        m_pPlayback->Enqueue(converted.data(), converted.size());
+        // Held while the line before it plays, so it starts (and is
+        // reported started) only as that one runs out, and a line not heard
+        // yet can still be dropped without a sound of it.
+        if (m_Waiting.empty() || m_Waiting.back().m_Id != m_CurrentId)
+        {
+            m_Waiting.push_back({m_CurrentId, {}});
+        }
+        std::vector<int16_t>& held = m_Waiting.back().m_Samples;
+        held.insert(held.end(), converted.begin(), converted.end());
+        HandOver();
     }
 
 } // namespace gitgud::voice

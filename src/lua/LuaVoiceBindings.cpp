@@ -58,6 +58,18 @@
 //                                     start; "" or nil is the system default.
 //                                     A new speaker closes the speak channel
 //                                     (the next voiceSpeak reopens it there)
+//   gitgud.setEchoDelay(ms)        how late the speaker's sound reaches the
+//                                     microphone (0 to 1000; 0: the system's
+//                                     canceller finds the speaker itself),
+//                                     from the next time listening starts
+//   gitgud.echoTest(task, wav?, seconds?)
+//                                  -> true | nil, msg. Plays the first
+//                                     seconds of a recording (default 5), or a
+//                                     few chirps, on the chosen speaker and
+//                                     measures how late the microphone hears
+//                                     it; "<task>.done" carries {ok,
+//                                     heard, delayMs, correlation, echoDb,
+//                                     floorDb, route, error?}
 //   gitgud.micTest(on)             -> true | nil, msg. While on, the chosen
 //                                     microphone (no engine needed) reports
 //                                     "audio.level" ten times a second: its
@@ -102,17 +114,20 @@
 // the link didn't take in time, dropped oldest first), "voice.record"
 // (voiceRecord) and "voice.closed" ({code, reason}). The speak channel's are
 // "voice.speech.<type>" (start, end, stopped, error, closed). "voice.playback"
-// ({state: started|stopped, id}) is also told to the listen channel, so the
-// engine knows the app's own voice when it hears it. Local failures are
+// ({state: started|stopped, id}) is also told to the listen channel (speech
+// heard meanwhile counts like any other: the echo canceller keeps the reply
+// out of the microphone). Local failures are
 // errors with code "connect", "audio", "no-ready", or "send" (a send failed
 // on the link; the session then closes).
 // -----------------------------------------------------------------------------
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 #include "app/EventBus.h"
 #include "app/Json.h"
@@ -124,15 +139,16 @@
 #include "speech/LocalEngine.h"
 #include "speech/OnnxPatch.h"
 #include "speech/SherpaApi.h"
+#include "speech/Turbo.h"
 #include "voice/Pcm.h"
 #include "voice/VoiceSession.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <algorithm>
 #include <vector>
 
 namespace gitgud::lua::bindings
@@ -601,6 +617,75 @@ namespace gitgud::lua::bindings
             return 0;
         }
 
+        int LSetEchoDelay(lua_State* _pL)
+        {
+            platform::EchoOptions options = platform::CurrentEchoOptions();
+            const lua_Integer idelay = luaL_optinteger(_pL, 1, 0);
+            options.m_iDelayMs = static_cast<int>(std::clamp<lua_Integer>(idelay, 0, 1000));
+            platform::SetEchoOptions(options);
+            return 0;
+        }
+
+        std::atomic<bool> g_bEchoTesting{false};
+
+        int LEchoTest(lua_State* _pL)
+        {
+            const std::string task = luaL_checkstring(_pL, 1);
+            // What to play: a recording's first seconds (speech gets through
+            // microphones that filter out tones), else the chirps.
+            std::vector<int16_t> signal;
+            if (!lua_isnoneornil(_pL, 2))
+            {
+                std::vector<float> samples;
+                std::string error;
+                if (!speech::ReadWav24k(luaL_checkstring(_pL, 2), samples, error))
+                {
+                    return FailWith(_pL, error);
+                }
+                const double fseconds = luaL_optnumber(_pL, 3, 5.0);
+                const std::size_t nmax = static_cast<std::size_t>(std::max(1.0, fseconds) * 16000);
+                for (std::size_t ni = 0; ni < nmax && ni * 3 / 2 + 1 < samples.size(); ++ni)
+                {
+                    // 24 kHz to 16 kHz: every other sample of the pair between.
+                    const std::size_t nat = ni * 3 / 2;
+                    const float fvalue =
+                        (ni % 2 == 0) ? samples[nat] : 0.5f * (samples[nat] + samples[nat + 1]);
+                    signal.push_back(static_cast<int16_t>(std::clamp(fvalue, -1.0f, 1.0f) * 32767));
+                }
+            }
+            auto* pbus = Self(_pL)->EventBus();
+            if (!pbus)
+            {
+                return FailWith(_pL, "no event bus");
+            }
+            if (g_bEchoTesting.exchange(true))
+            {
+                return FailWith(_pL, "the echo test is already running");
+            }
+            // Blocks for seconds: on its own thread, the answer as an event.
+            std::thread(
+                [pbus, task, signal]()
+                {
+                    const platform::EchoMeasurement result = platform::MeasureEcho(signal);
+                    Json done = Json::Object();
+                    done.Set("ok", result.m_bOk)
+                        .Set("heard", result.m_bHeard)
+                        .Set("delayMs", result.m_fDelayMs)
+                        .Set("correlation", result.m_fCorrelation)
+                        .Set("echoDb", result.m_fEchoDb)
+                        .Set("floorDb", result.m_fFloorDb)
+                        .Set("route", result.m_Route);
+                    if (!result.m_Error.empty())
+                    {
+                        done.Set("error", result.m_Error);
+                    }
+                    g_bEchoTesting = false;
+                    pbus->Publish({task + ".done", done.Dump()});
+                })
+                .detach();
+            return Ok(_pL);
+        }
+
         int LMicTest(lua_State* _pL)
         {
             const bool bon = lua_toboolean(_pL, 1) != 0;
@@ -1025,6 +1110,8 @@ namespace gitgud::lua::bindings
         _Out.push_back({"audioDevices", LAudioDevices});
         _Out.push_back({"setAudioDevices", LSetAudioDevices});
         _Out.push_back({"micTest", LMicTest});
+        _Out.push_back({"setEchoDelay", LSetEchoDelay});
+        _Out.push_back({"echoTest", LEchoTest});
     }
 
 } // namespace gitgud::lua::bindings

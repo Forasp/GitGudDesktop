@@ -117,7 +117,7 @@
 -- agent.answerQuestion(item, choice, opts), agent.openQuestion(), agent.typedChoice(item, body),
 -- agent.choiceLabel(list, key, default), agent.pickChoice(button, list, key, default),
 -- for bragi/voice.lua: agent.voiceStatus(line, on), agent.voiceLevel(levels),
--- agent.setPrompt(text), agent.voicePending(heard), agent.dropPending(item),
+-- agent.setPrompt(text), agent.voicePending(heard), agent.rehearPending(item, heard), agent.dropPending(item),
 -- agent.waitingTitle(title), agent.warm(); for bragi/sidepanel.lua: agent.current(),
 -- agent.relayout() and "bragi.tabShown" (tab); agent.loaded() (what the last session loaded, for
 -- Settings, Claude); for bragi/quick.lua: agent.quickAnswered(item, question, answer),
@@ -486,6 +486,18 @@ local function toolSummary(name, input)
     end
     if plan.isTool(name) then
         return plan.summary(ctx.plan, name, input)
+    elseif (tostring(name):match("bragi_read_conversation$") or tostring(name):match("bragi_send$"))
+        and input.id then
+        -- A conversation by its title, not its id (the narrator says which
+        -- one it's on, and the list shows it).
+        local id = tostring(input.id)
+        local tab = agent.tabFor(id)
+        local saved = not tab and agent.savedSession(id) or nil
+        local title = (tab and tab.title) or (saved and saved.title) or ""
+        if title ~= "" then
+            return title
+        end
+        return id
     elseif input.command then
         return input.command:match("^[^\n]*")
     elseif tostring(name):match("bragi_settings_set$") and input.setting then
@@ -1968,6 +1980,15 @@ function agent.waitingTitle(title)
     if cur.waiting then
         use(cur)
         setWaiting(title)
+    end
+end
+
+--- A pending spoken message heard further (it carried on after a pause).
+function agent.rehearPending(item, heard)
+    if item and item.pending then
+        item.text = heard
+        item.dirty = true
+        agent.layoutSoon()
     end
 end
 

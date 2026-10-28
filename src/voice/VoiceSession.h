@@ -40,6 +40,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <limits>
 #include <map>
@@ -47,6 +48,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace gitgud::voice
 {
@@ -172,8 +174,8 @@ namespace gitgud::voice
         // or "done" (the app judged it finished); empty sends none.
         void SendNow(const std::string& _Reason = "");
         void Cancel();
-        // `_Text`: what the reply says (the engine drops its own voice heard
-        // back while it plays).
+        // `_Text`: what the reply says (passed on; the engine treats speech
+        // heard meanwhile like any other).
         void Playback(const std::string& _State, const std::string& _Id, const std::string& _Text = {});
         // `_iTokens` < 0 leaves the engine's default (contextTokens).
         void Lookback(const std::string& _Id, int _iTokens);
@@ -243,6 +245,9 @@ namespace gitgud::voice
       public:
         // The speaker runs at this rate; speech at other rates is resampled.
         static constexpr int kPlaybackRate = 24000;
+        // A line's audio goes into the speaker once the one before it has
+        // about this much left to play (no gap between them).
+        static constexpr int kHandOverMs = 100;
 
         SpeakSession(LinkFactory _MakeLink, OnEvent _OnEvent,
             std::unique_ptr<platform::IAudioPlayback> _pPlayback);
@@ -259,7 +264,7 @@ namespace gitgud::voice
         // Stop that utterance, or everything when `_Id` is "".
         void StopSpeech(const std::string& _Id = {});
 
-        // What is playing ("" when silent).
+        // What is playing: heard now, or about to be ("" when silent).
         std::string PlayingId() const;
 
       private:
@@ -269,6 +274,16 @@ namespace gitgud::voice
         void OnText(const app::Json& _Message) override;
         void OnBinary(const std::string& _Data) override;
         void Silence(); // m_Mutex held: drop queued audio, report stopped
+        // m_Mutex held: waiting lines start as the one playing runs out.
+        void HandOver();
+        std::size_t HandOverSamples() const;
+        void DropWaiting(const std::string& _Id); // m_Mutex held; "" drops all
+
+        struct Waiting
+        {
+            std::string m_Id;
+            std::vector<int16_t> m_Samples; // at the speaker's rate
+        };
 
         std::unique_ptr<platform::IAudioPlayback> m_pPlayback;
         bool m_bSpeaker = false;
@@ -277,7 +292,8 @@ namespace gitgud::voice
         Resampler m_Resampler;
         std::string m_CurrentId;      // the latest `start`
         std::map<std::string, std::string> m_SayTexts; // id -> text, the latest few
-        std::string m_PlayingId;      // reported as started, not yet stopped
+        std::string m_PlayingId;      // in the speaker: reported as started, not yet stopped
+        std::deque<Waiting> m_Waiting; // made, held until the one playing runs out
         bool m_bCurrentEnded = false; // its `end` or `stopped` arrived
         bool m_bDiscard = false;      // stopped here: ignore its audio
     };

@@ -418,6 +418,8 @@ exit and is never reported as a crash.
 | `voiceTestEngine(mode?)` | tests only (under `GITGUD_SCRIPT`): `"fake"` or `"fault"` swaps in a stand-in engine with a quiet microphone and speaker (`GITGUD_TEST_VOICE` does the same from the start); `nil` goes back |
 | `audioDevices()` | `{inputs = { {id, name, default}, … }, outputs = …}`: the microphones and speakers plugged in (`default`: the system's default device, the one voice opens when none is picked); empty lists where devices can't be listed |
 | `setAudioDevices(input, output)` | the devices voice opens from its next start; `""` or `nil` is the system default. One that's unplugged falls back to the default. A new speaker closes the `speak` channel; the next `voiceSpeak` plays there |
+| `setEchoDelay(ms)` | how late the speaker's sound reaches the microphone, past what the system knows (0 to 1000 ms), from the next time listening starts. Above 0, voice lines the speaker up itself: the echo canceller gets the microphone and a loopback of the speaker that much earlier (filter mode). 0: the system's canceller finds the speaker by itself |
+| `echoTest(task, wav?, seconds?)` | play the first `seconds` (default 5) of a recording (16-bit WAV), or a few chirps, on the chosen speaker while recording the microphone and the speaker's loopback, and measure how late the microphone hears it (speech gets through microphones that filter out tones); `<task>.done` carries `{ok, heard, delayMs, correlation, echoDb, floorDb, route, error?}` (`heard`: clearly enough to trust `delayMs`). `true` or `nil, msg` |
 | `micTest(on)` | the chosen microphone on its own, no engine needed: while on, `audio.level` arrives ten times a second with its level, `0` to `1` (RMS, -60 to 0 dBFS). `true` or `nil, msg` |
 
 The listen functions return `nil, "Voice input is off"` when it is.
@@ -432,7 +434,8 @@ RMS and loudest 20 ms in dBFS, `t` its end in the engine's times) and
 `voice.closed` (`{code, reason}`, last). From `speak`: `voice.speech.<type>`
 (`start`, `end`, `stopped`, `error`, `closed`). `voice.playback`
 (`{state: started|stopped, id}`) says when a reply is heard; the app tells
-the `listen` channel too, so the engine knows its own voice. Local failures
+the `listen` channel too (speech heard meanwhile counts like any other: the
+echo canceller keeps the reply out of the microphone). Local failures
 are errors with `code` `connect`, `audio`, or `no-ready`.
 
 `ready` says whether the turn-taking model loaded (`decider`, and
@@ -448,7 +451,7 @@ add `utterances` (the utterances' own texts, decoded one by one), and
 `message` adds `live` (the last partial's text), `utterances`, and
 `finalOk` (`false` when the last decode failed), so the app can fall back
 when a decode of the whole recording heard less. Only speech the engine
-kept (not its own voice, not someone else's) is heard. Its settings, all
+kept (not someone else's) is heard. Its settings, all
 in seconds unless noted: `growEverySeconds`, `growEveryLongSeconds` after
 `growLongAfterSeconds` of live buffer, `growCostFactor` (passes never more
 often than this times a pass's own time), `growHotwords` (passes biased

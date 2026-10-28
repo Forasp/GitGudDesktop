@@ -406,30 +406,11 @@ namespace gitgud::speech
         }
         else if (type == "playback")
         {
-            // Barge-in stays the app's (it gets `vad` as always). Here playback
-            // only marks speech that may be echo (OnUtterance).
+            // Told when a reply plays; speech heard meanwhile is treated like
+            // any other (the echo canceller keeps the reply out of the mic),
+            // and barge-in is the app's.
             const std::string& state = json["state"].AsString();
-            if (state == "started" && json["text"].IsString())
-            {
-                m_LastPlayText = m_PlayText;
-                m_PlayText = json["text"].AsString();
-            }
-            if (state == "started" && !m_bPlaying)
-            {
-                m_bPlaying = true;
-                m_iPlayStart = m_iNow;
-            }
-            else if (state == "stopped" && m_bPlaying)
-            {
-                m_bPlaying = false;
-                m_Playback.push_back({m_iPlayStart,
-                    m_iNow + static_cast<long long>(m_Config.m_fPlaybackTailSeconds * kRate)});
-                while (m_Playback.size() > 16)
-                {
-                    m_Playback.pop_front();
-                }
-            }
-            else if (state != "started" && state != "stopped")
+            if (state != "started" && state != "stopped")
             {
                 SendError("bad-request", "playback state must be started or stopped");
             }
@@ -797,19 +778,9 @@ namespace gitgud::speech
                 1024 + static_cast<long long>(ncount);
             m_iSpeechStart = std::max(std::max(0LL, m_iNow - iback), m_iLastS1);
             m_iLastPartial = m_iNow;
-            m_bGated = false;
-            m_iGateLowRun = m_iGateChecks = m_iGateLows = 0;
-            m_iLastGateCheck = m_iNow;
-            m_SavedMsgId = m_Msg.m_bActive ? m_Msg.m_Id : "";
-            m_iSavedPause = m_Msg.m_iPauseDeadline;
-            m_iSavedClosing = m_Msg.m_iClosingDeadline;
             m_Msg.m_iPauseDeadline = -1;
             m_Msg.m_iClosingDeadline = -1;
-            SendVad(true, m_iSpeechStart, false);
-        }
-        if (bdetected)
-        {
-            CheckGate();
+            SendVad(true, m_iSpeechStart);
         }
         if (!bdetected && m_bVoiced)
         {
@@ -817,11 +788,10 @@ namespace gitgud::speech
             if (m_bSpeaking)
             {
                 m_bSpeaking = false;
-                SendVad(false,
-                    segments.empty() ? m_iNow
-                                     : segments.back().m_iStart +
-                                           static_cast<long long>(segments.back().m_Samples.size()),
-                    false);
+                SendVad(false, segments.empty()
+                                   ? m_iNow
+                                   : segments.back().m_iStart +
+                                         static_cast<long long>(segments.back().m_Samples.size()));
             }
         }
         for (SpeechSegment& segment : segments)
@@ -860,13 +830,7 @@ namespace gitgud::speech
         CheckTimers();
     }
 
-    bool Listener::GateActive() const
-    {
-        return m_Config.m_bSpeakerGate && !m_Voiceprint.m_Vector.empty() && !m_bEnrolling &&
-               !m_bTraining;
-    }
-
-    void Listener::SendVad(bool _bSpeaking, long long _iT, bool _bGated)
+    void Listener::SendVad(bool _bSpeaking, long long _iT)
     {
         if (!_bSpeaking)
         {
@@ -874,83 +838,7 @@ namespace gitgud::speech
         }
         Json out = Json::Object();
         out.Set("type", "vad").Set("speaking", _bSpeaking).Set("t", Ms(_iT));
-        if (_bGated)
-        {
-            out.Set("gated", true);
-        }
         m_Send(out);
-    }
-
-    void Listener::RestoreDeadlines()
-    {
-        if (!m_Msg.m_bActive || m_Msg.m_Id != m_SavedMsgId)
-        {
-            return;
-        }
-        if (m_Msg.m_iPauseDeadline < 0)
-        {
-            m_Msg.m_iPauseDeadline = m_iSavedPause;
-        }
-        if (m_Msg.m_iClosingDeadline < 0)
-        {
-            m_Msg.m_iClosingDeadline = m_iSavedClosing;
-        }
-    }
-
-    // While the detector hears speech: score the newest window against the
-    // voiceprint.
-    void Listener::CheckGate()
-    {
-        if (!GateActive() || m_Config.m_fSpeakerGateEverySeconds <= 0)
-        {
-            return;
-        }
-        const long long iwindow =
-            static_cast<long long>(m_Config.m_fSpeakerGateWindowSeconds * kRate);
-        if (m_iNow - m_iLastGateCheck <
-                static_cast<long long>(m_Config.m_fSpeakerGateEverySeconds * kRate) ||
-            m_iNow - m_iSpeechStart < iwindow)
-        {
-            return;
-        }
-        m_iLastGateCheck = m_iNow;
-        const std::vector<float> audio = RingSlice(m_iNow - iwindow, m_iNow);
-        const float fscore = ScoreSpeaker(audio.data(), audio.size(), nullptr);
-        if (fscore < -1)
-        {
-            return;
-        }
-        ++m_iGateChecks;
-        const bool blow = fscore < m_Config.m_fSpeakerGateBelow;
-        if (blow)
-        {
-            ++m_iGateLows;
-            ++m_iGateLowRun;
-        }
-        else
-        {
-            m_iGateLowRun = 0;
-        }
-        if (!m_bGated && blow && m_iGateLowRun >= std::max(1, m_Config.m_iSpeakerGateWindows))
-        {
-            m_bGated = true;
-            m_bSpeaking = false;
-            RestoreDeadlines();
-            SendVad(false, m_iNow, true);
-            m_Log(Format("listen: speaker gate: not the user at %.2f s (%.2f)",
-                static_cast<double>(m_iNow) / kRate, fscore));
-        }
-        else if (m_bGated && !blow)
-        {
-            m_bGated = false;
-            m_bSpeaking = true;
-            m_iLastPartial = m_iNow;
-            m_Msg.m_iPauseDeadline = -1;
-            m_Msg.m_iClosingDeadline = -1;
-            SendVad(true, m_iNow - iwindow, false);
-            m_Log(Format("listen: speaker gate: the user again at %.2f s (%.2f)",
-                static_cast<double>(m_iNow) / kRate, fscore));
-        }
     }
 
     void Listener::OnKeyword(long long _iAt)
@@ -1018,39 +906,11 @@ namespace gitgud::speech
             _nCount -= static_cast<std::size_t>(iskip);
             _iS0 += iskip;
         }
-        // Speaker gate: speech that isn't the user's is dropped before decoding.
+        // Who it sounds like, for the message's `speaker` (never a reason to
+        // drop or hold anything).
         double fsms = 0;
         const float fscore =
             m_bEnrolling || m_bTraining ? -2 : ScoreSpeaker(_pSamples, _nCount, &fsms);
-        if (GateActive())
-        {
-            const bool bdrop = fscore >= -1 && fscore < m_Config.m_fSpeakerGateBelow;
-            m_Log(Format(
-                "listen: speaker gate: utterance %.2f-%.2f s, score %.2f, windows %d (%d low), %s",
-                static_cast<double>(_iS0) / kRate, static_cast<double>(_iS1) / kRate, fscore,
-                m_iGateChecks, m_iGateLows, bdrop ? "dropped" : "kept"));
-            if (bdrop)
-            {
-                if (m_pGrow)
-                {
-                    m_pGrow->Reject(_iS0, _iS1);
-                }
-                // As with a wake utterance without words: a message the
-                // spotter started in it goes too.
-                if (m_Msg.m_bActive && !m_Msg.m_bFromApp && m_Msg.m_Parts.empty() &&
-                    m_Msg.m_iT0 <= _iS1)
-                {
-                    m_Log("listen: wake utterance not the user's; message dropped");
-                    CancelMessage();
-                }
-                if (!m_bSpeaking)
-                {
-                    RestoreDeadlines();
-                }
-                return;
-            }
-        }
-
         double fms = 0;
         bool bok = true;
         std::string text = m_Recognizer.Recognize(_pSamples, _nCount, m_Hotwords, &fms, &bok);
@@ -1080,16 +940,7 @@ namespace gitgud::speech
         if (!bwake && m_Config.m_bTextWake && !text.empty() &&
             ContainsPhrase(FixText(text), m_WakeWord))
         {
-            // Speech overlapping playback may be the app's own voice leaking
-            // past echo cancellation: there only the spotter can wake.
-            if (OverlapsPlayback(_iS0, _iS1))
-            {
-                m_Log("listen: wake word in the transcript during playback, ignored (likely echo)");
-            }
-            else
-            {
-                bwake = true;
-            }
+            bwake = true;
         }
         if (bwake)
         {
@@ -1171,23 +1022,11 @@ namespace gitgud::speech
                 m_Log("listen: nothing recognized in the wake utterance; message dropped");
                 CancelMessage();
             }
-            else if (m_pGrow && m_Msg.m_bActive && _iS1 > m_Msg.m_iT0 &&
-                     !OverlapsPlayback(_iS0, _iS1))
+            else if (m_pGrow && m_Msg.m_bActive && _iS1 > m_Msg.m_iT0)
             {
                 // Too quiet or short to decode alone: with the message's
-                // context the growing transcript may still hear it, unless
-                // it isn't the user's (as below).
-                Segment probe{Ms(_iS0), Ms(_iS1), ""};
-                TagSpeaker(probe, fscore, static_cast<double>(_nCount) / kRate, fsms);
-                if (!m_Voiceprint.m_Vector.empty() && probe.m_Speaker == "other" &&
-                    !m_Msg.m_Parts.empty())
-                {
-                    m_pGrow->Reject(_iS0, _iS1);
-                }
-                else
-                {
-                    m_pGrow->Accept(_iS0, _iS1);
-                }
+                // context the growing transcript may still hear it.
+                m_pGrow->Accept(_iS0, _iS1);
             }
             return;
         }
@@ -1195,32 +1034,6 @@ namespace gitgud::speech
         Segment segment{Ms(_iS0), Ms(_iS1), text};
         TagSpeaker(segment, fscore, static_cast<double>(_nCount) / kRate, fsms);
 
-        // Its own reply heard back: speech overlapping playback (and its
-        // tail) whose words are the reply's, or, once the user's voice is
-        // enrolled, that isn't theirs, never joins a message
-        // (a reply that started while they talked ran into their
-        // message).
-        if (!m_bEnrolling && !m_bTraining && OverlapsPlayback(_iS0, _iS1))
-        {
-            const bool becho = EchoOf(text, m_PlayText) || EchoOf(text, m_LastPlayText);
-            const bool bother = !m_Voiceprint.m_Vector.empty() && segment.m_Speaker == "other";
-            if (becho || bother)
-            {
-                m_Log(Format("listen: utterance %.2f-%.2f s during playback is %s; dropped",
-                    static_cast<double>(_iS0) / kRate, static_cast<double>(_iS1) / kRate,
-                    becho ? "the reply's own words" : "not the user's voice"));
-                if (m_pGrow)
-                {
-                    m_pGrow->Reject(_iS0, _iS1);
-                }
-                if (m_Msg.m_bActive && !m_Msg.m_bFromApp && m_Msg.m_Parts.empty() &&
-                    m_Msg.m_iT0 <= _iS1)
-                {
-                    CancelMessage(); // a wake that was its own voice
-                }
-                return;
-            }
-        }
         m_Lookback.push_back(segment);
         PruneLookback();
 
@@ -1230,20 +1043,7 @@ namespace gitgud::speech
             StartMessage(_iS0, hits.empty() ? _iS0 : hits.front(), false);
             bstarted = true;
         }
-        // Once the user's voice is enrolled, a later utterance that isn't
-        // theirs (someone else, or its own voice) stays out of their message.
-        const bool bnotUser = !m_Voiceprint.m_Vector.empty() && segment.m_Speaker == "other" &&
-                              m_Msg.m_bActive && !m_Msg.m_Parts.empty() && !bstarted;
-        if (bnotUser)
-        {
-            m_Log(Format("listen: utterance %.2f-%.2f s isn't the user's voice; kept out of the message",
-                static_cast<double>(_iS0) / kRate, static_cast<double>(_iS1) / kRate));
-            if (m_pGrow)
-            {
-                m_pGrow->Reject(_iS0, _iS1);
-            }
-        }
-        if (m_Msg.m_bActive && _iS1 > m_Msg.m_iT0 && !bnotUser)
+        if (m_Msg.m_bActive && _iS1 > m_Msg.m_iT0)
         {
             const bool bfirst = m_Msg.m_Parts.empty() || bstarted;
             m_Msg.m_Parts.push_back(segment);
@@ -1352,47 +1152,6 @@ namespace gitgud::speech
         return false;
     }
 
-    bool Listener::EchoOf(const std::string& _Heard, const std::string& _Spoken)
-    {
-        // Most of the heard words are words of what was spoken (as the
-        // app's isEcho: 75%), with at least two of them.
-        auto words = [](const std::string& _S)
-        {
-            std::vector<std::string> out;
-            std::string word;
-            for (const char c : _S)
-            {
-                const unsigned char uc = static_cast<unsigned char>(c);
-                if (std::isalnum(uc) || c == '\'')
-                {
-                    word.push_back(static_cast<char>(std::tolower(uc)));
-                }
-                else if (!word.empty())
-                {
-                    out.push_back(word);
-                    word.clear();
-                }
-            }
-            if (!word.empty())
-            {
-                out.push_back(word);
-            }
-            return out;
-        };
-        const std::vector<std::string> heard = words(_Heard);
-        if (heard.size() < 2 || _Spoken.empty())
-        {
-            return false;
-        }
-        const std::vector<std::string> spoken = words(_Spoken);
-        std::size_t nfound = 0;
-        for (const std::string& w : heard)
-        {
-            nfound += std::find(spoken.begin(), spoken.end(), w) != spoken.end() ? 1 : 0;
-        }
-        return static_cast<double>(nfound) >= 0.75 * static_cast<double>(heard.size());
-    }
-
     const char* Listener::MessageSpeaker() const
     {
         long long iuser = 0;
@@ -1413,22 +1172,6 @@ namespace gitgud::speech
             return "";
         }
         return iuser >= iother ? "user" : "other";
-    }
-
-    bool Listener::OverlapsPlayback(long long _iS0, long long _iS1) const
-    {
-        if (m_bPlaying && _iS1 > m_iPlayStart)
-        {
-            return true;
-        }
-        for (const auto& [ifrom, ito] : m_Playback)
-        {
-            if (_iS0 < ito && _iS1 > ifrom)
-            {
-                return true;
-            }
-        }
-        return false;
     }
 
     void Listener::CheckTimers()

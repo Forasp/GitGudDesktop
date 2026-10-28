@@ -109,3 +109,75 @@ TEST_CASE("Audio endpoints: a chosen webcam unplugged", "[audio]")
     // The unplugged webcam itself can't be pointed at.
     CHECK_FALSE(EchoDeviceIndexes(kWebcam, mics, speaker, speakers, ipacked));
 }
+
+TEST_CASE("EchoTimeline: samples dated by their packets, kept until trimmed", "[audio]")
+{
+    using gitgud::platform::EchoTimeline;
+    EchoTimeline line(16000);
+    std::vector<int16_t> packet(160);
+    for (std::size_t ni = 0; ni < packet.size(); ++ni)
+    {
+        packet[ni] = static_cast<int16_t>(ni);
+    }
+    CHECK_FALSE(line.Stamped());
+    // 10 ms packets at 1 s, 1.01 s, then one without a time, then one a
+    // little late (the device's clock runs slow).
+    line.Push(packet.data(), packet.size(), 10000000);
+    line.Push(packet.data(), packet.size(), 10100000);
+    line.Push(packet.data(), packet.size(), -1);
+    line.Push(packet.data(), packet.size(), 10300100);
+    CHECK(line.Stamped());
+    CHECK(line.Begin() == 0);
+    CHECK(line.End() == 640);
+    CHECK(line.TimeOf(0) == 10000000);
+    CHECK(line.TimeOf(80) == 10050000);  // 5 ms in
+    CHECK(line.TimeOf(400) == 10250000); // the untimed packet follows the one before
+    CHECK(line.TimeOf(480) == 10300100); // the late one keeps its own time
+    CHECK(line.IndexAt(10050000) == 80);
+    CHECK(line.IndexAt(10300100) == 480);
+    CHECK(line.IndexAt(9990000) == -16); // before the first: from it, backwards
+
+    std::vector<int16_t> out;
+    line.Copy(150, 20, out);
+    REQUIRE(out.size() == 20);
+    CHECK(out[0] == 150);
+    CHECK(out[10] == 0); // the next packet starts again at 0
+    line.Copy(630, 20, out);
+    CHECK(out[9] == 159);
+    CHECK(out[10] == 0); // not come yet
+
+    line.TrimBefore(200);
+    CHECK(line.Begin() == 200);
+    CHECK(line.TimeOf(200) == 10125000); // still dated by the packet it's in
+    line.Copy(150, 60, out);
+    CHECK(out[0] == 0); // gone
+    CHECK(out[50] == 40);
+}
+
+TEST_CASE("EchoLag: how far the microphone trails what played", "[audio]")
+{
+    using gitgud::platform::EchoLag;
+    using gitgud::platform::EchoTestSignal;
+    const std::vector<int16_t> played = EchoTestSignal(16000);
+    REQUIRE(played.size() == 48000);
+    // A quiet room, then the chirps 247.5 ms late at a third of the level.
+    std::vector<int16_t> mic(played.size() + 16000, 0);
+    uint32_t useed = 12345;
+    for (int16_t& sample : mic)
+    {
+        useed = useed * 1103515245u + 12345u;
+        sample = static_cast<int16_t>(static_cast<int>((useed >> 16) % 61) - 30);
+    }
+    const std::size_t nlag = 3960;
+    for (std::size_t ni = 0; ni < played.size(); ++ni)
+    {
+        mic[ni + nlag] = static_cast<int16_t>(mic[ni + nlag] + played[ni] / 3);
+    }
+    double fcorrelation = 0;
+    CHECK(EchoLag(played, mic, 16000, &fcorrelation) == static_cast<int>(nlag));
+    CHECK(fcorrelation > 0.9);
+    // Nothing heard: no clear match.
+    std::vector<int16_t> silent(mic.size(), 0);
+    EchoLag(played, silent, 16000, &fcorrelation);
+    CHECK(fcorrelation == 0);
+}

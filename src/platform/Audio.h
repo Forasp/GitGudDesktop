@@ -123,6 +123,127 @@ namespace gitgud::platform
 
     // The devices voice uses from the next Start(); "" is the default.
     void SetAudioDevices(const std::string& _CaptureId, const std::string& _RenderId);
+
+    // How the echo canceller runs, from its next Start(): how long an echo
+    // it follows (128, 256, 512 or 1024 ms), its noise suppression, and
+    // center clipping (it mutes what's left quiet after the echo is taken
+    // out, soft words with it).
+    //
+    // `m_iDelayMs` above 0 is how late the speaker's sound reaches the
+    // microphone, past what the system knows about (a receiver, a
+    // soundbar, a long digital output: about 250 ms on one setup, where the
+    // system's canceller took out almost nothing). Voice then lines the
+    // speaker up itself: the canceller gets the microphone and a loopback
+    // of the speaker that much earlier (filter mode), with center clipping
+    // on. 0: the canceller finds the speaker by itself, as before.
+    struct EchoOptions
+    {
+        int m_iEchoLengthMs = 512;
+        bool m_bNoiseSuppression = true;
+        bool m_bCenterClip = false;
+        int m_iDelayMs = 0;
+        // Its residual echo suppression after the canceller: how many passes,
+        // 0 (off) to 2. On, it took a soundbar's echo from 6 to 22 dB below
+        // what the microphone hears, close to the room's own noise; without
+        // it the canceller alone leaves Bragi loud enough to pass for speech.
+        int m_iSuppression = 1;
+    };
+
+    void SetEchoOptions(const EchoOptions& _Options);
+    EchoOptions CurrentEchoOptions();
+
+    // The echo canceller in filter mode, on samples instead of devices:
+    // `_Mic` (what the microphone heard) with `_Reference` (what played,
+    // lined up with it), both 16 kHz mono, sample for sample. `_Out` gets
+    // the cancelled microphone. False with `_Error` where it can't run
+    // (not Windows, or the DSP refused).
+    bool CancelEcho(const std::vector<int16_t>& _Mic, const std::vector<int16_t>& _Reference,
+        const EchoOptions& _Options, std::vector<int16_t>& _Out, std::string& _Error);
+
+    // Samples stamped with the system clock (100 ns units), as a capture
+    // stream hands them over: each packet's first sample has a time, the
+    // rest follow at the rate. Lines a speaker's loopback up with the
+    // microphone. Indexes count every sample pushed; TrimBefore lets the
+    // old ones go.
+    class EchoTimeline
+    {
+      public:
+        explicit EchoTimeline(int _iRate = 16000) : m_iRate(_iRate)
+        {
+        }
+
+        // `_iTime` < 0: no time for this packet; it follows the last.
+        void Push(const int16_t* _pSamples, std::size_t _nCount, int64_t _iTime);
+        // The time of sample `_iIndex`, from the nearest stamped packet at
+        // or before it (the first one's, for an index before it).
+        int64_t TimeOf(int64_t _iIndex) const;
+        // The index of the sample heard at `_iTime` (may be outside what's
+        // kept).
+        int64_t IndexAt(int64_t _iTime) const;
+        // `_nCount` samples from `_iFrom` into `_Out` (replaced): zeros for
+        // what's gone or hasn't come yet.
+        void Copy(int64_t _iFrom, std::size_t _nCount, std::vector<int16_t>& _Out) const;
+
+        int64_t Begin() const
+        {
+            return m_iBegin;
+        }
+
+        int64_t End() const
+        {
+            return m_iBegin + static_cast<int64_t>(m_Samples.size());
+        }
+
+        bool Stamped() const
+        {
+            return !m_Anchors.empty();
+        }
+
+        void TrimBefore(int64_t _iIndex);
+
+      private:
+        struct Anchor
+        {
+            int64_t m_iIndex;
+            int64_t m_iTime;
+        };
+
+        int m_iRate;
+        int64_t m_iBegin = 0;
+        std::vector<int16_t> m_Samples;
+        std::vector<Anchor> m_Anchors;
+    };
+
+    // How far `_Mic` trails `_Reference`, in samples (0 to `_iMaxLag`):
+    // where the two match best. `_pCorrelation` (optional) says how well,
+    // 0 to 1.
+    int EchoLag(const std::vector<int16_t>& _Reference, const std::vector<int16_t>& _Mic,
+        int _iMaxLag, double* _pCorrelation);
+
+    // The echo test's sound at `_iRate`: four short chirps at uneven gaps
+    // (beeps that sweep up, so each matches its echo in one place only).
+    std::vector<int16_t> EchoTestSignal(int _iRate);
+
+    // What MeasureEcho found.
+    struct EchoMeasurement
+    {
+        bool m_bOk = false;    // it ran (else m_Error says why)
+        bool m_bHeard = false; // the microphone heard the chirps clearly
+        double m_fDelayMs = 0; // how late the speaker reaches the microphone
+        double m_fCorrelation = 0;
+        double m_fEchoDb = 0;  // the chirps in the microphone (dBFS)
+        double m_fFloorDb = 0; // the room before them (dBFS)
+        std::string m_Error;
+        std::string m_Route; // the devices it used, for the log
+    };
+
+    // Play `_Signal` (16 kHz mono; empty: EchoTestSignal) on the speaker
+    // voice uses while recording the microphone and the speaker's
+    // loopback, and measure how late the microphone hears it: the delay
+    // for EchoOptions. Blocks for the signal's length and two seconds more.
+    // Windows only. (Some microphones filter out tones: speech gets
+    // through them.)
+    EchoMeasurement MeasureEcho(const std::vector<int16_t>& _Signal = {});
     void ChosenAudioDevices(std::string& _CaptureId, std::string& _RenderId);
 
     // The endpoint voice opens: `_Chosen` while it's among `_Active` (the

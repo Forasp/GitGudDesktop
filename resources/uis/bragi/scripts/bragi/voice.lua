@@ -23,7 +23,9 @@
 -- grows, and ends the message (`send` reason "done") once it's sure.
 -- Without it, after each pause a Haiku helper judges the text so far, and
 -- when it says complete, Bragi waits bragi.endWaitSeconds (2 to 10) and
--- ends it. Anything heard in that wait cancels it.
+-- ends it. Anything heard in that wait cancels it. Speech that starts
+-- right after the model ended a message carries it on, without the wake
+-- word ("Carrying on after a pause").
 --
 -- Every heard message goes through the pre-pass filter
 -- (prompts/heard-text.md) on its own helper before anything else sees it.
@@ -73,10 +75,10 @@
 -- both. None while you talk, and only when there's something new: no "still
 -- working" filler (silence is fine), and never a line
 -- that repeats one said lately, for this message or the ones just before
--- it (guard.repeats). Once the answer text streams, no
--- snippet starts: one being made is dropped, one said but not playing yet
--- is stopped, and one playing finishes before the summary (the engine
--- plays says in order). A tool step after the text resumes narration.
+-- it (guard.repeats). Once the answer text streams, no new
+-- snippet is made: one being made is dropped, one said already plays
+-- (the answer's first words often come right after it), and the summary
+-- follows (the engine plays says in order). A tool step after the text resumes narration.
 -- News (done, failed, waiting on you) cuts in at once. bragi.narrate
 -- turns it off.
 --
@@ -98,12 +100,12 @@
 -- the message's own words or Bragi's voice. Longer messages get context
 -- only when the filter or the rules above ask.
 --
--- Bragi hearing itself (a message they'd sent popped back
--- into the prompt box): a message heard while a reply plays, or just
--- after, or in the follow-up window, that's mostly the reply or mostly
--- what was just sent, is dropped as an echo (logged). Message events
--- from a connection that's gone (before the new one's `ready`) are
--- ignored: the engine's ids (m1, m2...) start again on each.
+-- Speech heard while a reply plays is the user's: the echo canceller keeps
+-- the reply out of the microphone, so nothing is second-guessed as Bragi
+-- hearing itself (an answer in the follow-up window that's mostly the
+-- reply or what was just sent still is). Message events from a connection
+-- that's gone (before the new one's `ready`) are ignored: the engine's ids
+-- (m1, m2...) start again on each.
 --
 -- New messages don't interrupt work by default: typed
 -- ones too go through the barge-in classifier while a turn runs
@@ -119,7 +121,9 @@
 -- The reply to a spoken message is always retold for speaking
 -- (prompts/spoken-reply.md, bragi.summaryLength "short" or "medium") and
 -- spoken through `speak` while bragi.speak is on; the full text stays on
--- screen. A summary that says the reply again (echoes) is asked for once
+-- screen. A long one is told a block at a time as it streams, and one
+-- asked to be heard in full is read out ("Telling a long reply as it's
+-- written"). A summary that says the reply again (echoes) is asked for once
 -- more, strictly; if that echoes too, or the summarizer fails, the reply is
 -- cut to its first sentence or two. Every `say` carries bragi.speechSpeed
 -- as `speed`.
@@ -141,15 +145,8 @@
 -- spoken summary ready), sound (its first sound); each snippet is a
 -- "narrate" line.
 --
--- Bragi may say its own name (or "Baldr", close to it). A wake while a
--- reply plays, or just after, may be Bragi hearing itself, so it never
--- stops the reply on its own (Baldr cut itself off when
--- the spotter heard it). The reply keeps playing until the wake is
--- confirmed as you: words heard that aren't the reply's own and, once your
--- voice is enrolled (`ready` says so), your voice (the engine tags the
--- speech it has scored, on partials too). Words of what's being spoken, or
--- someone else's voice, drop the message as an echo; a wake with no words
--- is logged as `wake-ignored` and the engine cancels it. Whether the microphone is echo cancelled shows in
+-- A wake while a reply plays stops it at once (barge-in): the message that
+-- follows goes on as any other. Whether the microphone is echo cancelled shows in
 -- Settings (voice.micLine, from the "voice.mic" event), now or the last
 -- time it was on: the capture and its route are kept in bragi/voice-mic.json in
 -- the config folder, and every start logs the last one (`listen`).
@@ -389,7 +386,8 @@ local SUMMARY_FORMAT = [[
 ## How the app talks to you
 
 Each message you get is one JSON object: `{"reply": "...", "length":
-"short" | "medium"}`. Answer with the words to say only, as plain text:
+"short" | "medium"}`, often with `said`, and for a part of a long reply
+`part`, `told`, `speaking`, and `replacing`. Answer with the words to say only, as plain text:
 no JSON, no quotes, no Markdown, no tools. When it also has `"strict":
 true`, your last answer was the reply again, nearly word for word: retell
 it in your own words, shorter, the way you'd say it to a friend.]]
@@ -449,7 +447,6 @@ local voices = {}           -- the engine's voices (voice.voices)
 local voicesChecked = nil   -- gitgud.now() of the last voices list asked
 local previewCount = 0
 local ECHO_AFTER_MS = 1500   -- a wake this soon after a reply stopped may be its echo
-local ECHO_DECIDE_MS = 1500  -- no words by then: take the wake as real
 local ECHO_SHARE = 0.75      -- of the heard words found in the reply: an echo
 -- Against echoes and old connections: lastSent (what was last sent to the
 -- agent, as sent and as heard), connected (`ready` came on this
@@ -792,7 +789,16 @@ local function afterTurn(fn)
     end)
 end
 
-local BARGE_ACTIONS = { stop = true, steer = true, note = true }
+local BARGE_ACTIONS = { stop = true, steer = true, note = true, resume = true }
+
+--- A message that talks over Bragi or its work, from when it's heard until
+-- it's sent or the barge-in classifier says what it is: no narration
+-- meanwhile ("never mind" would cut it off). Given up on after JUDGING_MS.
+guard.JUDGING_MS = 15000
+function guard.judgingNow()
+    local j = guard.judging
+    return j ~= nil and gitgud.now() - j.at < guard.JUDGING_MS
+end
 
 --- Send a checked message to the agent. One that cut a reply short, or
 -- came while a turn runs, is classified first: stop, steer, or note.
@@ -800,6 +806,16 @@ local BARGE_ACTIONS = { stop = true, steer = true, note = true }
 -- @param body  its checked text
 -- @param opts  agent.send's options
 local function deliver(m, body, opts)
+    if guard.judging and guard.judging.id == m.id then
+        guard.judging = nil -- classify takes it up again
+    end
+    m.delivered = true -- what it carries on with goes after it ("Carrying on after a pause")
+    if m.readAloud then
+        guard.readAloud[m.tab or agent.current()] = true
+    end
+    if m.barge and m.route ~= "main" then
+        guard.endTelling("asked something else")
+    end
     guard.lastSent = body .. "\n" .. (m.heard or "")
     if m.tab and m.tab ~= agent.current() then
         return guard.answerElsewhere(m, body, opts)
@@ -844,6 +860,18 @@ local function deliver(m, body, opts)
         end
     end
     local running = agent.session().turn == true
+    if m.carryOn and running then
+        -- The rest of what was just sent: the turn stops, and it goes.
+        record("barge", { id = m.id, text = body, action = "steer", why = "carried on after a pause",
+            running = true })
+        agent.stop()
+        return afterTurn(function()
+            record("sent", { id = m.id, text = body, action = "steer" })
+            timing("started", { action = "steer" }, m.id)
+            agent.send(body, opts)
+            startNarration(body, m.id)
+        end)
+    end
     if not m.barge and not running then
         record("sent", { id = m.id, text = body, context = opts.context and #opts.context or nil })
         timing("started", nil, m.id)
@@ -862,8 +890,13 @@ end
 -- @param running  whether the agent's turn ran when it came
 classify = function(m, body, opts, running)
     local started = gitgud.now()
+    local judging = { id = m.id, at = started }
+    guard.judging = judging
     askHelper(barger, { spoken = m.barge and m.barge.spoken or "", said = body, running = running },
         function(reply, err)
+            if guard.judging == judging then
+                guard.judging = nil
+            end
             local answer = nil
             local first = type(reply) == "string" and reply:find("{", 1, true)
             local last = type(reply) == "string" and reply:match(".*()}")
@@ -871,6 +904,20 @@ classify = function(m, body, opts, running)
                 answer = gitgud.jsonDecode(reply:sub(first, last))
             end
             local action = type(answer) == "table" and BARGE_ACTIONS[answer.action] and answer.action or "note"
+            -- Go on with what was cut short ("never mind, keep going").
+            if action == "resume" then
+                if m.barge and guard.resumeTelling() then
+                    record("barge", { id = m.id, text = body, action = "resume", why = answer.why,
+                        running = running, ms = gitgud.now() - started })
+                    dropped(m.id)
+                    agent.dropPending(opts.pending)
+                    return
+                end
+                action = "note"
+            end
+            if m.barge then
+                guard.endTelling(action)
+            end
             -- A card waits on the user: stopping the turn would cancel it, so only
             -- a clear stop does; a change of direction waits like a note.
             local card = action == "steer" and agent.session().turn and agent.waitingCard()
@@ -1196,6 +1243,19 @@ end
 local function finish(answer, err)
     local m = active
     active = nil
+    if guard.carryWaits(m) then
+        -- They went on after the pause: it waits for what comes
+        -- ("Carrying on after a pause").
+        m.held = { answer = answer, err = err }
+        record("carry-on", { id = m.id, state = "held" })
+        return filterNext()
+    end
+    guard.finishFor(m, answer, err)
+    filterNext()
+end
+
+--- A message through the filter goes on: sent, or dropped.
+function guard.finishFor(m, answer, err)
     local elapsed = gitgud.now() - m.started
     local sent = false
     timing("filtered", { ok = answer ~= nil }, m.id)
@@ -1210,6 +1270,7 @@ local function finish(answer, err)
         record("filter", { id = m.id, heard = m.heard, answer = answer, ms = elapsed,
             context = m.context ~= "" and #m.context or 0 })
         learnFrom(answer, m.id)
+        m.readAloud = answer.read_aloud == true
         local changed = describeChanges(answer.changes)
         local unplaced, maybes = unclearOf(answer, m.heard)
         local missing = droppedWords(m.heard, answer)
@@ -1272,8 +1333,10 @@ local function finish(answer, err)
     if not sent then
         dropped(m.id)
         agent.dropPending(m.pending)
+        if m.barge then
+            guard.endTelling("not for Bragi")
+        end
     end
-    filterNext()
 end
 
 -- Words that point back at a long stretch of what was said ("did you get
@@ -1350,6 +1413,11 @@ local function onFilterAnswer(m, reply, err)
     if m ~= active then
         return
     end
+    if m.again then
+        -- It carried on while the filter checked it: checked again, all of it.
+        m.again = nil
+        return ask(m)
+    end
     if not reply then
         return finish(nil, "the filter: " .. tostring(err))
     end
@@ -1417,11 +1485,14 @@ end
 --                lookback keeps only what came before)
 -- @param to      optional { tab, question }: an answer to what that
 --                conversation (not the one shown) asked aloud goes there
+-- @return the message, as it goes through
 function voice.filter(heard, id, pending, barge, t0, to)
-    queue[#queue + 1] = { id = id or "", heard = heard, context = "", lookback = "", fetched = 0,
+    local m = { id = id or "", heard = heard, context = "", lookback = "", fetched = 0,
         started = gitgud.now(), pending = pending, barge = barge, t0 = tonumber(t0),
         short = #wordList(heard) < HEARD.SHORT_WORDS, tab = to and to.tab, question = to and to.question }
+    queue[#queue + 1] = m
     filterNext()
+    return m
 end
 
 -- ===================================================================
@@ -1498,7 +1569,7 @@ function guard.startDeciding()
             return
         end
         local now = gitgud.now()
-        if h.suspect or guard.speaking or text.trim(h.text) == "" or now - h.grewAt < decider.SETTLE_MS
+        if guard.speaking or text.trim(h.text) == "" or now - h.grewAt < decider.SETTLE_MS
             or (h.asking and now - h.asking.at < decider.WAIT_MS) then
             return
         end
@@ -2001,6 +2072,18 @@ local function onReply(reply)
         record("reply-missed", { about = tab.title })
         return
     end
+    -- Told in blocks as it streamed, or read out: the rest goes as the
+    -- last block ("Telling a long reply as it's written").
+    local read = tab and guard.readAloud[tab]
+    if tab then
+        guard.readAloud[tab] = nil
+    end
+    if tab and not guard.tellingReply(tab) and read then
+        guard.telling = { tab = tab, text = "", told = 0, parts = 0, said = {}, read = true }
+    end
+    if tab and guard.tellingReply(tab) then
+        return guard.tellRest(guard.telling, reply)
+    end
     local started = gitgud.now()
     local fields = { ms = reply.ms, quick = reply.quick }
     guard.summaryPending = started -- no update goes before it
@@ -2029,7 +2112,8 @@ local function onReply(reply)
         expectFollowUp(speak(spoken, fields), spoken, reply.tab)
     end
     local function ask(strict)
-        askHelper(summarizer, { reply = reply.text, length = summaryLength(), strict = strict },
+        askHelper(summarizer, { reply = reply.text, length = summaryLength(), strict = strict,
+            said = guard.lately(3) },
             function(short, err)
                 if short and echoes(short, reply.text) then
                     record("summary-echo", { text = short, strict = strict == true })
@@ -2070,11 +2154,13 @@ end
 -- time):
 --   0 (the default): as it happens. Something worth telling is told
 --     at once (asks at least ASK_GAP_MS apart, one at a time), also while
---     a line plays: the narrator gets that line (`speaking`) and its line
---     follows on from it. A narration line not yet playing when something
---     new comes is dropped and made again with its steps and the new ones
+--     a line plays: the narrator gets the line said just before its own
+--     (`speaking`: the one playing, or the one about to) and follows on
+--     from it. A narration line waiting behind another when something new
+--     comes is dropped and made again with its steps and the new ones
 --     (`replacing`: what it would have said), at most REWRITES times; then
---     it plays. The line playing always finishes.
+--     it plays. The line playing always finishes, and the next one up
+--     (nothing ahead of it, only being made) is never remade.
 --   3 to 120: that long after the last thing Bragi said has finished
 --     playing. Nothing new: nothing said, and it looks again an interval
 --     later.
@@ -2115,24 +2201,50 @@ end
 guard.ASK_GAP_MS = 1000 -- as it happens: the narrator asked at most this often
 guard.REWRITES = 2      -- as it happens: a line not yet said is made again at most this often
 
---- The narration line waiting to play (said, not started, not dropped;
--- not an opening line): its id and entry, or nil.
-function guard.queuedNarration()
-    local now, found, foundId = gitgud.now(), nil, nil
+--- Lines said and not heard yet (not started, not dropped, not stale),
+-- oldest first: { id, entry } each.
+local function unheard()
+    local now, out = gitgud.now(), {}
     for id, s in pairs(spokenText) do
-        if s.narration and not s.opening and not s.started and not s.dropped
-            and now - (s.at or 0) < NARRATE_STALE_MS and (not found or s.at > found.at) then
-            found, foundId = s, id
+        if not s.started and not s.dropped and now - (s.at or 0) < NARRATE_STALE_MS then
+            out[#out + 1] = { id = id, entry = s }
         end
     end
-    return foundId, found
+    table.sort(out, function(a, b)
+        return a.entry.at < b.entry.at
+    end)
+    return out
 end
 
---- The narration line playing now, or nil.
-function guard.playingNarration()
+--- The narration line that can still be made again (not an opening
+-- line): the newest one waiting behind another line, playing or about
+-- to. Its id and entry, or nil. The next one up, with nothing ahead of
+-- it, plays as soon as it's made: never remade.
+function guard.queuedNarration()
+    local waiting = unheard()
+    local last = waiting[#waiting]
+    if not last or not last.entry.narration or last.entry.opening then
+        return nil
+    end
+    if #waiting == 1 and not voice.backend.playing() then
+        return nil
+    end
+    return last.id, last.entry
+end
+
+--- The line said just before a new one: the newest not heard yet, else
+-- the one playing; never `skip` (the line the new one may replace). Its
+-- entry, or nil.
+function guard.lineAhead(skip)
+    local waiting = unheard()
+    for i = #waiting, 1, -1 do
+        if waiting[i].entry ~= skip then
+            return waiting[i].entry
+        end
+    end
     local id = voice.backend.playing()
-    local s = id and spokenText[id]
-    return s and s.narration and s or nil
+    local s = id and spokenText[id] or nil
+    return s ~= skip and s or nil
 end
 
 guard.START_WAIT_MS = 2500 -- a line not playing by then, with nothing else playing, is taken as lost
@@ -2174,7 +2286,7 @@ end
 -- streams or is being summarized, news is coming, or a permission is
 -- being asked.
 local function narrationDue(n, now)
-    if n.asking or n.answering or approval or hearing or guard.newsComing()
+    if n.asking or n.answering or approval or hearing or guard.judgingNow() or guard.newsComing()
         or (guard.summaryPending and now - guard.summaryPending < NARRATE_STALE_MS) then
         return false
     end
@@ -2389,9 +2501,9 @@ local function askNarrator(n, opts)
     n.asking = true
     n.askedAt = gitgud.now()
     -- As it happens: a line not said yet is made again with what's new, and
-    -- the new line follows on from the one playing. The line waiting stays
-    -- queued until the new one is in hand: a skip, a repeat, or a line
-    -- dropped leaves it to play.
+    -- the new line follows on from the one said just before it. The line
+    -- waiting stays queued until the new one is in hand: a skip, a repeat,
+    -- or a line dropped leaves it to play.
     local queuedId, queued, replacing, rewrites = nil, nil, nil, 0
     if guard.updateMs() == 0 then
         queuedId, queued = guard.queuedNarration()
@@ -2406,7 +2518,7 @@ local function askNarrator(n, opts)
             end
         end
     end
-    local playingLine = guard.updateMs() == 0 and guard.playingNarration() or nil
+    local playingLine = guard.updateMs() == 0 and guard.lineAhead(queued) or nil
     local forTurn, before = n.tab, guard.lastSpoken
     local saidHere = #n.said
     for _, line in ipairs(n.said) do
@@ -2433,17 +2545,28 @@ local function askNarrator(n, opts)
         end
         local snippet = snippetOf(reply)
         local since = guard.lastSpoken ~= before and spokenText[guard.lastSpoken]
-        if snippet ~= "" and (n.answering or approval or guard.newsComing() or (since and not since.narration)) then
+        -- Saying a spoken answer was heard ("Okay, renaming it") may share
+        -- the opening line's words, and goes even once the reply streams.
+        local answered = false
+        for _, s in ipairs(own) do
+            answered = answered or (s.kind == "permission" and s.answer ~= "waiting")
+        end
+        if snippet ~= "" and ((n.answering and not answered) or approval or guard.newsComing()
+            or (since and not since.narration)) then
             record("narrate", { text = snippet, said = false, why = n.answering and "answering"
                 or approval and "asking" or "news" })
             return
         end
         if snippet == "" then
+            -- Nothing to say (or nothing usable): logged, so a quiet stretch
+            -- can be told from one where nothing was asked.
+            record("narrate", { said = false, why = "skipped", steps = count,
+                others = #others > 0 and #others or nil, speaking = payload.speaking })
             return
         end
         -- The line it replaces, if that's still waiting (not played meanwhile).
         local waiting = queued and not queued.started and not queued.dropped and replacing or nil
-        local same = guard.repeats(snippet, nil, waiting)
+        local same = not answered and guard.repeats(snippet, nil, waiting)
         if same then
             record("narrate-dropped", { text = snippet, why = "repeats", said = same })
             return
@@ -2532,17 +2655,375 @@ dropQueuedNarration = function(why)
     end
 end
 
---- The answer started streaming: no narration from now until a new tool
--- step shows the model went back to work.
+--- The answer started streaming: no new narration from now until a new
+-- tool step shows the model went back to work.
 answerStreaming = function()
     local n = narration
     if n and n.tab and not n.answering then
         n.answering = true
         updates.clear(n.tab)
-        dropQueuedNarration("answering")
+        -- Lines already said still play (the answer's first words often
+        -- come a moment after a line about the work); nothing new starts.
     end
     if opener and opener.asking then
         opener.dropped = true
+    end
+end
+
+-- ===================================================================
+-- Telling a long reply as it's written
+-- ===================================================================
+--
+-- A reply is told while it streams, a block at a time, so a long one
+-- starts within seconds, not after the agent has finished: once
+-- TELL_FIRST_WORDS words of the answer have come and a paragraph ends after
+-- them (else, with twice that many, a sentence), that block is retold
+-- (prompts/spoken-reply.md, its `part`) and spoken while the rest streams;
+-- each block after it once it has TELL_WORDS. Each is told with what was
+-- said of the reply before it (`told`) and the line playing (`speaking`),
+-- so it carries on instead of starting over. As with narration as it
+-- happens, a block's line still waiting behind another when the next
+-- block is ready is made again with both (`replacing`), at most
+-- guard.REWRITES times. The rest comes with the reply (onReply): the last
+-- block, and only its line may open a follow-up. A reply shorter than a
+-- block is retold whole, as before.
+--
+-- Read aloud: a reply to a message the filter says asks to hear something
+-- in full (`read_aloud`: a story, a file read out) is read, not retold,
+-- in the same blocks (no Markdown; a code block's text is read too).
+--
+-- A wake while a line plays pauses the telling (the lines waiting are
+-- dropped), and the barge-in classifier says what comes of it: `resume`
+-- picks it up again from the sentence it stopped in; anything else ends it
+-- (the rest is on screen). Text before a tool step was the agent talking
+-- while it works: what was told of it stays told, and the answer starts
+-- again after the tool.
+
+guard.TELL_FIRST_WORDS = 60
+guard.TELL_WORDS = 120
+guard.CHARS_PER_SECOND = 16 -- spoken at speed 1: how far a line got before it was cut (resume)
+guard.readAloud = {}        -- tab -> true: its reply is read out (the filter's read_aloud)
+guard.telling = nil         -- { tab, text, told (chars of text told), parts, said, asking, read, paused,
+                            -- parked, over, final, lastId }
+
+--- Where a block of `s` ends (its last character), or nil while it's
+-- too short: after `min` words, at the first paragraph break; with twice
+-- that many and no break, at the last sentence end after them. Never
+-- inside a code block.
+function guard.blockEnd(s, min)
+    local count, at = 0, nil
+    for pos in s:gmatch("()%S+") do
+        count = count + 1
+        if count == min then
+            at = pos
+        end
+    end
+    if not at then
+        return nil
+    end
+    local function outside(i)
+        local fences = 0
+        for _ in s:sub(1, i):gmatch("```") do
+            fences = fences + 1
+        end
+        return fences % 2 == 0
+    end
+    local from = at
+    while true do
+        local i, j = s:find("\n[ \t]*\n", from)
+        if not i then
+            break
+        end
+        if outside(i) then
+            return j
+        end
+        from = j + 1
+    end
+    if count < 2 * min then
+        return nil
+    end
+    local last = nil
+    for e in s:gmatch("[%.!%?][\"')%]]*()%s", at) do
+        if outside(e) then
+            last = e - 1
+        end
+    end
+    return last
+end
+
+--- A block as it's read out: what a code block holds is read too (a file
+-- asked for is often in one), without its fences or the Markdown.
+function guard.readable(s)
+    return plain((tostring(s or ""):gsub("```[%w%-%+]*", "")))
+end
+
+--- The block line waiting behind another (playing, or waiting too), which
+-- can still be made again: its id and entry, or nil.
+function guard.queuedBlock()
+    local waiting = unheard()
+    local last = waiting[#waiting]
+    if not last or not last.entry.telling then
+        return nil
+    end
+    if #waiting == 1 and not voice.backend.playing() then
+        return nil
+    end
+    return last.id, last.entry
+end
+
+--- Speak a block's line. The last one may open a follow-up.
+function guard.tellLine(t, line, block, last, rewrites)
+    if (guard.telling ~= t and not t.finishing) or t.over then
+        return
+    end
+    if t.paused then
+        t.parked = { line = line, block = block, last = last, rewrites = rewrites }
+        return
+    end
+    if line ~= "" then
+        t.said[#t.said + 1] = line
+        local id = speak(line, { tell = t.parts, read = t.read or nil, last = last or nil, offOk = true,
+            tab = t.tab })
+        if id and spokenText[id] then
+            spokenText[id].telling = true
+            spokenText[id].block = block
+            spokenText[id].rewrites = rewrites
+            t.lastId = id
+        end
+    end
+    if last then
+        if guard.telling == t then
+            guard.telling = nil
+        end
+        if t.lastId and spokenText[t.lastId] then
+            expectFollowUp(t.lastId, spokenText[t.lastId].text, t.tab)
+        end
+    end
+end
+
+--- Tell what's come of the reply that makes a block, when nothing is
+-- being made.
+function guard.tellDue(t)
+    if (guard.telling ~= t and not t.finishing) or t.asking or t.paused or t.over then
+        return
+    end
+    if t.final then
+        return guard.tellRest(t, t.final)
+    end
+    local rest = t.text:sub(t.told + 1)
+    local e = guard.blockEnd(rest, t.parts == 0 and guard.TELL_FIRST_WORDS or guard.TELL_WORDS)
+    if e then
+        t.told = t.told + e
+        guard.tellBlock(t, rest:sub(1, e), false)
+    end
+end
+
+--- Tell a block: read out, or retold (with the line still waiting for the
+-- one before it, made again with both).
+function guard.tellBlock(t, block, last)
+    local replacing, rewrites = nil, 0
+    local queuedId, queued = guard.queuedBlock()
+    if queued and not t.read and (queued.rewrites or 0) < guard.REWRITES then
+        queued.dropped = true
+        voice.backend.speakStop(queuedId)
+        block = queued.block .. "\n\n" .. block
+        replacing, rewrites = queued.text, (queued.rewrites or 0) + 1
+        for i = #t.said, 1, -1 do
+            if t.said[i] == queued.text then
+                table.remove(t.said, i)
+                break
+            end
+        end
+        record("tell-rewrite", { reply = queuedId, text = queued.text, rewrites = rewrites })
+    end
+    t.parts = t.parts + 1
+    if t.read then
+        local line = guard.readable(block)
+        record("tell", { part = t.parts, read = true, chars = #line, last = last or nil })
+        return guard.tellLine(t, line, block, last, 0)
+    end
+    local part = (t.parts == 1 and not replacing) and "first" or "middle"
+    if last then
+        part = "last"
+    end
+    local ahead = guard.lineAhead()
+    local payload = { reply = block, length = summaryLength(), part = part, request = t.request,
+        told = #t.said > 0 and t.said or nil, speaking = ahead and ahead.text or nil, replacing = replacing }
+    t.asking = true
+    guard.summaryPending = gitgud.now()
+    local started = gitgud.now()
+    askHelper(summarizer, payload, function(reply, err)
+        t.asking = false
+        guard.summaryPending = nil
+        local line = type(reply) == "string" and plain(reply) or ""
+        if line == "" or line:sub(1, 1) == "{" then
+            line = voice.speakable(block, SPOKEN_CUT)
+        end
+        if t.parts == 1 then
+            timing("summary", { summaryMs = gitgud.now() - started, part = part })
+        end
+        record("tell", { part = t.parts, kind = part, ms = gitgud.now() - started, said = line, error = err,
+            replacing = replacing, speaking = payload.speaking })
+        guard.tellLine(t, line, block, last, rewrites)
+        guard.tellDue(t)
+    end)
+end
+
+--- A piece of a reply's text as it streams.
+function guard.answerPiece(tab, piece)
+    local t = guard.telling
+    if t and t.tab == tab and t.over then
+        return -- cut short: the rest is on screen
+    end
+    if not guard.canSpeak() or not guard.told(tab) then
+        return
+    end
+    if not t or t.tab ~= tab or t.finishing then
+        t = { tab = tab, text = "", told = 0, parts = 0, said = {}, read = guard.readAloud[tab] == true,
+            request = narration and narration.tab == tab and narration.request or nil }
+        guard.telling = t
+    end
+    t.text = t.text .. tostring(piece or "")
+    guard.tellDue(t)
+end
+
+--- A tool step: the text before it was the agent talking while it works.
+function guard.answerAgain(tab)
+    local t = guard.telling
+    if t and t.tab == tab and not t.over then
+        t.text, t.told = "", 0
+    end
+end
+
+--- Whether the reply to a conversation is being told in blocks.
+function guard.tellingReply(tab)
+    local t = guard.telling
+    return t ~= nil and t.tab == tab and (t.parts > 0 or t.asking or t.read or t.over)
+end
+
+--- The reply came: what's left of it is told, as the last block. Waits
+-- for a block being made, or for a pause to be settled.
+function guard.tellRest(t, reply)
+    t.final = reply
+    if t.asking and guard.telling == t then
+        t.finishing = true -- its last block goes, whatever comes next
+    end
+    if t.over then
+        if guard.telling == t then
+            guard.telling = nil
+        end
+        return
+    end
+    if t.asking or t.paused then
+        return
+    end
+    t.final = nil
+    local full = tostring(reply.text or "")
+    local rest = full
+    if t.told > 0 and full:sub(1, t.told) == t.text:sub(1, t.told) then
+        rest = full:sub(t.told + 1)
+    end
+    if #words(plain(rest)) == 0 then
+        return guard.tellLine(t, "", "", true, 0)
+    end
+    if t.read then
+        -- Read out in blocks all the same: the voice starts on the first.
+        while true do
+            local e = guard.blockEnd(rest, guard.TELL_WORDS)
+            if not e or e >= #rest then
+                break
+            end
+            guard.tellBlock(t, rest:sub(1, e), false)
+            rest = rest:sub(e + 1)
+        end
+    end
+    guard.tellBlock(t, rest, true)
+end
+
+--- A reply told aloud was cut short by a wake: it waits for what the
+-- message is (guard.resumeTelling, guard.endTelling).
+function guard.pauseTelling(playing)
+    local cut = playing and spokenText[playing]
+    local waiting = {}
+    for _, w in ipairs(unheard()) do
+        if w.entry.telling and w.entry ~= cut then
+            waiting[#waiting + 1] = w.entry.text
+        end
+    end
+    local startedAt = cut and cut.startedAt
+    guard.cutShort = cut and { text = cut.text, ms = startedAt and (gitgud.now() - startedAt) or 0,
+        waiting = waiting } or nil
+    local t = guard.telling
+    if t and not t.over then
+        t.paused = true
+    end
+end
+
+--- The wake was to hear the rest ("never mind, go on"): the line cut short
+-- again from the sentence it stopped in, the lines that waited, and the
+-- telling goes on. False when nothing was cut short.
+function guard.resumeTelling()
+    local cut = guard.cutShort
+    guard.cutShort = nil
+    if not cut then
+        return false
+    end
+    local sentences = guard.sentences(cut.text)
+    local reached = cut.ms / 1000 * guard.CHARS_PER_SECOND * voice.speechSpeed()
+    local from, chars = #sentences, 0
+    for i, sentence in ipairs(sentences) do
+        chars = chars + #sentence + 1
+        if chars > reached then
+            from = i
+            break
+        end
+    end
+    local again = table.concat(sentences, " ", math.max(1, from))
+    record("resume", { from = from, sentences = #sentences, ms = cut.ms })
+    local t = guard.telling
+    local lines = { again }
+    for _, line in ipairs(cut.waiting) do
+        lines[#lines + 1] = line
+    end
+    local lastId = nil
+    for _, line in ipairs(lines) do
+        local id = speak(line, { resumed = true, offOk = true, tab = t and t.tab })
+        if id and spokenText[id] then
+            spokenText[id].telling = t ~= nil
+            spokenText[id].block = line
+            lastId = id
+        end
+    end
+    if t then
+        t.lastId = lastId or t.lastId
+        t.paused = false
+        local parked = t.parked
+        t.parked = nil
+        if parked then
+            guard.tellLine(t, parked.line, parked.block, parked.last, parked.rewrites)
+        end
+        if guard.telling == t then
+            guard.tellDue(t)
+        end
+    elseif lastId then
+        expectFollowUp(lastId, spokenText[lastId].text)
+    end
+    return true
+end
+
+--- The wake was for something else: the rest of the reply stays on screen.
+function guard.endTelling(why)
+    guard.cutShort = nil
+    local t = guard.telling
+    if not t then
+        return
+    end
+    t.over = true
+    t.paused = false
+    t.parked = nil
+    record("tell-ended", { why = why, parts = t.parts })
+    if t.final or not (t.tab and t.tab.session.turn) then
+        guard.telling = nil
     end
 end
 
@@ -2573,64 +3054,93 @@ startNarration = function(request, id)
     end
 end
 
---- A message is through the filter: say that it was heard, in a line the
--- narrator makes from the checked text ("Sure, checking the time"). Never
--- canned. Not said once the message is dropped or answered, or while a
--- new one is being heard. From the checked text, not the heard one: a line
--- made from the raw transcript said "Bot Desktop" for "Claude Desktop".
--- @param body  the message as it goes to the agent
--- @param id    its message id
-local function sayOpening(body, id)
+--- Say a message's opening line, once it's made and the filter passed the
+-- message. Not once the message is dropped or answered, or while a new one
+-- is being heard.
+function guard.speakOpening(o)
+    local line = o.line
+    o.line = nil
+    local ended = lastEnded
+    if opener ~= o or o.dropped or not line or line == "" or current == "off" or hearing or not ended
+        or ended.id ~= o.id or ended.dropped or ended.answered then
+        record("opening", { id = o.id, text = line, said = false, askMs = o.askMs })
+        return
+    end
+    local same = guard.repeats(line)
+    if same then
+        record("narrate-dropped", { text = line, why = "repeats", said = same, opening = true })
+        return
+    end
+    o.text = line
+    o.at = gitgud.now()
+    local n = narration
+    if n and n.id == o.id then
+        n.said[#n.said + 1] = line
+    end
+    guard.noteSaid(line)
+    speak(line, { narration = true, opening = true })
+    timing("opening", { text = line, askMs = o.askMs, early = o.early or nil }, o.id)
+    record("narrate", { text = line, ms = o.at - ended.at, askMs = o.askMs, opening = true, early = o.early or nil })
+end
+
+--- A message's opening line: that it was heard, in a line the narrator
+-- makes ("Sure, checking the time"). Never canned. Asked the moment the
+-- message ends, from the text as heard, side by side with the filter
+-- (`early`), and said once the filter passes it, when what goes to the
+-- agent has the same words; else made again from the checked text (a
+-- line from the raw transcript said "Bot Desktop" for "Claude Desktop").
+-- @param body   the message: as heard (early), or as it goes to the agent
+-- @param id     its message id
+-- @param early  asked before the filter answered
+local function sayOpening(body, id, early)
     opener = nil
     if not narrationOn() then
         return
     end
-    local o = { id = id, asking = true }
+    local o = { id = id, asking = true, wanted = true, from = body, early = early }
     opener = o
     local started = gitgud.now()
-    timing("openingAsked")
+    timing("openingAsked", { early = early or nil }, id)
     askHelper(narrator, { request = body, steps = {}, said = guard.lately(3), opening = true }, function(reply)
         o.asking = false
-        local line = snippetOf(reply)
-        local ended = lastEnded
-        if opener ~= o or o.dropped or line == "" or current == "off" or hearing or not ended or ended.id ~= id
-            or ended.dropped or ended.answered then
-            line = ""
-        end
-        local same = line ~= "" and guard.repeats(line)
-        if same then
-            record("narrate-dropped", { text = line, why = "repeats", said = same, opening = true })
-            line = ""
-        end
+        o.askMs = gitgud.now() - started
+        o.line = snippetOf(reply)
         local n = narration
         if n and n.id == id then
             n.asking = false
         end
-        if line == "" then
-            record("opening", { id = id, text = reply, said = false, askMs = gitgud.now() - started })
-            return
+        if not early or o.passed then
+            guard.speakOpening(o)
         end
-        o.text = line
-        o.at = gitgud.now()
-        if n and n.id == id then
-            n.said[#n.said + 1] = line
-        end
-        guard.noteSaid(line)
-        speak(line, { narration = true, opening = true })
-        timing("opening", { text = line, askMs = o.at - started })
-        record("narrate", { text = line, ms = o.at - ended.at, askMs = o.at - started, opening = true })
     end)
 end
 
+--- Two texts with the same words (case and punctuation aside).
+function guard.sameWords(a, b)
+    return table.concat(words(a), " ") == table.concat(words(b), " ")
+end
+
 --- The filter passed a message on: its opening line, when takeMessage
--- wanted one, from the text that goes to the agent.
+-- wanted one: the early one when the checked text has the same words,
+-- else one made from it.
 -- @param m     the message
 -- @param body  its checked text
 openAfterFilter = function(m, body)
     local o = opener
-    if o and o.wanted and o.id == m.id then
-        sayOpening(body, m.id)
+    if not (o and o.wanted and o.id == m.id) then
+        return
     end
+    if o.early and guard.sameWords(o.from, body) then
+        o.passed = true
+        if not o.asking then
+            guard.speakOpening(o)
+        end
+        return
+    end
+    if o.early then
+        record("opening", { id = m.id, text = o.line, said = false, why = "repaired" })
+    end
+    sayOpening(body, m.id)
 end
 
 -- Commands that only serve the work itself (reading the clock to stamp a
@@ -2675,7 +3185,20 @@ end
 --- A step of any conversation ("bragi.step", bragi/agent.lua): kept for
 -- the next update when Bragi manages it, unless it's incidental.
 function guard.onStep(e)
-    if type(e) ~= "table" or type(e.step) ~= "table" or not narrationOn() then
+    if type(e) ~= "table" or type(e.step) ~= "table" then
+        return
+    end
+    -- The reply to what you sent is told as it's written.
+    local tab = e.tab
+    if tab and (guard.sentTurn[tab] or (tab.session and tab.session.voiceTurn)) then
+        if e.step.kind == "text" then
+            guard.answerPiece(tab, e.step.text)
+        elseif e.step.kind == "tool" and not (e.step.starting and guard.SHELL_TOOLS[e.step.name])
+            and not guard.incidental(e.step) then
+            guard.answerAgain(tab)
+        end
+    end
+    if not narrationOn() then
         return
     end
     if not updates.managed(e.tab) then
@@ -2772,6 +3295,9 @@ function guard.cut(tab, why)
     if n and n.tab == tab then
         guard.turnOver()
     end
+    if guard.telling and guard.telling.tab == tab then
+        guard.endTelling(why)
+    end
 end
 
 --- Make a conversation the thread (nil: none), cutting the one before.
@@ -2856,6 +3382,16 @@ function guard.onSent(e)
     local tab = e.tab
     guard.sentTurn[tab] = true
     guard.missed[tab] = nil
+    local t = guard.telling
+    if t and t.tab == tab then
+        -- The last reply's: its last block may still be on its way, and
+        -- this one's is told afresh.
+        if t.final or t.asking then
+            t.finishing = true
+        else
+            guard.telling = nil
+        end
+    end
     guard.setThread(tab, "sent")
     if e.voice or not narrationOn() or not tab.session.turn then
         return
@@ -2907,22 +3443,6 @@ local function recentSpeech()
     return { id = id, text = said and said.text or "", playing = voice.backend.playing() ~= nil }
 end
 
---- Whether a message heard while Bragi spoke, or just after, is Bragi
--- hearing itself: mostly the reply (`spoken`), or mostly what was just
--- sent (the filter, unsure of such an echo, put the
--- message they'd sent back in the prompt box). Logged when it is.
-function guard.echoed(id, heard, spoken)
-    if #words(heard) < HEARD.ECHO_MIN_WORDS then
-        return false
-    end
-    local of = (spoken and spoken ~= "" and isEcho(heard, spoken)) and "reply"
-        or (guard.lastSent and isEcho(heard, guard.lastSent)) and "sent" or nil
-    if of then
-        record("echo", { id = id, text = heard, of = of })
-    end
-    return of ~= nil
-end
-
 --- Whether a lookback line is Bragi's own voice: mostly something it said.
 function guard.saidByBragi(line)
     if #words(line) < HEARD.ECHO_MIN_WORDS then
@@ -2945,8 +3465,7 @@ end
 -- from the tool and its input ("Can I run git log to check the recent
 -- commits?"). Once it has been said, an answer window opens
 -- (bragi.approvalSeconds, 12 s): the next thing the user says, without the wake
--- word (an `ambient` utterance; once their voice is enrolled, only theirs), is
--- the answer. The approval classifier (prompts/approval.md) calls it allow,
+-- word (an `ambient` utterance, whoever says it), is the answer. The approval classifier (prompts/approval.md) calls it allow,
 -- deny, or unclear; it never allows on a guess. A yes with a remark ("Yes,
 -- but it should already be dark.") is allow, and their words go to the
 -- agent right after (agent.remark). Unclear: Bragi asks once more,
@@ -2956,10 +3475,8 @@ end
 -- at a time, in order. Logged as `ask`, `answer`, and `decision` lines.
 -- bragi.voiceApprovals turns it off.
 --
--- once their voice is enrolled, only speech positively
--- someone else's ("other") is ignored; a short "Yes." is too short to
--- score ("unknown") and is theirs while a window is open, unless it's Bragi's
--- own words coming back. A message (wake word or not) while a card waits,
+-- Anything said while a window is open counts, unless it's Bragi's own
+-- words coming back. A message (wake word or not) while a card waits,
 -- asked aloud or left on screen, goes to that card's classifier first: a
 -- yes or no (or a pick) answers the card, anything else goes on as a
 -- message, and then it only stops the agent when it's a clear stop (the
@@ -3023,9 +3540,22 @@ local function closeApproval(a)
     askNextApproval()
 end
 
+--- The narrator is told how a permission was answered, so a tool refused
+-- (or still waiting) is never told as running.
+local function tellAnswer(a, answer, choice)
+    local tab = narration and narration.tab or agent.current()
+    if tab then
+        updates.add(tab, { kind = "permission", tool = a.item.tool, summary = choice and a.question or a.item.summary,
+            answer = answer, choice = choice })
+    end
+end
+
 --- No answer, or one that wasn't yes or no: the card stays for a click.
 local function leaveOnScreen(a, why, said)
     record("decision", { request = a.n, decision = "left", why = why, text = said })
+    if not a.item.answer and a.item.kind ~= "question" then
+        tellAnswer(a, "waiting")
+    end
     if not a.item.answer then
         speak("I'll leave that on screen.", { approval = true })
     end
@@ -3046,6 +3576,7 @@ local function decide(a, verdict, said, via, note)
         return leaveOnScreen(a, "not confirmed", said)
     end
     local remark = verdict == "allow" and type(note) == "string" and text.trim(note) ~= "" and not a.item.answer
+    local permission = not a.item.answer and a.item.kind ~= "question"
     if not a.item.answer then
         local allow = verdict == "allow"
         agent.answer(a.item, allow, (allow and "Allowed by voice: \u{201C}" or "Denied by voice: \u{201C}")
@@ -3053,6 +3584,9 @@ local function decide(a, verdict, said, via, note)
     end
     record("decision", { request = a.n, decision = verdict, by = "voice", via = via, text = said,
         note = remark and note or nil })
+    if permission then
+        tellAnswer(a, verdict == "allow" and "allowed" or "refused")
+    end
     if remark then
         -- His whole answer, every word, not the classifier's summary of it.
         agent.remark(a.item, "About allowing " .. tostring(a.item.tool) .. ", I said: \u{201C}" .. said .. "\u{201D}")
@@ -3192,20 +3726,13 @@ local function ambientAnswer(e)
     if not a or not a.open or a.classifying or onlyFiller(said) then
         return
     end
-    -- Only someone positively else is ignored: a short "Yes." is too short
-    -- to score, comes back "unknown", and is theirs.
-    if enrolled and e.speaker == "other" then
-        record("answer", { request = a.n, text = said, via = "ambient", speaker = e.speaker,
-            ignored = "not you" })
-        return
-    end
     -- A short answer to a question card repeats its words ("two", "blue"):
     -- only a longer stretch of the question heard back is its echo. Words
-    -- not known to be theirs are also checked against what Bragi just said
-    -- (asking again, or a narration), longer than a word or two.
+    -- are also checked against what Bragi just said (asking again, or a
+    -- narration), longer than a word or two. Who says it doesn't matter.
     local count = #words(said)
     local short = a.item.kind == "question" and count < 4
-    local recent = e.speaker ~= "user" and count >= 3 and recentSpeech()
+    local recent = count >= 3 and recentSpeech()
     if (a.question and not short and isEcho(said, a.question))
         or (a.again and count >= 3 and isEcho(said, a.again)) or (recent and isEcho(said, recent.text)) then
         record("answer", { request = a.n, text = said, via = "ambient", ignored = "echo",
@@ -3290,6 +3817,8 @@ decideChoice = function(a, choice, said, via)
     if not a.item.answer then
         agent.answerQuestion(a.item, choice, { by = "voice",
             note = "Answered by voice: \u{201C}" .. said .. "\u{201D}" })
+        -- Said at once that it was heard (the narrator).
+        tellAnswer(a, "answered", tostring(a.item.answer or ""))
     end
     record("decision", { request = a.n, decision = "answer", answer = a.item.answer, by = "voice", via = via,
         text = said })
@@ -3470,8 +3999,8 @@ end
 -- bragi.followUpSeconds (FOLLOW_UP_SECONDS, 3 to 30). The next thing the user
 -- says without the wake word (`ambient`) is their next message: it goes
 -- through the filter and is sent like a wake-word message. Filler alone
--- ("um"), another speaker once their voice is enrolled, and the reply heard
--- back (four words or more, mostly its own) are ignored. The window
+-- ("um") and the reply heard back (four words or more, mostly its own)
+-- are ignored. The window
 -- closes on an answer, the wake word, a typed message, a new turn or
 -- card, voice off, or when the time runs out. While it's open the status
 -- says "Listening for your answer". Narration never opens one. Logged as
@@ -3582,11 +4111,10 @@ local function followUpAnswer(e)
         return
     end
     local long = #words(said) >= HEARD.ECHO_MIN_WORDS
-    -- Only someone else's voice is left out: a short answer ("no") is too
-    -- short to score, comes back "unknown", and is theirs (as for a card).
-    local ignored = onlyFiller(said) and "filler" or (enrolled and e.speaker == "other") and "not you"
+    -- Who says it doesn't matter.
+    local ignored = onlyFiller(said) and "filler"
         or (long and isEcho(said, f.text)) and "echo"
-        or (long and not enrolled and guard.lastSent and isEcho(said, guard.lastSent)) and "echo of what was sent"
+        or (long and guard.lastSent and isEcho(said, guard.lastSent)) and "echo of what was sent"
         or nil
     if ignored then
         record("follow-up", { n = f.n, state = "ignored", text = said, speaker = e.speaker or "unknown",
@@ -3756,9 +4284,6 @@ end
 function guard.forgetHearing()
     cancelDone()
     if hearing then
-        if hearing.suspect then
-            gitgud.cancelTimer(hearing.suspect.timer)
-        end
         agent.setHeard("")
     end
     hearing = nil
@@ -3775,6 +4300,7 @@ function voice.stop()
     mic.on = false
     guard.connected = false
     guard.forgetHearing()
+    guard.releaseCarry("off")
     stopNarration()
     dropApprovals()
     record("stop", {})
@@ -3826,15 +4352,12 @@ function handlers.enrollResult(e)
     enrolled = e.enrolled == true
 end
 
---- Someone else spoke: only meaningful once your voice is enrolled (until
--- then the engine shouldn't tell, and a stray "other" is ignored).
-local function notYou(e)
-    return enrolled and e.speaker == "other"
-end
-
 function handlers.vad(e)
     record("vad", { speaking = e.speaking == true, t = e.t })
     guard.speaking = e.speaking == true
+    if guard.speaking then
+        guard.carryStarted(e.t)
+    end
     paintLevel(e.speaking == true)
 end
 
@@ -3865,59 +4388,26 @@ function handlers.level(e)
     end
 end
 
--- A reply that says the wake word, or a word that sounds like it.
-local WAKE_ALIKES = { "baldr", "balder", "bragi's" }
-local function soundsLikeWake(s)
-    if voice.mentionsWakeWord(s) then
-        return true
+--- A wake while a reply plays: the reply stops at once. What's heard
+-- meanwhile is the user (the echo canceller keeps the reply out of the
+-- microphone), never second-guessed as Bragi's own voice.
+local function bargeIn(playing)
+    local said = spokenText[playing]
+    hearing.barge = { spoken = said and said.text or "" }
+    hearing.duringPlayback = true
+    guard.pauseTelling(playing)
+    for _, w in ipairs(unheard()) do
+        w.entry.dropped = true
     end
-    local lower = " " .. tostring(s or ""):lower() .. " "
-    for _, w in ipairs(WAKE_ALIKES) do
-        if lower:find("%f[%w']" .. w:gsub("'", "'") .. "%f[^%w']") then
-            return true
-        end
-    end
-    return false
-end
-
---- A wake during (or just after) a reply was confirmed: stop the reply.
-local function bargeIn()
-    local suspect = hearing and hearing.suspect
-    if not suspect then
-        return
-    end
-    hearing.suspect = nil
-    hearing.barge = { spoken = suspect.text }
-    gitgud.cancelTimer(suspect.timer)
-    local playing = voice.backend.playing()
-    if playing then
-        voice.backend.speakStop(playing)
-    end
-    record("barge-in", { id = hearing.id, reply = suspect.id })
-    agent.setHeard(hearing.text)
+    voice.backend.speakStop(nil) -- and the lines waiting after it
+    record("barge-in", { id = hearing.id, reply = playing })
     setState("hearing")
-end
-
---- A wake was Bragi hearing itself: drop the message.
-local function selfWake(why)
-    local suspect = hearing.suspect
-    gitgud.cancelTimer(suspect.timer)
-    record("self-wake", { id = hearing.id, reply = suspect.id, heard = hearing.text, why = why })
-    hearing = nil
-    guard.flushHeld("ended")
-    agent.setHeard("")
-    if voice.backend.cancel then
-        voice.backend.cancel()
-    end
-    if current ~= "off" then
-        setState("listening", voice.backend.playing()
-            and ("Speaking. Say \u{201C}" .. wakeWord() .. "\u{201D} to interrupt") or nil)
-    end
 end
 
 function handlers.wake(e)
     record("wake", { id = e.id, t = e.t, at = gitgud.now(), playing = voice.backend.playing() })
     cancelDone()
+    guard.releaseCarry("wake")
     -- An open window closes; one waiting for its question to finish
     -- playing stays until a message is taken (takeMessage): a wake
     -- dropped as Bragi's own voice mustn't lose it.
@@ -3927,21 +4417,9 @@ function handlers.wake(e)
     hearing = { id = e.id, text = "" }
     agent.setHeard("")
     guard.startDeciding()
-    local recent = recentSpeech()
-    if recent then
-        -- Maybe its own voice: the reply plays on until the words (and your
-        -- voice, once enrolled) say it's you. No words in a while: noted.
-        local h = hearing
-        local named = soundsLikeWake(recent.text)
-        hearing.suspect = { id = recent.id, text = recent.text, named = named,
-            timer = gitgud.after(ECHO_DECIDE_MS, function()
-                if hearing == h and h.suspect then
-                    record("wake-ignored", { id = h.id, reply = h.suspect.id, why = "no words yet",
-                        named = h.suspect.named or nil })
-                end
-            end) }
-        hearing.duringPlayback = true
-        return
+    local playing = voice.backend.playing()
+    if playing then
+        return bargeIn(playing)
     end
     setState("hearing")
 end
@@ -3956,24 +4434,6 @@ function handlers.partial(e)
             hearing.grewAt = gitgud.now()
         end
         hearing.text = heard
-        if hearing.suspect then
-            if #words(hearing.text) == 0 then
-                return
-            elseif isEcho(hearing.text, hearing.suspect.text) then
-                return selfWake("words")
-            elseif enrolled then
-                -- Your voice decides: the engine tags speech it has scored.
-                if e.speaker == "user" then
-                    return bargeIn()
-                elseif e.speaker == "other" then
-                    return selfWake("speaker")
-                end
-                return -- not scored yet
-            elseif hearing.suspect.named then
-                return -- it said the wake word: the whole message decides
-            end
-            return bargeIn()
-        end
         agent.setHeard(hearing.text)
     end
 end
@@ -4063,15 +4523,6 @@ end
 
 handlers["message"] = function(e)
     local heard = guard.finalText(e)
-    if hearing and hearing.id == e.id and hearing.suspect then
-        hearing.text = heard
-        if isEcho(heard, hearing.suspect.text) then
-            return selfWake("words")
-        elseif notYou(e) then
-            return selfWake("speaker")
-        end
-        bargeIn()
-    end
     local wasPlayback = hearing and hearing.id == e.id and hearing.duringPlayback
     local barge = hearing and hearing.id == e.id and hearing.barge or nil
     cancelDone()
@@ -4084,27 +4535,14 @@ handlers["message"] = function(e)
     if heard == "" then
         return
     end
-    if wasPlayback and notYou(e) then
-        -- With your voice enrolled, only you interrupt a reply.
-        record("not-you", { id = e.id, text = heard })
-        return
-    end
-    -- Heard while Bragi spoke, or just after: maybe its own reply, or
-    -- what was just sent, coming back. Dropped, never sent or kept. Not
-    -- when it's your voice, once enrolled: you may repeat yourself.
-    local recent = recentSpeech()
-    if (wasPlayback or recent) and not (enrolled and e.speaker == "user")
-        and guard.echoed(e.id, heard, barge and barge.spoken or recent and recent.text) then
-        return
-    end
     -- Said with the wake word while a card waits (asked aloud, or left on
     -- screen): a clear yes or no (or a pick) answers it; anything else is
-    -- a new message. Not when it's positively someone else.
+    -- a new message.
     local a = approval
-    if not a and not notYou(e) then
+    if not a then
         a = cards.reopen()
     end
-    if a and not a.classifying and not notYou(e) then
+    if a and not a.classifying then
         a.question = a.question or a.item.asked or ("Can I use " .. tostring(a.item.tool) .. "?")
         return classifyAnswer(a, heard, "wake", e.speaker, function()
             takeMessage(e, heard, barge, wasPlayback)
@@ -4121,21 +4559,142 @@ takeMessage = function(e, heard, barge, wasPlayback)
     -- An answer that goes to another conversation (e.to) shows there, not here.
     local pending = not e.to and agent.voicePending(heard) or nil
     timing("shown")
-    -- The opening line waits for the filter (openAfterFilter). Not for a
-    -- message that talks over a reply or the agent's work: that one is
-    -- classified.
+    -- The opening line is asked now, and said once the filter passes the
+    -- message (openAfterFilter). Not for a message that talks over a reply
+    -- or the agent's work: that one is classified.
     if not barge and not wasPlayback and not agent.session().turn and not e.to then
         opener = { id = e.id, wanted = true }
+        sayOpening(heard, e.id, true)
     else
         opener = nil
+        guard.judging = { id = e.id, at = gitgud.now() }
     end
-    voice.filter(heard, e.id, pending, barge, e.t0, e.to)
+    local m = voice.filter(heard, e.id, pending, barge, e.t0, e.to)
+    m.carryOn = e.carryOn
+    guard.releaseCarry("new message")
+    if e.endedBy == "done" and tonumber(e.t1) then
+        guard.carry = { m = m, id = e.id, t1 = tonumber(e.t1) }
+    end
+end
+
+-- ===================================================================
+-- Carrying on after a pause
+-- ===================================================================
+--
+-- The turn-taking model ends a message at a pause that sounds final, and
+-- people go on after one ("I want to tidy up this project a little."
+-- then "Can you start by telling me what's in the notes file?"). Speech
+-- that starts within CARRY_ON_MS of the end of a message the model ended
+-- carries it on, without the wake word:
+--   * from when the engine says it started (`vad`, in the engine's time),
+--     the message waits: once through the filter it isn't sent (nor its
+--     opening line said) until that speech ends, at most CARRY_ON_WAIT_MS;
+--   * the speech (`ambient`) joins the message, which goes through the
+--     filter again with all of it, and may carry on again;
+--   * a message already sent gets it as a message of its own: while the
+--     turn runs, the turn stops and it's sent (a steer).
+-- Speech in the window that's nothing (filler), or a wake, lets the
+-- message go on as it was.
+
+guard.CARRY_ON_MS = 2500
+guard.CARRY_ON_WAIT_MS = 20000
+guard.carry = nil -- { m, id, t1, resumed, timer }: the latest message the model ended
+
+--- Whether a message waits for what its speaker went on to say.
+function guard.carryWaits(m)
+    return m ~= nil and guard.carry ~= nil and guard.carry.m == m and guard.carry.resumed == true
+end
+
+--- The message no longer carries on: one held goes on as it was.
+-- @param why  for the log
+function guard.releaseCarry(why)
+    local c = guard.carry
+    if not c then
+        return
+    end
+    guard.carry = nil
+    if c.timer then
+        gitgud.cancelTimer(c.timer)
+    end
+    if c.resumed then
+        record("carry-on", { id = c.id, state = "released", why = why })
+    end
+    local held = c.m.held
+    if held then
+        c.m.held = nil
+        guard.finishFor(c.m, held.answer, held.err)
+    end
+end
+
+--- Speech started: within the window, the message waits for it.
+function guard.carryStarted(t)
+    local c = guard.carry
+    t = tonumber(t)
+    if not c or c.resumed or hearing or not t then
+        return
+    end
+    if t - c.t1 > guard.CARRY_ON_MS then
+        guard.carry = nil -- too late to carry it on
+        return
+    end
+    c.resumed = true
+    record("carry-on", { id = c.id, state = "waiting", after = t - c.t1 })
+    c.timer = gitgud.after(guard.CARRY_ON_WAIT_MS, function()
+        c.timer = nil
+        if guard.carry == c then
+            guard.releaseCarry("timeout")
+        end
+    end)
+end
+
+--- Speech outside a message: the carry-on, when one is awaited. False
+-- when it isn't one.
+function guard.carryOn(e)
+    local c = guard.carry
+    local said = text.trim(e.text or "")
+    if not c or not c.resumed then
+        return false
+    end
+    if said == "" or onlyFiller(said) then
+        guard.releaseCarry("nothing said")
+        return true
+    end
+    guard.carry = nil
+    if c.timer then
+        gitgud.cancelTimer(c.timer)
+    end
+    local m = c.m
+    record("carry-on", { id = c.id, state = "joined", text = said, sent = m.delivered or nil })
+    if m.delivered then
+        -- Sent already: it follows as a message of its own.
+        local next = { id = c.id .. "+", t0 = e.t0, t1 = e.t1, speaker = e.speaker, carryOn = true }
+        record("heard", { id = next.id, text = said, endedBy = "carry-on", t0 = e.t0, t1 = e.t1,
+            speaker = e.speaker })
+        takeMessage(next, said, nil, false)
+        return true
+    end
+    m.heard = text.trim(m.heard .. " " .. said)
+    m.short = #wordList(m.heard) < HEARD.SHORT_WORDS
+    agent.rehearPending(m.pending, m.heard)
+    if m.held then
+        m.held = nil
+        table.insert(queue, 1, m)
+        filterNext()
+    elseif m == active then
+        m.again = true
+    end
+    -- It may go on again.
+    guard.carry = { m = m, id = c.id, t1 = tonumber(e.t1) or c.t1 }
+    return true
 end
 
 --- Speech outside a message: kept by the engine for the lookback; here
 -- only the answer to a permission question, or to a reply that asked
 -- something (Follow-up answers).
 function handlers.ambient(e)
+    if guard.carryOn(e) then
+        return
+    end
     if approval then
         return ambientAnswer(e)
     end
@@ -4276,6 +4835,7 @@ function handlers.playback(e)
         local said = spokenText[e.id]
         if said then
             said.started = true
+            said.startedAt = now
         end
         if approval and approval.sayId == e.id then
             approval.playing = true
@@ -4298,10 +4858,6 @@ function handlers.playback(e)
     end
     -- The permission question has been said: listen for the answer.
     local asked = e.state ~= "started" and approval and approval.sayId == e.id and approval or nil
-    if hearing and hearing.suspect then
-        -- The status stays as it was until the wake is decided.
-        return asked and openWindow(asked)
-    end
     if e.state == "started" then
         setState(current, "Speaking. Say \u{201C}" .. wakeWord() .. "\u{201D} to interrupt")
     else
@@ -4688,9 +5244,14 @@ function voice.init()
         reattach(kept)
     end)
     -- The microphone and speakers picked in Settings or setup ("" = the
-    -- default). A new pick while listening restarts the capture with it.
+    -- default), and the speaker delay. A new pick while listening restarts
+    -- the capture with it.
     devices.apply()
-    local picked = settings.get("bragi.micDevice", "") .. "\n" .. settings.get("bragi.speakerDevice", "")
+    local function pickedNow()
+        return settings.get("bragi.micDevice", "") .. "\n" .. settings.get("bragi.speakerDevice", "") .. "\n"
+            .. devices.echoDelay()
+    end
+    local picked = pickedNow()
     app.subscribe("bragi.choices", function()
         -- A new wait (Settings, or the agent's settings tool) reaches the
         -- engine while listening.
@@ -4698,7 +5259,7 @@ function voice.init()
             sentEndWait = voice.endWait()
             voice.backend.config({ endWaitSeconds = sentEndWait })
         end
-        local now = settings.get("bragi.micDevice", "") .. "\n" .. settings.get("bragi.speakerDevice", "")
+        local now = pickedNow()
         if now == picked then
             return
         end

@@ -13,6 +13,12 @@
 //   work on <topic>
 //           the same, reading src/<topic>.lua and searching for "callers of <topic> in the module tests"
 //   slow    empty thinking, 10 s of nothing, then a streamed answer
+//   told long
+//           a long answer streamed over about 4 s: four paragraphs of about
+//           75 words ("Part N begins here." then "This is sentence K of
+//           part N."), a piece every 250 ms; the last ends "Should I go on?"
+//   told story
+//           the same, its paragraphs "Once upon a time, part N." ...
 //   think   three thinking blocks with no words (empty, a signature only,
 //           redacted), then one that has none for 2 s, then "Weighing the
 //           parser. Then the tests.", then "Thought it through." streamed
@@ -134,7 +140,8 @@
 //           `conversation.names`, then `vocabulary`; "I said X, not Y" is
 //           `learned` {Y, X}; "zorp" is kept, `unclear`, with low confidence;
 //           "My input and change the" is left out without a word (the
-//           2026-10-14 bug, for the app's check)
+//           2026-10-14 bug, for the app's check); `read_aloud` when it has
+//           "story" or "read me"
 //   {"message": ..., "recent": ...}
 //           the router (prompts/route.md): route recap, quick or main, the
 //           same way
@@ -155,7 +162,10 @@
 //           branch; "never mind" gets a short reply; anything else hands back
 //   {"reply": ...}
 //           the spoken summary (prompts/spoken-reply.md): "Summary: " and the
-//           first sentence; " More." added when `length` is "medium". A
+//           first sentence; " More." added when `length` is "medium". With
+//           `part`: "Part <part>: " and the first sentence, " (again)" with
+//           `replacing`, and for the last part of a reply that ends with a
+//           question, " Should I go on?". A
 //           reply with "word for word" in it comes back as it is (an echo),
 //           unless `strict` is given ("Retold: " and its first three words);
 //           with "always" too, it comes back as it is even then
@@ -188,7 +198,8 @@
 //           else unclear
 //   {"said": ...}
 //           the barge-in classifier (prompts/barge-in.md): "stop" in what
-//           was said is stop, "instead" is steer, anything else a note
+//           was said is stop, "instead" is steer, "keep going" or "go on"
+//           resume, anything else a note
 //
 // Control requests from the app (set_model, set_permission_mode,
 // interrupt) get a success reply; stop_task stops a background task (a
@@ -587,6 +598,8 @@ namespace
             .Set("kind", heard.rfind("hmm", 0) == 0 ? "remark" : "request")
             .Set("complete", heard.size() < 4 || heard.substr(heard.size() - 4) != " and")
             .Set("route", RouteOf(heard))
+            .Set("read_aloud", heard.find("story") != std::string::npos ||
+                                   heard.find("read me") != std::string::npos)
             .Set("command", CommandOf(heard))
             .Set("route_why", IsSettings(heard) ? "Bragi's settings" : "fake");
     }
@@ -1769,6 +1782,41 @@ namespace
             Out(Delta("Thought it through."));
             Say("Thought it through.");
         }
+        else if (_Text == "told long" || _Text == "told story")
+        {
+            Out(Json::Object()
+                    .Set("type", "stream_event")
+                    .Set("event", Json::Object()
+                                      .Set("type", "content_block_start")
+                                      .Set("index", 0)
+                                      .Set("content_block", Json::Object().Set("type", "text").Set("text", "")))
+                    .Set("parent_tool_use_id", nullptr));
+            const bool bstory = _Text == "told story";
+            std::string whole;
+            for (int ipart = 1; ipart <= 4; ++ipart)
+            {
+                const std::string n = std::to_string(ipart);
+                std::string paragraph = bstory ? "Once upon a time, part " + n + "." : "Part " + n + " begins here.";
+                for (int k = 1; k <= 12; ++k)
+                {
+                    paragraph += " This is sentence " + std::to_string(k) + " of part " + n + ".";
+                }
+                if (ipart == 4)
+                {
+                    paragraph += " Should I go on?";
+                }
+                const std::string piece = (ipart > 1 ? "\n\n" : "") + paragraph;
+                // Each paragraph in four pieces, 250 ms apart.
+                const std::size_t nquarter = piece.size() / 4;
+                for (int iq = 0; iq < 4; ++iq)
+                {
+                    Out(Delta(piece.substr(iq * nquarter, iq == 3 ? std::string::npos : nquarter)));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+                }
+                whole += piece;
+            }
+            Say(whole);
+        }
         else if (_Text == "late")
         {
             // A result that ran no turn, as Claude Code 2.1 sends for a
@@ -1988,6 +2036,23 @@ namespace
         {
             const std::string reply = (*request)["reply"].AsString();
             const bool bstrict = (*request)["strict"].AsBool();
+            if (request->Has("part"))
+            {
+                const std::string part = (*request)["part"].AsString();
+                const std::size_t idot = reply.find('.');
+                std::string said = "Part " + part + ": " +
+                                   (idot == std::string::npos ? reply : reply.substr(0, idot + 1));
+                if (request->Has("replacing"))
+                {
+                    said += " (again)";
+                }
+                if (part == "last" && !reply.empty() && reply.back() == '?')
+                {
+                    said += " Should I go on?";
+                }
+                Say(said);
+                return;
+            }
             if (reply.find("word for word") != std::string::npos &&
                 (!bstrict || reply.find("always") != std::string::npos))
             {
@@ -2120,7 +2185,10 @@ namespace
             const std::string said = (*request)["said"].AsString();
             const char* szaction = said.find("stop") != std::string::npos ? "stop"
                                    : said.find("instead") != std::string::npos ? "steer"
-                                                                               : "note";
+                                   : (said.find("keep going") != std::string::npos ||
+                                         said.find("go on") != std::string::npos)
+                                       ? "resume"
+                                       : "note";
             Say(Json::Object().Set("action", szaction).Set("why", "fake").Dump());
         }
         else if (g_nImages > 0)

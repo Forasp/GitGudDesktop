@@ -198,11 +198,6 @@ namespace gitgud::speech
             number("speakerMinSeconds", 0.1, 30, c.m_fSpeakerMinSeconds) &&
             number("speakerUnsureBelow", -1, 1, c.m_fSpeakerUnsureBelow) &&
             number("speakerUnsureSeconds", 0, 60, c.m_fSpeakerUnsureSeconds) &&
-            flag("speakerGate", c.m_bSpeakerGate) &&
-            number("speakerGateBelow", -1, 1, c.m_fSpeakerGateBelow) &&
-            number("speakerGateWindowSeconds", 0.2, 10, c.m_fSpeakerGateWindowSeconds) &&
-            number("speakerGateEverySeconds", 0, 10, c.m_fSpeakerGateEverySeconds) &&
-            number("speakerGateWindows", 1, 20, c.m_iSpeakerGateWindows) &&
             number("enrollMinSeconds", 1, 600, c.m_fEnrollMinSeconds) &&
             number("vadThreshold", 0.05, 0.95, c.m_fVadThreshold) &&
             number("silenceSeconds", 0.1, 5, c.m_fSilenceSeconds) &&
@@ -234,8 +229,7 @@ namespace gitgud::speech
             number("remarkContextSeconds", 0, 600, c.m_fRemarkContextSeconds) &&
             number("contextTokens", 0, 50000, c.m_iContextTokens) &&
             number("messageContextTokens", 0, 50000, c.m_iMessageContextTokens) &&
-            number("lookbackTokens", 1, 50000, c.m_iLookbackTokens) &&
-            number("playbackTailSeconds", 0, 10, c.m_fPlaybackTailSeconds);
+            number("lookbackTokens", 1, 50000, c.m_iLookbackTokens);
         if (!bok)
         {
             return false;

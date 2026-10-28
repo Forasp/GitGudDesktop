@@ -74,6 +74,13 @@ You return:
 - `route_why`: a few words on why.
 - `command`: only with the route `command`: the slash command to run,
   like `"/compact"` or `"/compact keep the release plan"`.
+- `read_aloud`: true when {user} asks to hear something in full, word
+  for word: a story, a poem, a file or a section read out, the steps or
+  the list itself ("tell me a story", "read me the notes file", "read
+  out the error", "what does the readme say, word for word?"). Bragi
+  then reads the reply out instead of retelling it. False for anything
+  else, questions about a file's contents too ("what's in the notes
+  file?" is answered, not read).
 
 ## Route
 

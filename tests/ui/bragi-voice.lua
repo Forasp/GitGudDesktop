@@ -13,7 +13,7 @@
 -- quick question while the agent works, "ask Opus", the setting off), and
 -- (2026-10-14) recovered context sent with the message (more lookback for
 -- "all that" or a cut-off start, the quick answerer too), no "still
--- working" filler, no narration once the answer streams, typed messages
+-- working" filler, no new narration once the answer streams, typed messages
 -- while it works waiting their turn, and permission cards asked aloud and
 -- answered by voice (allow, deny, unclear, another speaker, a click, no
 -- answer, a wake-word answer, two at once, the setting off), Claude's
@@ -38,7 +38,12 @@
 -- followed conversation's steps told every interval after the last line
 -- finished playing (none when nothing is new, incidental steps and
 -- repeats dropped), its news cutting in at once and restarting the
--- interval, news waiting while you talk and said the moment you stop. The voice service is faked: voice.backend is replaced and the
+-- interval, news waiting while you talk and said the moment you stop, and
+-- (2026-10-27) speech right after a message the model ended carrying it on
+-- (joined before it's sent, a steer after), the opening line asked beside
+-- the filter, a long reply told in blocks as it streams (the line waiting
+-- made again with the next), and a story read out, cut short and picked
+-- up again, then stopped. The voice service is faked: voice.backend is replaced and the
 -- voice.* events are emitted here. The filter and the
 -- agent run the fake claude (tests/fake_claude.cpp), never the real one.
 --
@@ -188,6 +193,27 @@ end
 local function logged(what)
     return table.concat(voice.logLines(), "\n"):find(what, 1, true) ~= nil
 end
+-- How permissions were answered, as the narrator is told (updates.add).
+local permissionSteps = {}
+do
+    local updates = require("bragi.updates")
+    local realAdd = updates.add
+    updates.add = function(tab, step)
+        if type(step) == "table" and step.kind == "permission" then
+            permissionSteps[#permissionSteps + 1] = step
+        end
+        return realAdd(tab, step)
+    end
+end
+local function told(answer)
+    for _, step in ipairs(permissionSteps) do
+        if step.answer == answer then
+            return true
+        end
+    end
+    return false
+end
+
 local function emit(kind, fields)
     gitgud.emit("voice." .. kind, gitgud.jsonEncode(fields))
 end
@@ -434,7 +460,8 @@ step(2300, "the filtered message went to the agent", function()
     check("an opening line from the repaired text", opening ~= nil and opening.text == "Looking into: fix the Lua parser")
     local asked = logIndex({ " timing ", '"stage":"openingAsked"', '"id":"m1"' })
     local filtered = logIndex({ " timing ", '"stage":"filtered"', '"id":"m1"' })
-    check("asked once the filter answered", asked ~= nil and filtered ~= nil and asked > filtered)
+    check("asked the moment it ended, beside the filter", asked ~= nil and filtered ~= nil and asked < filtered)
+    check("and made again from the repaired text", loggedLine("opening", { '"id":"m1"', '"why":"repaired"' }))
     check("the opening line is timed", logged('"stage":"opening"'))
     local speeds = true
     for _, c in ipairs(called("speak")) do
@@ -673,85 +700,33 @@ step(2500, "a filter that fails: sent as heard", function()
         and notesText():find("Couldn't check", 1, true) == nil)
 end)
 
--- Bragi hearing itself: a wake while its reply plays
--- never stops it on its own (with no words in time it's
--- only logged), and words that are the reply, or what was just sent, are
--- dropped, nothing in the prompt box.
+-- A wake while a reply plays stops it at once: the echo canceller keeps the
+-- reply out of the microphone, so nothing heard is second-guessed as Bragi
+-- hearing itself, and the message goes on like any other.
 local usersBefore = 0
-step(200, "a wake while the reply plays, no words yet", function()
+local echoStops = 0
+step(200, "a wake while the reply plays", function()
     usersBefore = count("user")
     playing = replies()[1].id -- "Summary: You said: fix the Lua parser"
+    echoStops = #called("speakStop")
     emit("playback", { state = "started", id = playing })
     emit("wake", { id = "e1", t = 36, t0 = 36 })
 end)
 
-step(1800, "no words in time: noted, not a barge-in", function()
-    check("logged as ignored", loggedLine("wake-ignored", { '"id":"e1"', '"why":"no words yet"' }))
-    check("not a barge-in", not loggedLine("barge-in", { '"id":"e1"' }))
-    emit("message", { id = "e1", text = "you said fix the Lua parser", endedBy = "done", t0 = 36, t1 = 37 })
-end)
-
-step(500, "its own reply: an echo", function()
-    check("dropped as an echo of the reply", loggedLine("self-wake", { '"id":"e1"', '"why":"words"' }))
-    check("not sent", count("user") == usersBefore)
-    check("nothing in the prompt box", prompt() == "" and not voice.hearing())
-    emit("wake", { id = "e2", t = 38, t0 = 38 })
-end)
-
-step(1800, "again, with what was just sent", function()
-    emit("message", { id = "e2", text = "check the lure build, check", endedBy = "done", t0 = 38, t1 = 39 })
-end)
-
-step(500, "what was just sent: an echo", function()
-    check("dropped as an echo of what was sent", loggedLine("echo", { '"id":"e2"', '"of":"sent"' }))
-    check("not sent", count("user") == usersBefore)
-    check("nothing in the prompt box", prompt() == "")
-    emit("playback", { state = "stopped", id = playing })
-    playing = nil
-end)
-
-local echoStops = 0
-local cancelsBefore = 0
-step(200, "a wake while a reply plays", function()
-    cancelsBefore = #called("cancel")
-    -- The reply the fake played: "You said: fix the Lua parser".
-    playing = replies()[1].id
-    echoStops = #called("speakStop")
-    emit("playback", { state = "started", id = playing })
-    emit("wake", { id = "m4", t = 30, t0 = 30 })
-end)
-
-step(200, "the reply goes on until words are heard", function()
-    check("not stopped on the wake alone", #called("speakStop") == echoStops)
-    emit("partial", { id = "m4", text = "you said fix the", t = 30.5 })
-end)
-
-step(200, "its own words: an echo", function()
-    check("the echo is dropped", #called("cancel") == cancelsBefore + 1 and not voice.hearing())
-    check("the reply wasn't stopped", #called("speakStop") == echoStops)
-    check("nothing in the prompt box", prompt() == "")
-    emit("cancelled", { id = "m4" })
-    emit("wake", { id = "m5e", t = 31, t0 = 31 })
-end)
-
-step(200, "other words while it plays", function()
-    emit("partial", { id = "m5e", text = "Bragi stop there", t = 31.5 })
-end)
-
-step(200, "the wake word stops a reply being spoken", function()
+step(200, "the reply stops on the wake", function()
     local stop = called("speakStop")[echoStops + 1]
-    check("the playing reply stopped", stop ~= nil and stop.id == playing)
-    check("the words show", prompt() == "Bragi stop there")
+    check("the playing reply stopped, and all after it", stop ~= nil and stop.id == nil)
+    check("logged as a barge-in", loggedLine("barge-in", { '"id":"e1"' }))
+    check("hearing", voice.hearing() ~= nil)
     emit("playback", { state = "stopped", id = playing })
     playing = nil
-    emit("cancelled", { id = "m5e" })
+    emit("partial", { id = "e1", text = "you said fix the Lua parser", t = 36.5 })
 end)
 
-step(200, "the message was dropped", function()
-    check("a dropped message leaves nothing", prompt() == "" and not voice.hearing())
-    local all = table.concat(voice.logLines(), "\n")
-    check("the log has the echo and the barge-in", all:find(" self-wake ", 1, true) ~= nil
-        and all:find(" barge-in ", 1, true) ~= nil)
+step(200, "the words show, even the reply's own", function()
+    check("the words show", prompt() == "you said fix the Lua parser" and voice.hearing() ~= nil)
+    check("never dropped as its own voice", not loggedLine("self-wake", { '"id":"e1"' }))
+    emit("cancelled", { id = "e1" })
 end)
 
 -- News from conversations Bragi follows, said aloud:
@@ -860,37 +835,23 @@ step(2500, "the command ran", function()
     check("logged", loggedLine("command", { '"command":"/compact"', '"how":"now"' }))
 end)
 
--- Once your voice is enrolled, a wake during a reply stops it only when
--- the engine says the speech is yours (the spotter heard
--- Baldr through the speakers and the reply cut itself off).
+-- Once your voice is enrolled, a wake during a reply stops it at once
+-- too: no waiting for the engine to score the voice.
 local enrolledStops = 0
-step(200, "enrolled: a wake during a reply, someone else's words", function()
+step(200, "enrolled: a wake during a reply", function()
     emit("enrollResult", { enrolled = true })
     playing = replies()[1].id
     enrolledStops = #called("speakStop")
     emit("playback", { state = "started", id = playing })
     emit("wake", { id = "n1", t = 32, t0 = 32 })
-    emit("partial", { id = "n1", text = "three things are open on the port", t = 32.5 })
 end)
-step(200, "not scored yet: the reply plays on", function()
-    check("not stopped before the voice is known", #called("speakStop") == enrolledStops)
-    emit("partial", { id = "n1", text = "three things are open on the port", t = 33, speaker = "other" })
-end)
-step(200, "not your voice: dropped, the reply plays on", function()
-    check("never stopped", #called("speakStop") == enrolledStops)
-    check("logged as not you", loggedLine("self-wake", { '"id":"n1"', '"why":"speaker"' }))
-    check("nothing held", prompt() == "" and not voice.hearing())
-    emit("cancelled", { id = "n1" })
-    emit("wake", { id = "n2", t = 34, t0 = 34 })
-    emit("partial", { id = "n2", text = "Bragi wait a second", t = 34.5, speaker = "user" })
-end)
-step(200, "your voice: the reply stops", function()
+step(200, "stopped before any voice is scored", function()
     local stop = called("speakStop")[enrolledStops + 1]
-    check("stopped for you", stop ~= nil and stop.id == playing)
-    check("logged as a barge-in", loggedLine("barge-in", { '"id":"n2"' }))
+    check("stopped on the wake", stop ~= nil and stop.id == nil)
+    check("logged as a barge-in", loggedLine("barge-in", { '"id":"n1"' }))
     emit("playback", { state = "stopped", id = playing })
     playing = nil
-    emit("cancelled", { id = "n2" })
+    emit("cancelled", { id = "n1" })
     emit("enrollResult", { enrolled = false })
 end)
 
@@ -1217,8 +1178,9 @@ step(2500, "sharing a word isn't a repeat", function()
         == "Looking into: the flight log shows two failures")
 end)
 
--- Narration and the answer: nothing narrated starts once it streams; a
--- line not yet playing is dropped; one playing finishes. The fake "wait"
+-- Narration and the answer: nothing new is narrated once it streams; a
+-- line already said still plays (2026-10-27: dropped, it left silence
+-- until the summary); one playing finishes. The fake "wait"
 -- turn runs a tool and waits; its steps are published here.
 local queuedLine = nil
 --- A step of the shown conversation's voice turn, as bragi/agent.lua publishes it.
@@ -1245,7 +1207,8 @@ step(300, "the answer starts streaming", function()
     for _, c in ipairs(called("speakStop")) do
         dropped = dropped or (queuedLine ~= nil and c.id == queuedLine.id)
     end
-    check("the line not yet playing is dropped", dropped and loggedLine("narrate-dropped", { '"why":"answering"' }))
+    check("the line already said still plays", not dropped and not loggedLine("narrate-dropped",
+        { '"why":"answering"' }))
     activity({ kind = "thinking", text = string.rep("weighing the parser ", 10) })
 end)
 
@@ -1848,6 +1811,13 @@ devices.audio = {
         audioCalls[#audioCalls + 1] = { name = "test", on = on }
         return true
     end,
+    echo = function(ms)
+        audioCalls[#audioCalls + 1] = { name = "echo", ms = ms }
+    end,
+    echoTest = function(task)
+        audioCalls[#audioCalls + 1] = { name = "echoTest", task = task }
+        return true
+    end,
 }
 local function lastAudio(name)
     for i = #audioCalls, 1, -1 do
@@ -1922,6 +1892,66 @@ step(300, "back to the default microphone", function()
     emit("ready", { version = 0, keywords = true })
 end)
 
+-- The speaker delay and the echo test: the test pauses listening, plays
+-- its chirps (the audio layer's), saves the delay it measured, and
+-- listening picks up again with it.
+local function echoDone(fields)
+    gitgud.emit("BragiEchoTest.done", gitgud.jsonEncode(fields))
+end
+
+step(200, "the speaker delay rows", function()
+    check("a speaker delay slider", gitgud.getText(picker.widget(2, 4, "Title")) == "Speaker delay")
+    check("off by default", gitgud.getText(picker.widget(2, 4, "Value")) == "Off" and devices.echoDelay() == 0)
+    check("an echo test", gitgud.getText(picker.widget(2, 5, "Title")) == "Echo test"
+        and gitgud.getText(picker.widget(2, 5, "Action")) == "Test")
+    calls = {}
+    clickWidget(picker.widget(2, 5, "Action"))
+end)
+
+step(300, "the test runs", function()
+    check("the audio layer plays the chirps", lastAudio("echoTest") ~= nil and lastAudio("echoTest").task == "BragiEchoTest")
+    check("listening paused for it", #called("stop") == 1 and voice.state() == "off")
+    check("its button says so", gitgud.getText(picker.widget(2, 5, "Action")) == "Testing")
+    calls = {}
+    echoDone({ ok = true, heard = true, delayMs = 247.6, correlation = 0.7, echoDb = -20, floorDb = -50 })
+end)
+
+step(300, "measured: the delay saved and used", function()
+    check("saved, rounded", settings.get("bragi.echoDelayMs", "") == "248" and devices.echoDelay() == 248)
+    check("the slider shows it", gitgud.getText(picker.widget(2, 4, "Value")) == "248 ms")
+    check("the test says what it found", (gitgud.getText(picker.widget(2, 5, "Sub")) or ""):find("248 ms late", 1, true)
+        ~= nil)
+    check("the audio layer has it", lastAudio("echo") ~= nil and lastAudio("echo").ms == 248)
+    check("listening picked up again", #called("listen") == 1)
+    emit("ready", { version = 0, keywords = true })
+end)
+
+step(300, "a test that hears nothing", function()
+    check("listening", voice.state() == "listening")
+    clickWidget(picker.widget(2, 5, "Action"))
+end)
+
+step(300, "not heard", function()
+    echoDone({ ok = true, heard = false, delayMs = 12, correlation = 0.05, echoDb = -60, floorDb = -55 })
+end)
+
+step(300, "the delay kept", function()
+    check("it says so", (gitgud.getText(picker.widget(2, 5, "Sub")) or ""):find("didn't hear the test", 1, true) ~= nil)
+    check("the delay is kept", devices.echoDelay() == 248)
+    emit("ready", { version = 0, keywords = true })
+    clickWidget(picker.widget(2, 5, "Action"))
+end)
+
+step(300, "a short delay", function()
+    echoDone({ ok = true, heard = true, delayMs = 24, correlation = 0.8, echoDb = -25, floorDb = -50 })
+end)
+
+step(300, "left to the system", function()
+    check("off again", devices.echoDelay() == 0 and gitgud.getText(picker.widget(2, 4, "Value")) == "Off")
+    check("it says why", (gitgud.getText(picker.widget(2, 5, "Sub")) or ""):find("handles that", 1, true) ~= nil)
+    emit("ready", { version = 0, keywords = true })
+end)
+
 step(300, "back to the Agent view", function()
     shell.show("agent")
 end)
@@ -1945,14 +1975,31 @@ step(200, "a turn that runs until stopped", function()
     agent.send("wait")
 end)
 
+-- While it's judged (stop, steer, or note), no narration starts: a stop
+-- would cut it off.
+local judgedSeen, judgedAfter = false, nil
+local function watchJudging()
+    if voice.guard.judgingNow() then
+        judgedSeen = true
+    end
+    if bargeLog("stop") >= 1 then
+        judgedAfter = voice.guard.judgingNow()
+        return
+    end
+    gitgud.after(5, watchJudging)
+end
+
 step(1200, "\"stop\" while it works", function()
     check("the turn runs", agent.session().turn == true)
     emit("wake", { id = "b1", t = 100, t0 = 100 })
     emit("message", { id = "b1", text = "please stop", endedBy = "closing", t0 = 100, t1 = 101 })
+    watchJudging()
 end)
 
 step(3000, "stopped, nothing sent", function()
     check("classified as stop", bargeLog("stop") == 1)
+    check("narration held while it was judged", judgedSeen)
+    check("and free again once it was", judgedAfter == false)
     check("the turn stopped", agent.session().turn == false)
     check("nothing was sent", last("user").text == "wait")
     agent.send("wait")
@@ -2057,7 +2104,7 @@ step(3000, "stopped speaking, nothing sent", function()
     playing = nil
 end)
 
--- The speaker: "other" only counts once your voice is enrolled.
+-- Who speaks never matters: "other" is taken like anyone, enrolled or not.
 step(200, "another speaker over a reply, not enrolled", function()
     playing = replies()[1].id
     emit("playback", { state = "started", id = playing })
@@ -2084,64 +2131,9 @@ step(200, "enrolled: another speaker", function()
         speaker = "other" })
 end)
 
-step(1000, "dropped as someone else", function()
-    check("dropped once enrolled", logged('"why":"speaker"') and last("user").text == "what about the docs")
+step(1000, "taken too: what's heard during a reply isn't second-guessed", function()
+    check("not dropped as someone else", not logged(' not-you '))
     emit("playback", { state = "stopped", id = playing })
-    playing = nil
-end)
-
--- Bragi says its own name: its echo must not cut it off, even when the
--- first words heard don't match; only your voice stops it.
-local named, stopsBefore = nil, 0
--- A log line of this kind about message `id`.
-local function loggedAbout(kind, id)
-    for _, line in ipairs(voice.logLines()) do
-        if line:find(" " .. kind .. " ", 1, true) and line:find('"id":"' .. id .. '"', 1, true) then
-            return true
-        end
-    end
-    return false
-end
-step(1000, "a reply that says the name", function()
-    stopsBefore = #called("speakStop")
-    named = voice.say("I'm Bragi, and the build on main is green.")
-    check("it's spoken as written", named ~= nil and replies()[#replies()].text:find("Bragi", 1, true) ~= nil)
-    playing = named
-    emit("playback", { state = "started", id = named })
-    emit("wake", { id = "n1", t = 160, t0 = 160 })
-end)
-
-step(200, "first words that don't match", function()
-    emit("partial", { id = "n1", text = "brocky and the bill" })
-end)
-
-step(800, "not cut off by the first words", function()
-    check("still speaking", #called("speakStop") == stopsBefore)
-    check("no barge-in on the first words", not loggedAbout("barge-in", "n1"))
-    emit("message", { id = "n1", text = "brocky and the bill on main is green", endedBy = "closing",
-        t0 = 160, t1 = 162, speaker = "other" })
-end)
-
-step(1000, "its own voice is dropped", function()
-    check("dropped as its own voice", loggedAbout("self-wake", "n1") and not loggedAbout("barge-in", "n1"))
-    emit("playback", { state = "stopped", id = named })
-    named = voice.say("Bragi here again.")
-    playing = named
-    emit("playback", { state = "started", id = named })
-    emit("wake", { id = "n2", t = 170, t0 = 170 })
-end)
-
-step(200, "you interrupt it", function()
-    emit("partial", { id = "n2", text = "stop" })
-end)
-
-step(800, "you, by speaker", function()
-    emit("message", { id = "n2", text = "stop", endedBy = "closing", t0 = 170, t1 = 171, speaker = "user" })
-end)
-
-step(1000, "your voice stops it", function()
-    check("a barge-in by you", loggedAbout("barge-in", "n2") and not loggedAbout("self-wake", "n2"))
-    emit("playback", { state = "stopped", id = named })
     playing = nil
 end)
 
@@ -2330,6 +2322,7 @@ step(2000, "\"yeah go ahead\" allows", function()
         and loggedLine("decision", { '"decision":"allow"', '"by":"voice"', '"via":"ambient"' }))
     check("the tool ran", last("assistant").text == "Done")
     check("the window closed", not voice.approving())
+    check("the narrator is told it was allowed", told("allowed"))
     shot("08-allowed-by-voice")
     toolTurn("a2", 210)
 end)
@@ -2344,6 +2337,7 @@ step(2000, "\"no don't\" denies", function()
     local card = last("permission")
     check("denied", card.answer == "Denied" and card.answerNote == "Denied by voice: \u{201C}No, don't do that.\u{201D}")
     check("the agent heard no", last("assistant").text == "Denied")
+    check("the narrator is told it was refused", told("refused"))
     leftBefore = countSaid("I'll leave that on screen.")
     toolTurn("a3", 220)
 end)
@@ -2392,9 +2386,15 @@ step(3000, "another speaker in the window", function()
     emit("ambient", { text = "Yeah, go ahead.", t0 = 231, t1 = 232, speaker = "other" })
 end)
 
-step(1500, "only your voice answers", function()
-    check("not taken from someone else", last("permission").answer == nil and voice.approving())
-    check("logged as ignored", loggedLine("answer", { '"speaker":"other"', '"ignored":"not you"' }))
+step(1500, "anyone's voice answers", function()
+    check("taken, whoever says it", last("permission").answer == "Allowed")
+    check("never ignored as someone else", not loggedLine("answer", { '"ignored":"not you"' }))
+    toolTurn("a4b", 235)
+end)
+
+step(3000, "another request", function()
+    check("the tool was asked about", #askedLines() > askedBefore)
+    questionPlayed()
     clickCard(last("permission"), "Deny")
 end)
 
@@ -2882,16 +2882,19 @@ step(2500, "and used", function()
     local hot = vocab.hotwords()
     check("hotwords lead with what corrections meant", hot[1] == "Bragi notes" and hot[2] == "Zork")
     -- A changed vocabulary reaches the engine while listening (on the
-    -- keep-warm tick; called here), once.
+    -- keep-warm tick, or called here), once.
+    voice.syncHotwords()
+    local sent = nil
+    for _, c in ipairs(called("config")) do
+        if c.fields.vocabulary then
+            sent = c
+        end
+    end
+    check("the new vocabulary goes in a config", sent ~= nil and sent.fields.vocabulary[1] == "Bragi notes")
+    check("logged", logIndex({ " hotwords ", '"sent":"config"', '"Bragi notes"' }) ~= nil)
     local before = #called("config")
     voice.syncHotwords()
-    local configs = called("config")
-    local sent = configs[#configs]
-    check("the new vocabulary goes in a config", #configs == before + 1 and sent.fields.vocabulary ~= nil
-        and sent.fields.vocabulary[1] == "Bragi notes")
-    check("logged", logIndex({ " hotwords ", '"sent":"config"', '"Bragi notes"' }) ~= nil)
-    voice.syncHotwords()
-    check("not again while it's the same", #called("config") == before + 1)
+    check("not again while it's the same", #called("config") == before)
 end)
 
 -- The vocabulary: the products the user uses and the repository's words.
@@ -2999,19 +3002,17 @@ step(200, "the window opens once it has played", function()
     shot("11-follow-up")
     emit("ambient", { text = "Um.", t0 = 452, t1 = 452.5, speaker = "user" })
     emit("ambient", { text = "You said should I go ahead", t0 = 453, t1 = 454, speaker = "user" })
-    emit("ambient", { text = "Yes, go ahead with it.", t0 = 455, t1 = 456, speaker = "other" })
 end)
 
 local usersBefore = 0
-step(500, "filler, its echo, and someone else are ignored", function()
+step(500, "filler and its echo are ignored", function()
     check("still open", voice.followingUp())
     check("filler ignored", followUpLines({ '"ignored":"filler"' }) == 1)
     check("its echo ignored", followUpLines({ '"ignored":"echo"' }) == 1)
-    check("someone else ignored", followUpLines({ '"ignored":"not you"' }) == 1)
     check("nothing sent", last("user").text == "should I go ahead?")
     usersBefore = count("user")
-    -- Not scored ("unknown", too short to tell): theirs, as for a card.
-    emit("ambient", { text = "Yes, go ahead with it.", t0 = 457, t1 = 458, speaker = "unknown" })
+    -- Whoever says it: the answer.
+    emit("ambient", { text = "Yes, go ahead with it.", t0 = 457, t1 = 458, speaker = "other" })
 end)
 
 step(2500, "the answer is the next message, without the wake word", function()
@@ -3447,6 +3448,218 @@ step(2500, "the utterances stood in for an empty final", function()
     check("the fallback names the utterances", logged('"took":"utterances"'))
     local mine = last("user")
     check("the utterances' text was sent", mine ~= nil and mine.text == "run the parser tests twice")
+end)
+
+-- Carrying on after a pause (2026-10-27): speech that starts within
+-- guard.CARRY_ON_MS of the end of a message the model ended joins it, with
+-- no wake word; once it was sent, it follows as a steer.
+local function speaksSince(n)
+    local list = {}
+    for i, c in ipairs(called("speak")) do
+        if i > n then
+            list[#list + 1] = c
+        end
+    end
+    return list
+end
+local function spokeLike(list, prefix)
+    for _, c in ipairs(list) do
+        if c.text:find(prefix, 1, true) == 1 then
+            return c
+        end
+    end
+    return nil
+end
+local carryFrom = 0
+
+step(300, "a message the model ended, and the user goes on", function()
+    carryFrom = #called("speak")
+    emit("wake", { id = "c1", t = 298000, t0 = 298000 })
+    emit("message", { id = "c1", text = "rename the notes file", endedBy = "done", t0 = 298000, t1 = 300000 })
+    emit("vad", { speaking = true, t = 301000 })
+end)
+
+step(600, "what they went on to say", function()
+    check("the message waits for it", loggedLine("carry-on", { '"id":"c1"', '"state":"waiting"' }))
+    check("nothing sent yet", last("user").pending ~= nil)
+    emit("vad", { speaking = false, t = 302500 })
+    emit("ambient", { text = "to todo dot txt", t0 = 301000, t1 = 302500, speaker = "user" })
+end)
+
+step(2500, "sent as one message", function()
+    check("it joined the message", loggedLine("carry-on", { '"id":"c1"', '"state":"joined"' }))
+    local mine = last("user")
+    check("the whole of it was sent", mine ~= nil and mine.text == "rename the notes file to todo dot txt")
+    local reply = last("assistant")
+    check("and answered", reply ~= nil and reply.text == "You said: rename the notes file to todo dot txt")
+    local said = speaksSince(carryFrom)
+    check("the opening line was made from all of it",
+        spokeLike(said, "Looking into: rename the notes file to todo dot txt") ~= nil)
+    local half = false
+    for _, c in ipairs(said) do
+        half = half or c.text == "Looking into: rename the notes file"
+    end
+    check("never from the first half", not half)
+end)
+
+step(300, "a message that goes to work, and the user goes on after it was sent", function()
+    emit("wake", { id = "c2", t = 308000, t0 = 308000 })
+    emit("message", { id = "c2", text = "work", endedBy = "done", t0 = 308000, t1 = 310000 })
+end)
+
+step(1500, "the rest, once the turn runs", function()
+    check("the turn runs", agent.session().turn == true and last("user").text == "work")
+    emit("vad", { speaking = true, t = 311500 })
+    emit("vad", { speaking = false, t = 312500 })
+    emit("ambient", { text = "and the tests", t0 = 311500, t1 = 312500, speaker = "user" })
+end)
+
+step(6500, "it followed as a steer", function()
+    check("it joined, after the message was sent", loggedLine("carry-on", { '"id":"c2"', '"state":"joined"',
+        '"sent":true' }))
+    check("the turn was steered", loggedLine("barge", { '"action":"steer"', "carried on after a pause" }))
+    local mine = last("user")
+    check("the rest was sent", mine ~= nil and mine.text == "and the tests")
+    local reply = last("assistant")
+    check("and answered", reply ~= nil and reply.text == "You said: and the tests")
+end)
+
+step(300, "speech that starts too late", function()
+    carryFrom = #called("speak")
+    emit("wake", { id = "c3", t = 318000, t0 = 318000 })
+    emit("message", { id = "c3", text = "hello there", endedBy = "done", t0 = 318000, t1 = 320000 })
+    emit("vad", { speaking = true, t = 323000 })
+    emit("vad", { speaking = false, t = 324000 })
+    emit("ambient", { text = "something else", t0 = 323000, t1 = 324000, speaker = "user" })
+end)
+
+step(2500, "doesn't carry it on", function()
+    check("nothing joined", not loggedLine("carry-on", { '"id":"c3"' }))
+    check("the message went as it was", last("user").text == "hello there")
+    check("its opening line was the one asked beside the filter",
+        loggedLine("narrate", { '"opening":true', '"early":true', "Looking into: hello there" }))
+end)
+
+-- Telling a long reply as it's written (2026-10-27): told a block at a
+-- time while it streams, the line waiting behind another made again with
+-- the next block, the rest with the reply; only the last line opens a
+-- follow-up.
+local tellFrom, firstPart, firstWhileRunning = 0, nil, nil
+local function watchParts()
+    if not firstPart then
+        local c = spokeLike(speaksSince(tellFrom), "Part first: ")
+        if c then
+            firstPart = c
+            firstWhileRunning = agent.session().turn == true
+            -- It plays: what comes next waits behind it.
+            playing = c.id
+            emit("playback", { state = "started", id = c.id })
+            return
+        end
+    end
+    gitgud.after(20, watchParts)
+end
+
+step(300, "a long reply", function()
+    tellFrom = #called("speak")
+    emit("wake", { id = "l1", t = 330000, t0 = 330000 })
+    emit("message", { id = "l1", text = "told long", endedBy = "closing", t0 = 330000, t1 = 331000 })
+    watchParts()
+end)
+
+step(7000, "told in blocks as it streamed", function()
+    local said = speaksSince(tellFrom)
+    check("its first block was told while it was still being written", firstPart ~= nil
+        and firstPart.text == "Part first: Part 1 begins here." and firstWhileRunning == true)
+    check("then the next one", spokeLike(said, "Part middle: Part 2 begins here.") ~= nil)
+    local lastLine = spokeLike(said, "Part last: ")
+    check("the line waiting behind the one playing was made again with the rest",
+        lastLine ~= nil and lastLine.text == "Part last: Part 2 begins here. (again) Should I go on?"
+        and loggedLine("tell-rewrite", {}))
+    check("never retold whole as well", spokeLike(said, "Summary: ") == nil)
+    emit("playback", { state = "stopped", id = firstPart.id })
+    playing = nil
+    if lastLine then
+        emit("playback", { state = "started", id = lastLine.id })
+        emit("playback", { state = "stopped", id = lastLine.id })
+    end
+end)
+
+step(300, "the last line asked: the follow-up window", function()
+    check("it opened", voice.followingUp())
+end)
+
+-- Read aloud, cut short, and picked up again ("never mind, keep going").
+local storyFrom, storyFirst = 0, nil
+local function watchStory()
+    local c = spokeLike(speaksSince(storyFrom), "Once upon a time, part 1.")
+    if c then
+        storyFirst = c
+        playing = c.id
+        emit("playback", { state = "started", id = c.id })
+        return
+    end
+    gitgud.after(20, watchStory)
+end
+
+step(300, "a story", function()
+    storyFrom = #called("speak")
+    emit("wake", { id = "s1", t = 340000, t0 = 340000 })
+    emit("message", { id = "s1", text = "told story", endedBy = "closing", t0 = 340000, t1 = 341000 })
+    watchStory()
+end)
+
+step(2000, "cut short as it's read", function()
+    check("it's read out, not retold", storyFirst ~= nil and storyFirst.text:find("This is sentence 12 of part 1.",
+        1, true) ~= nil)
+    emit("wake", { id = "s2", t = 343000, t0 = 343000 })
+    emit("message", { id = "s2", text = "sorry, keep going", endedBy = "closing", t0 = 343000, t1 = 344000 })
+end)
+
+-- Events go out after the step: what stopped playing stops once the wake
+-- has been taken.
+step(50, "the line stopped", function()
+    emit("playback", { state = "stopped", id = playing })
+    playing = nil
+end)
+
+step(6000, "picked up where it stopped", function()
+    check("classified as resume", bargeLog("resume") == 1)
+    check("nothing was sent", last("user").text == "told story")
+    local said = speaksSince(storyFrom)
+    local again = 0
+    for _, c in ipairs(said) do
+        if c.text:find("This is sentence 12 of part 1.", 1, true) then
+            again = again + 1
+        end
+    end
+    check("the line cut short was said again", again == 2 and loggedLine("resume", {}))
+    check("and the rest of the story read", spokeLike(said, "Once upon a time, part 2.") ~= nil
+        and spokeLike(said, "Once upon a time, part 4.") ~= nil)
+end)
+
+step(300, "another story", function()
+    storyFrom, storyFirst = #called("speak"), nil
+    emit("wake", { id = "s3", t = 350000, t0 = 350000 })
+    emit("message", { id = "s3", text = "told story", endedBy = "closing", t0 = 350000, t1 = 351000 })
+    watchStory()
+end)
+
+step(2000, "stopped as it's read", function()
+    check("it started", storyFirst ~= nil)
+    emit("wake", { id = "s4", t = 353000, t0 = 353000 })
+    emit("message", { id = "s4", text = "stop", endedBy = "closing", t0 = 353000, t1 = 353500 })
+end)
+
+step(50, "that line stopped", function()
+    emit("playback", { state = "stopped", id = playing })
+    playing = nil
+end)
+
+step(5000, "nothing more of it", function()
+    check("classified as stop", loggedLine("barge", { '"id":"s4"', '"action":"stop"' }))
+    check("the telling ended", loggedLine("tell-ended", { '"why":"stop"' }))
+    check("the rest wasn't read", spokeLike(speaksSince(storyFrom), "Once upon a time, part 4.") == nil)
 end)
 
 step(500, "done", function()

@@ -17,14 +17,18 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <deque>
 #include <initializer_list>
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <tuple>
 #include <vector>
 
 namespace gitgud::platform
@@ -37,8 +41,21 @@ namespace gitgud::platform
         std::mutex g_DeviceMutex;
         std::string g_CaptureId;
         std::string g_RenderId;
+        EchoOptions g_Echo; // guarded by g_DeviceMutex
 
     } // namespace
+
+    void SetEchoOptions(const EchoOptions& _Options)
+    {
+        std::lock_guard<std::mutex> lock(g_DeviceMutex);
+        g_Echo = _Options;
+    }
+
+    EchoOptions CurrentEchoOptions()
+    {
+        std::lock_guard<std::mutex> lock(g_DeviceMutex);
+        return g_Echo;
+    }
 
     void SetAudioDevices(const std::string& _CaptureId, const std::string& _RenderId)
     {
@@ -305,6 +322,172 @@ namespace gitgud::platform
         stages.push_back(std::move(_pFirst));
         stages.push_back(std::move(_pSecond));
         return MakeFallbackCapture(std::move(stages), _Stall);
+    }
+
+    void EchoTimeline::Push(const int16_t* _pSamples, std::size_t _nCount, int64_t _iTime)
+    {
+        if (_nCount == 0)
+        {
+            return;
+        }
+        if (_iTime >= 0)
+        {
+            m_Anchors.push_back({End(), _iTime});
+        }
+        m_Samples.insert(m_Samples.end(), _pSamples, _pSamples + _nCount);
+    }
+
+    int64_t EchoTimeline::TimeOf(int64_t _iIndex) const
+    {
+        if (m_Anchors.empty())
+        {
+            return 0;
+        }
+        // The last anchor at or before the index (the first, before them all).
+        auto it = std::upper_bound(m_Anchors.begin(), m_Anchors.end(), _iIndex,
+            [](int64_t _iValue, const Anchor& _Anchor) { return _iValue < _Anchor.m_iIndex; });
+        const Anchor& anchor = it == m_Anchors.begin() ? *it : *(it - 1);
+        return anchor.m_iTime + (_iIndex - anchor.m_iIndex) * 10000000 / m_iRate;
+    }
+
+    int64_t EchoTimeline::IndexAt(int64_t _iTime) const
+    {
+        if (m_Anchors.empty())
+        {
+            return m_iBegin;
+        }
+        auto it = std::upper_bound(m_Anchors.begin(), m_Anchors.end(), _iTime,
+            [](int64_t _iValue, const Anchor& _Anchor) { return _iValue < _Anchor.m_iTime; });
+        const Anchor& anchor = it == m_Anchors.begin() ? *it : *(it - 1);
+        const int64_t idelta = _iTime - anchor.m_iTime;
+        // Rounded to the nearest sample, either way.
+        const int64_t isamples = (idelta * m_iRate + (idelta >= 0 ? 5000000 : -5000000)) / 10000000;
+        return anchor.m_iIndex + isamples;
+    }
+
+    void EchoTimeline::Copy(int64_t _iFrom, std::size_t _nCount, std::vector<int16_t>& _Out) const
+    {
+        _Out.assign(_nCount, 0);
+        const int64_t iend = End();
+        for (std::size_t ni = 0; ni < _nCount; ++ni)
+        {
+            const int64_t iat = _iFrom + static_cast<int64_t>(ni);
+            if (iat >= m_iBegin && iat < iend)
+            {
+                _Out[ni] = m_Samples[static_cast<std::size_t>(iat - m_iBegin)];
+            }
+        }
+    }
+
+    void EchoTimeline::TrimBefore(int64_t _iIndex)
+    {
+        if (_iIndex <= m_iBegin)
+        {
+            return;
+        }
+        const int64_t icut = (std::min)(_iIndex, End());
+        m_Samples.erase(
+            m_Samples.begin(), m_Samples.begin() + static_cast<std::ptrdiff_t>(icut - m_iBegin));
+        m_iBegin = icut;
+        // Anchors before the cut go, but the last of them stays: it still
+        // dates the samples after it.
+        std::size_t nkeep = 0;
+        while (nkeep + 1 < m_Anchors.size() && m_Anchors[nkeep + 1].m_iIndex <= icut)
+        {
+            ++nkeep;
+        }
+        m_Anchors.erase(m_Anchors.begin(), m_Anchors.begin() + static_cast<std::ptrdiff_t>(nkeep));
+    }
+
+    int EchoLag(const std::vector<int16_t>& _Reference, const std::vector<int16_t>& _Mic,
+        int _iMaxLag, double* _pCorrelation)
+    {
+        if (_pCorrelation)
+        {
+            *_pCorrelation = 0;
+        }
+        if (_Reference.empty() || _Mic.empty() || _iMaxLag < 0)
+        {
+            return 0;
+        }
+        double fref = 0;
+        for (const int16_t sample : _Reference)
+        {
+            fref += static_cast<double>(sample) * sample;
+        }
+        if (fref <= 0)
+        {
+            return 0;
+        }
+        const auto score = [&](int _iLag)
+        {
+            double fdot = 0;
+            double fmic = 0;
+            const std::size_t nlag = static_cast<std::size_t>(_iLag);
+            for (std::size_t ni = 0; ni < _Reference.size() && ni + nlag < _Mic.size(); ++ni)
+            {
+                const double fsample = _Mic[ni + nlag];
+                fdot += static_cast<double>(_Reference[ni]) * fsample;
+                fmic += fsample * fsample;
+            }
+            return fmic > 0 ? fdot / std::sqrt(fref * fmic) : 0.0;
+        };
+        // Every 4th lag, then each one around the best.
+        int ibest = 0;
+        double fbest = -2;
+        for (int ilag = 0; ilag <= _iMaxLag; ilag += 4)
+        {
+            const double f = score(ilag);
+            if (f > fbest)
+            {
+                fbest = f;
+                ibest = ilag;
+            }
+        }
+        const int icoarse = ibest;
+        for (int ilag = (std::max)(0, icoarse - 3); ilag <= (std::min)(_iMaxLag, icoarse + 3);
+            ++ilag)
+        {
+            const double f = score(ilag);
+            if (f > fbest)
+            {
+                fbest = f;
+                ibest = ilag;
+            }
+        }
+        if (_pCorrelation)
+        {
+            *_pCorrelation = (std::max)(0.0, fbest);
+        }
+        return ibest;
+    }
+
+    std::vector<int16_t> EchoTestSignal(int _iRate)
+    {
+        // Chirps of 180 ms from 500 Hz to 3 kHz, softened at both ends, at
+        // uneven gaps (no gap repeats, so no chirp lines up with another's
+        // echo), after a short quiet start.
+        constexpr double kPi = 3.14159265358979323846;
+        const double astarts[] = {0.3, 0.95, 1.85, 2.45};
+        const double fchirp = 0.18;
+        const double flow = 500.0;
+        const double fhigh = 3000.0;
+        std::vector<int16_t> out(static_cast<std::size_t>(3.0 * _iRate), 0);
+        const std::size_t nchirp = static_cast<std::size_t>(fchirp * _iRate);
+        for (const double fstart : astarts)
+        {
+            const std::size_t nat = static_cast<std::size_t>(fstart * _iRate);
+            for (std::size_t ni = 0; ni < nchirp && nat + ni < out.size(); ++ni)
+            {
+                const double ft = static_cast<double>(ni) / _iRate;
+                const double fphase =
+                    2 * kPi * (flow * ft + (fhigh - flow) * ft * ft / (2 * fchirp));
+                const double fwindow =
+                    0.5 - 0.5 * std::cos(2 * kPi * static_cast<double>(ni) / nchirp);
+                out[nat + ni] = static_cast<int16_t>(9000.0 * fwindow * std::sin(fphase));
+            }
+        }
+        return out;
     }
 
 #if defined(_WIN32)
@@ -940,6 +1123,28 @@ namespace gitgud::platform
             return SUCCEEDED(_pStore->SetValue(_Key, value));
         }
 
+        // The DSP's media type for 16 kHz mono 16-bit, for SetInputType or
+        // SetOutputType (`_bInput`) on `_iStream`.
+        HRESULT SetMonoType(IMediaObject* _pDsp, bool _bInput, DWORD _iStream)
+        {
+            DMO_MEDIA_TYPE type = {};
+            HRESULT hr = MoInitMediaType(&type, sizeof(WAVEFORMATEX));
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+            type.majortype = MEDIATYPE_Audio;
+            type.subtype = MEDIASUBTYPE_PCM;
+            type.bFixedSizeSamples = TRUE;
+            type.lSampleSize = 2;
+            type.formattype = FORMAT_WaveFormatEx;
+            *reinterpret_cast<WAVEFORMATEX*>(type.pbFormat) = MonoFormat(16000);
+            hr = _bInput ? _pDsp->SetInputType(_iStream, &type, 0)
+                         : _pDsp->SetOutputType(_iStream, &type, 0);
+            MoFreeMediaType(&type);
+            return hr;
+        }
+
         // A silent stream of our own on a speaker, running while the echo
         // canceller does. The DSP takes its echo reference from that
         // speaker, and per Microsoft's documentation of
@@ -1031,6 +1236,43 @@ namespace gitgud::platform
             bool m_bStarted = false;
         };
 
+        // The microphone and the speaker voice uses (the ones playback
+        // opens), resolved once by id, and the DSP's indexes for them.
+        struct EchoDevices
+        {
+            ComRef<IMMDevice> m_Mic;
+            ComRef<IMMDevice> m_Speaker;
+            bool m_bMicDefault = false;
+            bool m_bSpeakerDefault = false;
+            int32_t m_iIndexes = -1;
+        };
+
+        bool FindEchoDevices(EchoDevices& _Devices, std::string& _Error)
+        {
+            ComRef<IMMDeviceEnumerator> enumerator;
+            std::vector<std::string> mics;
+            std::vector<std::string> speakers;
+            std::string error;
+            if (!MakeEnumerator(enumerator, error) ||
+                !ResolveEndpoint(enumerator.m_pPointer, eCapture, _Devices.m_Mic, mics,
+                    _Devices.m_bMicDefault, error) ||
+                !ResolveEndpoint(enumerator.m_pPointer, eRender, _Devices.m_Speaker, speakers,
+                    _Devices.m_bSpeakerDefault, error))
+            {
+                _Error = error.empty() ? std::string("it can't find the devices") : error;
+                return false;
+            }
+            // A device the DSP can't be pointed at fails here, so plain
+            // capture opens it instead of the DSP quietly using another.
+            if (!EchoDeviceIndexes(DeviceId(_Devices.m_Mic.m_pPointer), mics,
+                    DeviceId(_Devices.m_Speaker.m_pPointer), speakers, _Devices.m_iIndexes))
+            {
+                _Error = "it can't use the chosen device";
+                return false;
+            }
+            return true;
+        }
+
         // How the echo canceller is pointed at its devices. MakeVoiceCapture
         // tries them in this order, each until it gives no audio for 2 s,
         // and the log's route says which ran: if the first never does, the
@@ -1103,43 +1345,6 @@ namespace gitgud::platform
             }
 
           private:
-            // The microphone and the speaker voice uses (the ones playback
-            // opens), resolved once by id, and the DSP's indexes for them.
-            struct Devices
-            {
-                ComRef<IMMDevice> m_Mic;
-                ComRef<IMMDevice> m_Speaker;
-                bool m_bMicDefault = false;
-                bool m_bSpeakerDefault = false;
-                int32_t m_iIndexes = -1;
-            };
-
-            static bool FindDevices(Devices& _Devices, std::string& _Error)
-            {
-                ComRef<IMMDeviceEnumerator> enumerator;
-                std::vector<std::string> mics;
-                std::vector<std::string> speakers;
-                std::string error;
-                if (!MakeEnumerator(enumerator, error) ||
-                    !ResolveEndpoint(enumerator.m_pPointer, eCapture, _Devices.m_Mic, mics,
-                        _Devices.m_bMicDefault, error) ||
-                    !ResolveEndpoint(enumerator.m_pPointer, eRender, _Devices.m_Speaker, speakers,
-                        _Devices.m_bSpeakerDefault, error))
-                {
-                    _Error = error.empty() ? std::string("it can't find the devices") : error;
-                    return false;
-                }
-                // A device the DSP can't be pointed at fails here, so plain
-                // capture opens it instead of the DSP quietly using another.
-                if (!EchoDeviceIndexes(DeviceId(_Devices.m_Mic.m_pPointer), mics,
-                        DeviceId(_Devices.m_Speaker.m_pPointer), speakers, _Devices.m_iIndexes))
-                {
-                    _Error = "it can't use the chosen device";
-                    return false;
-                }
-                return true;
-            }
-
             static bool Configure(IMediaObject* _pDsp, LONG _iDevices, std::string& _Error)
             {
                 ComRef<IPropertyStore> store;
@@ -1159,13 +1364,19 @@ namespace gitgud::platform
                     return false;
                 }
                 // Best effort: some Windows builds refuse some of these.
-                SetProperty(store.m_pPointer, MFPKEY_WMAAECMA_FEATR_ECHO_LENGTH, LONG(256));
-                SetProperty(store.m_pPointer, MFPKEY_WMAAECMA_FEATR_NS, LONG(1));
+                const EchoOptions options = CurrentEchoOptions();
+                SetProperty(store.m_pPointer, MFPKEY_WMAAECMA_FEATR_ECHO_LENGTH,
+                    LONG(options.m_iEchoLengthMs));
+                SetProperty(store.m_pPointer, MFPKEY_WMAAECMA_FEATR_NS,
+                    LONG(options.m_bNoiseSuppression ? 1 : 0));
                 SetProperty(store.m_pPointer, MFPKEY_WMAAECMA_FEATR_AGC, false);
+                SetProperty(store.m_pPointer, MFPKEY_WMAAECMA_FEATR_AES,
+                    LONG((std::max)(0, (std::min)(2, options.m_iSuppression))));
                 // Center clipping mutes what's quiet after the echo is taken
                 // out, and with it soft words and sentence ends
-                // (words and sentences went missing).
-                SetProperty(store.m_pPointer, MFPKEY_WMAAECMA_FEATR_CENTER_CLIP, false);
+                // (words and sentences went missing): off by default.
+                SetProperty(
+                    store.m_pPointer, MFPKEY_WMAAECMA_FEATR_CENTER_CLIP, options.m_bCenterClip);
                 return true;
             }
 
@@ -1231,11 +1442,11 @@ namespace gitgud::platform
                         keepAlive.push_back(std::move(pstream));
                     }
                 };
-                Devices devices;
+                EchoDevices devices;
                 std::string error;
                 if (m_eSetup != EchoSetup::kSystemDefaults)
                 {
-                    if (!FindDevices(devices, error))
+                    if (!FindEchoDevices(devices, error))
                     {
                         _Ready(false, error);
                         return;
@@ -1358,6 +1569,485 @@ namespace gitgud::platform
             std::string m_Error;             // why the loop stopped early
             std::string m_Route;             // what Route() says
         };
+
+        // The Voice Capture DSP in filter mode: 10 ms of the microphone and
+        // 10 ms of the speaker in (lined up by the caller), the cancelled
+        // microphone out.
+        class FilterDsp
+        {
+          public:
+            static constexpr std::size_t kFrame = 160;
+
+            FilterDsp() = default;
+            FilterDsp(const FilterDsp&) = delete;
+            FilterDsp& operator=(const FilterDsp&) = delete;
+
+            ~FilterDsp()
+            {
+                if (m_pOut)
+                {
+                    m_pOut->Release();
+                }
+                if (m_bStarted)
+                {
+                    m_Dsp->FreeStreamingResources();
+                }
+            }
+
+            bool Open(const EchoOptions& _Options, std::string& _Error)
+            {
+                HRESULT hr = CoCreateInstance(CLSID_CWMAudioAEC, nullptr, CLSCTX_INPROC_SERVER,
+                    IID_IMediaObject, m_Dsp.Out());
+                if (FAILED(hr))
+                {
+                    _Error = Failed("Opening the echo canceller", hr);
+                    return false;
+                }
+                ComRef<IPropertyStore> store;
+                if (FAILED(m_Dsp->QueryInterface(
+                        IID_PPV_ARGS(reinterpret_cast<IPropertyStore**>(store.Out())))) ||
+                    !SetProperty(store.m_pPointer, MFPKEY_WMAAECMA_SYSTEM_MODE,
+                        static_cast<LONG>(SINGLE_CHANNEL_AEC)) ||
+                    !SetProperty(store.m_pPointer, MFPKEY_WMAAECMA_DMO_SOURCE_MODE, false) ||
+                    !SetProperty(store.m_pPointer, MFPKEY_WMAAECMA_FEATURE_MODE, true))
+                {
+                    _Error = "The echo canceller refused its settings";
+                    return false;
+                }
+                SetProperty(store.m_pPointer, MFPKEY_WMAAECMA_FEATR_ECHO_LENGTH,
+                    LONG(_Options.m_iEchoLengthMs));
+                SetProperty(store.m_pPointer, MFPKEY_WMAAECMA_FEATR_NS,
+                    LONG(_Options.m_bNoiseSuppression ? 1 : 0));
+                SetProperty(store.m_pPointer, MFPKEY_WMAAECMA_FEATR_AGC, false);
+                SetProperty(store.m_pPointer, MFPKEY_WMAAECMA_FEATR_AES,
+                    LONG((std::max)(0, (std::min)(2, _Options.m_iSuppression))));
+                SetProperty(
+                    store.m_pPointer, MFPKEY_WMAAECMA_FEATR_CENTER_CLIP, _Options.m_bCenterClip);
+                for (const auto& [bInput, iStream, szWhat] :
+                    {std::tuple{true, DWORD(0), "microphone"},
+                        std::tuple{true, DWORD(1), "speaker"},
+                        std::tuple{false, DWORD(0), "output"}})
+                {
+                    hr = SetMonoType(m_Dsp.m_pPointer, bInput, iStream);
+                    if (FAILED(hr))
+                    {
+                        _Error = Failed(
+                            (std::string("Setting the echo canceller's ") + szWhat + " format")
+                                .c_str(),
+                            hr);
+                        return false;
+                    }
+                }
+                hr = m_Dsp->AllocateStreamingResources();
+                if (FAILED(hr))
+                {
+                    _Error = Failed("Starting the echo canceller", hr);
+                    return false;
+                }
+                m_bStarted = true;
+                m_pOut = new MediaBuffer(16000 * 2);
+                return true;
+            }
+
+            // One frame of each in (stamped in 100 ns units), all the
+            // output it has appended to `_Out`.
+            bool Process(const int16_t* _pMic, const int16_t* _pReference,
+                std::vector<int16_t>& _Out, std::string& _Error)
+            {
+                constexpr REFERENCE_TIME kFrameTime = 100000;
+                for (DWORD istream = 0; istream < 2; ++istream)
+                {
+                    auto* pin = new MediaBuffer(kFrame * 2);
+                    BYTE* pdata = nullptr;
+                    pin->GetBufferAndLength(&pdata, nullptr);
+                    std::memcpy(pdata, istream == 0 ? _pMic : _pReference, kFrame * 2);
+                    pin->SetLength(kFrame * 2);
+                    const HRESULT hr = m_Dsp->ProcessInput(istream, pin,
+                        DMO_INPUT_DATA_BUFFERF_TIME | DMO_INPUT_DATA_BUFFERF_TIMELENGTH, m_rtNext,
+                        kFrameTime);
+                    pin->Release();
+                    if (FAILED(hr))
+                    {
+                        _Error = Failed("The echo canceller's input", hr);
+                        return false;
+                    }
+                }
+                m_rtNext += kFrameTime;
+                DWORD dwflags = DMO_OUTPUT_DATA_BUFFERF_INCOMPLETE;
+                while (dwflags & DMO_OUTPUT_DATA_BUFFERF_INCOMPLETE)
+                {
+                    m_pOut->SetLength(0);
+                    DMO_OUTPUT_DATA_BUFFER output = {};
+                    output.pBuffer = m_pOut;
+                    DWORD dwstatus = 0;
+                    const HRESULT hr = m_Dsp->ProcessOutput(0, 1, &output, &dwstatus);
+                    if (FAILED(hr))
+                    {
+                        _Error = Failed("The echo canceller", hr);
+                        return false;
+                    }
+                    BYTE* pdata = nullptr;
+                    DWORD dwlength = 0;
+                    m_pOut->GetBufferAndLength(&pdata, &dwlength);
+                    const auto* psamples = reinterpret_cast<const int16_t*>(pdata);
+                    _Out.insert(_Out.end(), psamples, psamples + dwlength / 2);
+                    dwflags = output.dwStatus;
+                    if (hr == S_FALSE || dwlength == 0)
+                    {
+                        break;
+                    }
+                }
+                return true;
+            }
+
+          private:
+            ComRef<IMediaObject> m_Dsp;
+            MediaBuffer* m_pOut = nullptr;
+            bool m_bStarted = false;
+            REFERENCE_TIME m_rtNext = 0;
+        };
+
+        // A capture stream read by polling, 16 kHz mono, each packet stamped
+        // with the system clock: a microphone, or a speaker's loopback (what
+        // it plays, everyone's sound, as it plays it).
+        class TimedStream
+        {
+          public:
+            TimedStream() = default;
+            TimedStream(const TimedStream&) = delete;
+            TimedStream& operator=(const TimedStream&) = delete;
+
+            ~TimedStream()
+            {
+                if (m_bStarted)
+                {
+                    m_Client->Stop();
+                }
+            }
+
+            bool Start(IMMDevice* _pDevice, bool _bLoopback, std::string& _Error)
+            {
+                const char* szwhat = _bLoopback ? "the speaker's loopback" : "the microphone";
+                HRESULT hr =
+                    _pDevice->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, m_Client.Out());
+                if (SUCCEEDED(hr))
+                {
+                    const WAVEFORMATEX format = MonoFormat(16000);
+                    const DWORD dwflags = AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
+                                          AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY |
+                                          (_bLoopback ? AUDCLNT_STREAMFLAGS_LOOPBACK : 0);
+                    // A second of buffer (in 100 ns units): it's read every few ms.
+                    hr = m_Client->Initialize(
+                        AUDCLNT_SHAREMODE_SHARED, dwflags, 10000000, 0, &format, nullptr);
+                }
+                if (SUCCEEDED(hr) && !_bLoopback)
+                {
+                    NoDuckingFromStream(m_Client.m_pPointer);
+                }
+                if (SUCCEEDED(hr))
+                {
+                    hr = m_Client->GetService(__uuidof(IAudioCaptureClient), m_Capture.Out());
+                }
+                if (SUCCEEDED(hr))
+                {
+                    hr = m_Client->Start();
+                }
+                if (FAILED(hr))
+                {
+                    _Error = Failed((std::string("Opening ") + szwhat).c_str(), hr);
+                    return false;
+                }
+                m_bStarted = true;
+                return true;
+            }
+
+            // Everything it has into `_Timeline`. False when it failed.
+            bool Drain(EchoTimeline& _Timeline)
+            {
+                UINT32 upacket = 0;
+                HRESULT hr = S_OK;
+                while (SUCCEEDED(hr = m_Capture->GetNextPacketSize(&upacket)) && upacket > 0)
+                {
+                    BYTE* pdata = nullptr;
+                    UINT32 uframes = 0;
+                    DWORD dwflags = 0;
+                    UINT64 uposition = 0;
+                    UINT64 utime = 0;
+                    hr = m_Capture->GetBuffer(&pdata, &uframes, &dwflags, &uposition, &utime);
+                    if (FAILED(hr))
+                    {
+                        return false;
+                    }
+                    const int64_t itime = (dwflags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR)
+                                              ? -1
+                                              : static_cast<int64_t>(utime);
+                    if (dwflags & AUDCLNT_BUFFERFLAGS_SILENT)
+                    {
+                        m_Silence.assign(uframes, 0);
+                        _Timeline.Push(m_Silence.data(), uframes, itime);
+                    }
+                    else
+                    {
+                        _Timeline.Push(reinterpret_cast<const int16_t*>(pdata), uframes, itime);
+                    }
+                    m_Capture->ReleaseBuffer(uframes);
+                }
+                return SUCCEEDED(hr);
+            }
+
+          private:
+            ComRef<IAudioClient> m_Client;
+            ComRef<IAudioCaptureClient> m_Capture;
+            bool m_bStarted = false;
+            std::vector<int16_t> m_Silence;
+        };
+
+        // The echo canceller lined up by voice itself, for a speaker whose
+        // sound reaches the microphone later than the system knows
+        // (EchoOptions::m_iDelayMs): the microphone and a loopback of the
+        // speaker, both stamped with the system clock, and the DSP in filter
+        // mode given each 10 ms of the microphone with the speaker's sound
+        // from that much earlier (less kMarginMs, so it comes just before its
+        // echo), center clipping on (lined up, it measured best that way).
+        class AlignedEchoCapture final : public IAudioCapture
+        {
+          public:
+            ~AlignedEchoCapture() override
+            {
+                Stop();
+            }
+
+            bool Start(int _iSampleRate, OnSamples _OnSamples, std::string& _Error) override
+            {
+                if (_iSampleRate != 16000)
+                {
+                    _Error = "Echo cancellation gives 16 kHz only";
+                    return false;
+                }
+                m_OnSamples = std::move(_OnSamples);
+                {
+                    std::lock_guard<std::mutex> lock(m_ErrorMutex);
+                    m_Error.clear();
+                }
+                return m_Thread.Start([this](const auto& _Ready) { Loop(_Ready); }, _Error);
+            }
+
+            void Stop() override
+            {
+                m_Thread.Stop();
+            }
+
+            std::string Description() const override
+            {
+                return "Microphone (echo cancelled, lined up)";
+            }
+
+            std::string LastError() const override
+            {
+                std::lock_guard<std::mutex> lock(m_ErrorMutex);
+                return m_Error;
+            }
+
+            std::string Route() const override
+            {
+                std::lock_guard<std::mutex> lock(m_ErrorMutex);
+                return m_Route;
+            }
+
+          private:
+            static constexpr int kMarginMs = 20;
+            // The speaker's place follows the clocks only past this many
+            // samples off (their stamps jitter by a fraction of a
+            // millisecond), a sample per frame: a reference that jumps
+            // every frame spoils the canceller's filter.
+            static constexpr int64_t kDriftSamples = 16;
+            // The speaker's sound waited for at most this long (100 ns
+            // units) before a frame goes without it.
+            static constexpr int64_t kWait = 2000000;
+
+            void Fail(const std::string& _Error)
+            {
+                std::lock_guard<std::mutex> lock(m_ErrorMutex);
+                m_Error = _Error;
+            }
+
+            void Loop(const std::function<void(bool, const std::string&)>& _Ready)
+            {
+                ComScope com;
+                const EchoOptions options = CurrentEchoOptions();
+                EchoDevices devices;
+                std::string error;
+                if (!FindEchoDevices(devices, error))
+                {
+                    _Ready(false, error);
+                    return;
+                }
+                DuckingOptOut ducking;
+                const std::string optOut = ducking.Apply(devices.m_Speaker.m_pPointer);
+                // The loopback gives nothing while the speaker is idle.
+                SilentStream keepAlive;
+                const std::string kept = keepAlive.Start(devices.m_Speaker.m_pPointer, true);
+                TimedStream mic;
+                TimedStream speaker;
+                EchoOptions lined = options;
+                lined.m_bCenterClip = true;
+                FilterDsp dsp;
+                if (!mic.Start(devices.m_Mic.m_pPointer, false, error) ||
+                    !speaker.Start(devices.m_Speaker.m_pPointer, true, error) ||
+                    !dsp.Open(lined, error))
+                {
+                    _Ready(false, error);
+                    return;
+                }
+                {
+                    std::lock_guard<std::mutex> lock(m_ErrorMutex);
+                    m_Route =
+                        "echo canceller lined up, " + std::to_string(options.m_iDelayMs) +
+                        " ms; mic: " +
+                        EndpointName(devices.m_Mic.m_pPointer, devices.m_bMicDefault) +
+                        "; echo reference: loopback of " +
+                        EndpointName(devices.m_Speaker.m_pPointer, devices.m_bSpeakerDefault) +
+                        "; kept running: " + (kept == "ok" ? "yes" : kept) +
+                        "; ducking opt-out: " + optOut;
+                }
+                _Ready(true, {});
+
+                DWORD dwtask = 0;
+                HANDLE htask = AvSetMmThreadCharacteristicsW(L"Audio", &dwtask);
+                const int64_t ishift = static_cast<int64_t>(options.m_iDelayMs - kMarginMs) * 10000;
+                EchoTimeline micLine;
+                EchoTimeline speakerLine;
+                int64_t icursor = -1; // the next microphone sample to cancel
+                int64_t ispeaker = -1; // the speaker sample that goes with it
+                // Troubleshooting: GITGUD_ECHO_DEBUG names a folder for what
+                // the canceller got (mic.raw, speaker.raw: 16 kHz s16le).
+                const char* szdebug = std::getenv("GITGUD_ECHO_DEBUG");
+                std::FILE* pdebugMic = nullptr;
+                std::FILE* pdebugSpeaker = nullptr;
+                if (szdebug && *szdebug)
+                {
+                    pdebugMic = std::fopen((std::string(szdebug) + "/mic.raw").c_str(), "wb");
+                    pdebugSpeaker =
+                        std::fopen((std::string(szdebug) + "/speaker.raw").c_str(), "wb");
+                }
+                std::vector<int16_t> micFrame;
+                std::vector<int16_t> speakerFrame;
+                std::vector<int16_t> out;
+                while (m_Thread.Running())
+                {
+                    keepAlive.TopUp();
+                    if (!mic.Drain(micLine) || !speaker.Drain(speakerLine))
+                    {
+                        Fail("The microphone or the speaker's loopback stopped");
+                        break;
+                    }
+                    if (icursor < 0 && micLine.Stamped())
+                    {
+                        icursor = micLine.Begin();
+                    }
+                    while (icursor >= 0 &&
+                           micLine.End() - icursor >= static_cast<int64_t>(FilterDsp::kFrame))
+                    {
+                        const int64_t iwant = micLine.TimeOf(icursor) - ishift;
+                        const int64_t itarget = speakerLine.IndexAt(iwant);
+                        if (ispeaker < 0 || std::llabs(itarget - ispeaker) > 4 * kDriftSamples)
+                        {
+                            ispeaker = itarget; // the first frame, or far off: line up
+                        }
+                        else if (itarget - ispeaker > kDriftSamples)
+                        {
+                            ++ispeaker;
+                        }
+                        else if (ispeaker - itarget > kDriftSamples)
+                        {
+                            --ispeaker;
+                        }
+                        const int64_t ifrom = ispeaker;
+                        const bool bhave =
+                            speakerLine.Stamped() &&
+                            speakerLine.End() >= ifrom + static_cast<int64_t>(FilterDsp::kFrame);
+                        // Its sound not in yet (a delay shorter than the
+                        // loopback's own): wait for it, a little.
+                        if (!bhave &&
+                            micLine.TimeOf(micLine.End()) - micLine.TimeOf(icursor) < kWait)
+                        {
+                            break;
+                        }
+                        micLine.Copy(icursor, FilterDsp::kFrame, micFrame);
+                        speakerLine.Copy(ifrom, FilterDsp::kFrame, speakerFrame);
+                        if (pdebugMic && pdebugSpeaker)
+                        {
+                            std::fwrite(micFrame.data(), 2, micFrame.size(), pdebugMic);
+                            std::fwrite(speakerFrame.data(), 2, speakerFrame.size(), pdebugSpeaker);
+                        }
+                        out.clear();
+                        if (!dsp.Process(micFrame.data(), speakerFrame.data(), out, error))
+                        {
+                            Fail(error);
+                            icursor = -2;
+                            break;
+                        }
+                        if (!out.empty())
+                        {
+                            m_OnSamples(out.data(), out.size());
+                        }
+                        icursor += static_cast<int64_t>(FilterDsp::kFrame);
+                        ispeaker += static_cast<int64_t>(FilterDsp::kFrame);
+                        micLine.TrimBefore(icursor);
+                        // A second of the speaker kept behind what's wanted.
+                        speakerLine.TrimBefore(ifrom - 16000);
+                    }
+                    if (icursor == -2)
+                    {
+                        break;
+                    }
+                    Sleep(5);
+                }
+                if (htask)
+                {
+                    AvRevertMmThreadCharacteristics(htask);
+                }
+                for (std::FILE* pfile : {pdebugMic, pdebugSpeaker})
+                {
+                    if (pfile)
+                    {
+                        std::fclose(pfile);
+                    }
+                }
+            }
+
+            OnSamples m_OnSamples;
+            DeviceThread m_Thread;
+            mutable std::mutex m_ErrorMutex; // guards m_Error and m_Route
+            std::string m_Error;
+            std::string m_Route;
+        };
+
+    } // namespace
+
+    bool CancelEcho(const std::vector<int16_t>& _Mic, const std::vector<int16_t>& _Reference,
+        const EchoOptions& _Options, std::vector<int16_t>& _Out, std::string& _Error)
+    {
+        ComScope com;
+        _Out.clear();
+        FilterDsp dsp;
+        if (!dsp.Open(_Options, _Error))
+        {
+            return false;
+        }
+        const std::size_t ncount = (std::min)(_Mic.size(), _Reference.size());
+        for (std::size_t nat = 0; nat + FilterDsp::kFrame <= ncount; nat += FilterDsp::kFrame)
+        {
+            if (!dsp.Process(_Mic.data() + nat, _Reference.data() + nat, _Out, _Error))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    namespace
+    {
 
         // ---- playback -------------------------------------------------------
 
@@ -1500,6 +2190,10 @@ namespace gitgud::platform
     std::unique_ptr<IAudioCapture> MakeVoiceCapture()
     {
         std::vector<std::unique_ptr<IAudioCapture>> stages;
+        if (CurrentEchoOptions().m_iDelayMs > 0)
+        {
+            stages.push_back(std::make_unique<AlignedEchoCapture>());
+        }
         stages.push_back(std::make_unique<EchoCancelledCapture>(EchoSetup::kByIndex));
         stages.push_back(std::make_unique<EchoCancelledCapture>(EchoSetup::kByIndexNoOptOut));
         stages.push_back(std::make_unique<EchoCancelledCapture>(EchoSetup::kSystemDefaults));
@@ -1510,6 +2204,150 @@ namespace gitgud::platform
     std::unique_ptr<IAudioPlayback> MakePlayback()
     {
         return std::make_unique<WasapiPlayback>();
+    }
+
+    namespace
+    {
+
+        // 20 ms frames' levels (dBFS) of `_Samples` from `_nFrom`.
+        std::vector<double> FrameLevels(const std::vector<int16_t>& _Samples, std::size_t _nFrom)
+        {
+            constexpr std::size_t kFrame = 320;
+            std::vector<double> levels;
+            for (std::size_t nat = _nFrom; nat + kFrame <= _Samples.size(); nat += kFrame)
+            {
+                double fsum = 0;
+                for (std::size_t ni = nat; ni < nat + kFrame; ++ni)
+                {
+                    const double fsample = _Samples[ni] / 32768.0;
+                    fsum += fsample * fsample;
+                }
+                levels.push_back(10 * std::log10(fsum / kFrame + 1e-12));
+            }
+            return levels;
+        }
+
+    } // namespace
+
+    EchoMeasurement MeasureEcho(const std::vector<int16_t>& _Signal)
+    {
+        EchoMeasurement result;
+        ComScope com;
+        EchoDevices devices;
+        std::string error;
+        if (!FindEchoDevices(devices, error))
+        {
+            result.m_Error = error;
+            return result;
+        }
+        SilentStream keepAlive;
+        keepAlive.Start(devices.m_Speaker.m_pPointer, true);
+        TimedStream mic;
+        TimedStream speaker;
+        WasapiPlayback playback;
+        if (!mic.Start(devices.m_Mic.m_pPointer, false, error) ||
+            !speaker.Start(devices.m_Speaker.m_pPointer, true, error) ||
+            !playback.Start(16000, error))
+        {
+            result.m_Error = error;
+            return result;
+        }
+        result.m_Route =
+            "mic: " + EndpointName(devices.m_Mic.m_pPointer, devices.m_bMicDefault) +
+            "; speaker: " + EndpointName(devices.m_Speaker.m_pPointer, devices.m_bSpeakerDefault);
+
+        EchoTimeline micLine;
+        EchoTimeline speakerLine;
+        const auto listen = [&](std::chrono::milliseconds _For, const std::function<bool()>& _Until)
+        {
+            const auto deadline = std::chrono::steady_clock::now() + _For;
+            while (std::chrono::steady_clock::now() < deadline && !(_Until && _Until()))
+            {
+                keepAlive.TopUp();
+                if (!mic.Drain(micLine) || !speaker.Drain(speakerLine))
+                {
+                    return false;
+                }
+                Sleep(5);
+            }
+            return true;
+        };
+        // The room first, then the chirps, then a second for their echo.
+        const std::vector<int16_t> signal = _Signal.empty() ? EchoTestSignal(16000) : _Signal;
+        bool bok = listen(std::chrono::milliseconds(400), nullptr);
+        playback.Enqueue(signal.data(), signal.size());
+        bok = bok && listen(std::chrono::milliseconds(signal.size() / 16 + 3000),
+                         [&]() { return playback.Queued() == 0; });
+        bok = bok && listen(std::chrono::milliseconds(1200), nullptr);
+        playback.Stop();
+        if (!bok || !micLine.Stamped() || !speakerLine.Stamped())
+        {
+            result.m_Error = "the microphone or the speaker's loopback gave nothing";
+            return result;
+        }
+
+        // Both on one clock: the speaker's recording, and the microphone from
+        // the same moment with a second more for the delay.
+        std::vector<int16_t> heard;
+        speakerLine.Copy(speakerLine.Begin(),
+            static_cast<std::size_t>(speakerLine.End() - speakerLine.Begin()), heard);
+        const int64_t imicFrom = micLine.IndexAt(speakerLine.TimeOf(speakerLine.Begin()));
+        std::vector<int16_t> recorded;
+        micLine.Copy(imicFrom, heard.size() + 16000, recorded);
+        const int ilag = EchoLag(heard, recorded, 16000, &result.m_fCorrelation);
+        result.m_fDelayMs = ilag / 16.0;
+        // The two recordings on the clock, for the log.
+        char aClocks[160];
+        std::snprintf(aClocks, sizeof(aClocks),
+            "; recorded: mic %lld samples from %lld, speaker %lld from %lld (100 ns), mic offset "
+            "%lld",
+            static_cast<long long>(micLine.End() - micLine.Begin()),
+            static_cast<long long>(micLine.TimeOf(micLine.Begin())),
+            static_cast<long long>(speakerLine.End() - speakerLine.Begin()),
+            static_cast<long long>(speakerLine.TimeOf(speakerLine.Begin())),
+            static_cast<long long>(imicFrom - micLine.Begin()));
+        result.m_Route += aClocks;
+
+        // The room: the microphone before the speaker's first loud frame.
+        // The echo: the microphone, lag later, where the speaker was loud.
+        const std::vector<double> played = FrameLevels(heard, 0);
+        const std::vector<double> mics = FrameLevels(recorded, static_cast<std::size_t>(ilag));
+        std::vector<double> quiet;
+        double fecho = 0;
+        std::size_t nloud = 0;
+        bool bstarted = false;
+        for (std::size_t ni = 0; ni < played.size() && ni < mics.size(); ++ni)
+        {
+            if (played[ni] > -45)
+            {
+                bstarted = true;
+                fecho += std::pow(10.0, mics[ni] / 10);
+                ++nloud;
+            }
+            else if (!bstarted)
+            {
+                quiet.push_back(mics[ni]);
+            }
+        }
+        if (nloud == 0)
+        {
+            result.m_Error = "the chirps didn't play on the speaker";
+            return result;
+        }
+        result.m_fEchoDb = 10 * std::log10(fecho / static_cast<double>(nloud) + 1e-12);
+        if (!quiet.empty())
+        {
+            std::nth_element(quiet.begin(), quiet.begin() + quiet.size() / 2, quiet.end());
+            result.m_fFloorDb = quiet[quiet.size() / 2];
+        }
+        else
+        {
+            result.m_fFloorDb = -120;
+        }
+        result.m_bHeard =
+            result.m_fCorrelation >= 0.2 && result.m_fEchoDb - result.m_fFloorDb >= 10;
+        result.m_bOk = true;
+        return result;
     }
 
     std::unique_ptr<IAudioCapture> MakePlainCapture()
@@ -1570,6 +2408,21 @@ namespace gitgud::platform
     }
 
 #else
+
+    bool CancelEcho(const std::vector<int16_t>&, const std::vector<int16_t>&, const EchoOptions&,
+        std::vector<int16_t>& _Out, std::string& _Error)
+    {
+        _Out.clear();
+        _Error = "Echo cancellation is Windows only";
+        return false;
+    }
+
+    EchoMeasurement MeasureEcho(const std::vector<int16_t>&)
+    {
+        EchoMeasurement result;
+        result.m_Error = "The echo test is Windows only";
+        return result;
+    }
 
     namespace
     {

@@ -3,9 +3,11 @@
 -- a line plays: the narrator gets the line playing (`speaking`) and its line
 -- follows it. A narration line still waiting to play when something newer
 -- comes is dropped and made again with its steps and the new ones
--- (`replacing`), at most twice; the line playing is never cut. A line made
--- again whose new line doesn't come (here a line about narrating, which is
--- never said) stays queued and plays. Against the
+-- (`replacing`), at most twice; the line playing is never cut, and the next
+-- one up (nothing ahead of it, only being made) is never remade: the next
+-- line follows it (`speaking`). A line made again whose new line doesn't
+-- come (here a line about narrating, which is never said) stays queued and
+-- plays. Against the
 -- fake claude (tests/fake_claude.cpp: "work on <topic>" reads a file, then
 -- searches) and a fake voice service that plays says one after another,
 -- as the engine does.
@@ -32,10 +34,11 @@ local voice = require("bragi.voice")
 
 settings.set("bragi.claudeProgram", fake)
 
--- What the narrator was asked. With `quietRewrites`, a request to make a
--- line again gets "quietly" (the fake narrator then talks about staying
--- quiet, a line that's never said).
+-- What the narrator was asked, and the lines that have started playing.
+-- With `quietRewrites`, a request to make a line again gets "quietly" (the
+-- fake narrator then talks about staying quiet, a line that's never said).
 local asks = {}
+local started = {}
 local quietRewrites = false
 local realAgentSend = gitgud.agentSend
 gitgud.agentSend = function(name, body)
@@ -43,6 +46,11 @@ gitgud.agentSend = function(name, body)
         local payload = type(body) == "string" and gitgud.jsonDecode(body) or body
         if type(payload) == "table" and payload.steps then
             asks[#asks + 1] = payload
+            payload.playingThen = playing
+            payload.startedThen = {}
+            for id in pairs(started) do
+                payload.startedThen[id] = true
+            end
             if quietRewrites and payload.replacing then
                 payload.request = tostring(payload.request or "") .. " quietly"
                 body = type(body) == "string" and gitgud.jsonEncode(payload) or payload
@@ -53,13 +61,13 @@ gitgud.agentSend = function(name, body)
 end
 
 -- The fake voice service: says play one after another, PLAY_MS each,
--- while `hold` keeps the one playing going.
+-- while `hold` keeps the one playing going; each is made in `makeMs`.
 local PLAY_MS = 300
+local makeMs = 10
 local calls = {}
 local queue = {}
 local playing = nil
 local hold = false
-local started = {}
 require("bragi.voicemodels").engine = function()
     return { installed = false }
 end
@@ -105,7 +113,7 @@ voice.backend = {
     speak = function(id, body)
         calls[#calls + 1] = { name = "speak", id = id, text = body }
         queue[#queue + 1] = { id = id, text = body }
-        gitgud.after(10, playNext)
+        gitgud.after(makeMs, playNext)
         return true
     end,
     health = function(onDone)
@@ -221,6 +229,36 @@ step(6500, "the rest plays in order, then the reply", function()
     check("only lines not yet playing were dropped", not cutPlaying)
 end)
 
+-- Nothing playing, a line only being made: it plays as soon as it's made,
+-- so a step meanwhile gets a line of its own that follows it.
+step(300, "a line being made, nothing ahead of it", function()
+    makeMs = 1500
+    voice.guard.saidLately = {}
+    agent.send("work on beta")
+end)
+
+step(5000, "never made again; the next line follows it", function()
+    local line = said("Looking into: work on beta")
+    check("the first line was said", line ~= nil)
+    local followed, remade = false, false
+    for _, a in ipairs(asks) do
+        if line and a.speaking == line.text and not a.startedThen[line.id] and a.playingThen == nil then
+            followed = true
+        end
+        if line and a.replacing == line.text then
+            remade = true
+        end
+    end
+    check("asked while it was being made, told it comes first", followed)
+    check("not made again", not remade and line ~= nil and not stopped(line.id))
+    check("it played", line ~= nil and started[line.id])
+    makeMs = 10
+end)
+
+step(4000, "beta's turn ends", function()
+    check("the turn ended", not agent.current().session.turn)
+end)
+
 -- The log lines with `what` in them.
 local function logCount(what)
     local n = 0
@@ -239,11 +277,11 @@ step(300, "a line made again that doesn't come", function()
     voice.guard.saidLately = {}
     quietFrom, rewritesBefore = #calls, logCount(" narrate-rewrite ")
     droppedBefore = logCount("about narrating")
-    agent.send("work on beta")
+    agent.send("work on gamma")
 end)
 
 step(3500, "the line waiting is kept", function()
-    opening = said("Looking into: work on beta")
+    opening = said("Looking into: work on gamma")
     check("the first line plays", opening ~= nil and playing == opening.id)
     for i = quietFrom + 1, #calls do
         local c = calls[i]
@@ -271,7 +309,7 @@ step(1000, "it plays", function()
     check("the line kept played", waiting ~= nil and started[waiting.id] == true and not stopped(waiting.id))
 end)
 
-step(6000, "the turn ends", function()
+step(6000, "gamma's turn ends", function()
     check("the turn ended", not agent.current().session.turn)
 end)
 

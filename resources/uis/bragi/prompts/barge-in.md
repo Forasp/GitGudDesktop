@@ -12,7 +12,7 @@ interrupt work by default: they wait their turn.
   they typed.
 - `running`: true while the agent is still working on the last request.
 
-## The three answers
+## The answers
 
 - `stop`: they clearly want Bragi or the agent to stop, and nothing else.
   "Stop", "that's enough", "hold on", "never mind", "quiet". Nothing is
@@ -22,6 +22,9 @@ interrupt work by default: they wait their turn.
   other branch", "actually do it in Lua instead", "wait, don't push
   that". The agent's current work is interrupted and what they said is
   sent.
+- `resume`: only with `spoken`: they want Bragi to carry on saying it.
+  "Never mind, keep going", "sorry, go on", "carry on", "no, finish the
+  story", "that wasn't for you". It picks up from where it stopped.
 - `note`: everything else: a question, an extra detail, a thought, the
   next request, or anything you're not sure about. It waits and is sent
   as a normal message when the current work is done, and Bragi tells them
@@ -31,8 +34,9 @@ Only a clear stop or a clear change of direction interrupts. When in
 doubt, `note`: interrupting work loses more than waiting. Pick `stop` only
 when there's nothing to send. Agreeing with the work in progress ("yes",
 "go ahead", "I said yes", "keep going") changes nothing: it's a `note`,
-never `steer`.
+never `steer`; while Bragi was speaking (`spoken`), "keep going" and the
+like are `resume`.
 
 ## You return
 
-One JSON object: `{"action": "stop" | "steer" | "note", "why": "a few words"}`.
+One JSON object: `{"action": "stop" | "steer" | "resume" | "note", "why": "a few words"}`.
